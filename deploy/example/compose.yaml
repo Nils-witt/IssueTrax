@@ -13,6 +13,9 @@
 #               containers that exit).
 #   watchtower  pulls new images for containers labelled
 #               com.centurylinklabs.watchtower.enable=true and recreates them.
+#               It is scoped to this compose stack (the project name), so it
+#               ignores containers of other stacks and coexists with other
+#               watchtower instances on the same host.
 #               Only IssueTrax is opted in; PostgreSQL major upgrades need a
 #               manual dump/restore and must never happen automatically.
 #
@@ -43,6 +46,7 @@ services:
     labels:
       autoheal: "true"
       com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,7 +88,10 @@ services:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_SCHEDULE: ${WATCHTOWER_SCHEDULE:-0 0 4 * * *}
+      WATCHTOWER_SCOPE: ${COMPOSE_PROJECT_NAME}
       TZ: ${TZ:-UTC}
+    labels:
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
