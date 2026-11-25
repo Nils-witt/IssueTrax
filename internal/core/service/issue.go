@@ -1,8 +1,10 @@
 package service
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -336,6 +338,12 @@ func (s *IssueService) views(ctx context.Context, project domain.Project, issues
 		for _, id := range i.Assignees {
 			v.Assignees = append(v.Assignees, user(id))
 		}
+
+		// Present tags and assignees alphabetically, independent of storage order.
+		slices.SortFunc(v.Tags, func(a, b domain.Tag) int { return cmp.Compare(a.Name, b.Name) })
+		slices.SortFunc(v.Assignees, func(a, b domain.User) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName)), cmp.Compare(a.ID.String(), b.ID.String()))
+		})
 
 		views = append(views, v)
 	}

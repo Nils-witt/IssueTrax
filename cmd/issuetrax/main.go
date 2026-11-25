@@ -17,6 +17,7 @@ import (
 
 	"nilswitt.dev/issuetrax/frontend"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
+	"nilswitt.dev/issuetrax/internal/adapter/storage/postgres"
 	"nilswitt.dev/issuetrax/internal/config"
 	"nilswitt.dev/issuetrax/internal/version"
 )
@@ -43,6 +44,20 @@ func run(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.MigrateOnStart {
+		if err := postgres.Migrate(ctx, cfg.DatabaseURL); err != nil {
+			return err
+		}
+
+		logger.InfoContext(ctx, "database migrations applied")
+	}
+
+	db, err := postgres.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer db.Close()
 
 	dist, err := fs.Sub(frontend.DistFS, "dist")
 	if err != nil {

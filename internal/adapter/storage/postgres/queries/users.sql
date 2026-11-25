@@ -1,0 +1,24 @@
+-- name: CreateUser :exec
+INSERT INTO users (id, issuer, subject, email, display_name, created_at, last_login_at)
+VALUES (@id, @issuer, @subject, @email, @display_name, @created_at, @last_login_at);
+
+-- name: UpdateUser :execrows
+UPDATE users
+SET email = @email, display_name = @display_name, last_login_at = @last_login_at
+WHERE id = @id;
+
+-- name: GetUser :one
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at FROM users WHERE id = @id;
+
+-- name: GetUserByIdentity :one
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+FROM users
+WHERE issuer = @issuer AND subject = @subject;
+
+-- name: GetUsers :many
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at FROM users WHERE id = ANY (@ids::uuid[]);
+
+-- name: ListUsers :many
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+FROM users
+ORDER BY lower(display_name), id;

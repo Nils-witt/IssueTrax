@@ -9,7 +9,10 @@ LDFLAGS := -ldflags "-s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $
 
 FRONTEND_DIR := frontend
 
-.PHONY: all build frontend frontend-deps run dev-backend dev-frontend test lint lint-fix fmt audit clean help
+# Matches deploy/compose.yaml; override by exporting ISSUETRAX_DATABASE_URL.
+ISSUETRAX_DATABASE_URL ?= postgres://issuetrax:issuetrax@localhost:55432/issuetrax?sslmode=disable
+
+.PHONY: all build frontend frontend-deps run dev-backend dev-frontend dev-db generate test test-unit lint lint-fix fmt audit clean help
 
 all: lint test build
 
@@ -29,17 +32,29 @@ frontend:
 run: build
 	./bin/$(BINARY_NAME)
 
-## dev-backend: Run the Go server (needs frontend/dist to exist; run `make frontend` once)
+## dev-db: Start the local development services (PostgreSQL) in Docker
+dev-db:
+	docker compose -f deploy/compose.yaml up -d
+
+## dev-backend: Run the Go server against the dev database (needs frontend/dist; run `make frontend` once)
 dev-backend:
-	$(GO) run ./cmd/$(BINARY_NAME)
+	ISSUETRAX_DATABASE_URL="$(ISSUETRAX_DATABASE_URL)" $(GO) run ./cmd/$(BINARY_NAME)
+
+## generate: Regenerate sqlc database code from internal/adapter/storage/postgres/queries
+generate:
+	$(GO) generate ./...
 
 ## dev-frontend: Run Vite with HMR, proxying /api to the Go server
 dev-frontend:
 	cd $(FRONTEND_DIR) && $(NPM) run dev
 
-## test: Run Go tests with the race detector
+## test: Run all Go tests incl. Postgres integration tests (Docker) with the race detector
 test: frontend
-	$(GO) test -race -coverprofile=coverage.out ./...
+	$(GO) test -race -tags integration -coverprofile=coverage.out ./...
+
+## test-unit: Run Go unit tests only (no Docker needed)
+test-unit: frontend
+	$(GO) test -race ./...
 
 ## lint: Run golangci-lint and oxlint
 lint: frontend

@@ -42,7 +42,9 @@ func WithIDGenerator(newID func() uuid.UUID) Option {
 
 func newOptions(opts []Option) options {
 	o := options{
-		now: func() time.Time { return time.Now().UTC() },
+		// Microseconds match Postgres timestamptz precision, so values
+		// survive a storage round trip unchanged.
+		now: func() time.Time { return time.Now().UTC().Truncate(time.Microsecond) },
 		// NewV7 only fails if crypto/rand fails, which crashes the program anyway.
 		newID: func() uuid.UUID { return uuid.Must(uuid.NewV7()) },
 	}

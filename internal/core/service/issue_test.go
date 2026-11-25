@@ -53,7 +53,7 @@ func TestIssueService_Create(t *testing.T) {
 		t.Fatalf("first = %+v", first)
 	}
 
-	if got := tagNames(first); !slices.Equal(got, []domain.TagName{"needs-review", "bug"}) {
+	if got := tagNames(first); !slices.Equal(got, []domain.TagName{"bug", "needs-review"}) {
 		t.Fatalf("first tags = %v", got)
 	}
 
@@ -61,8 +61,8 @@ func TestIssueService_Create(t *testing.T) {
 		t.Fatalf("first assignees = %+v", first.Assignees)
 	}
 
-	if second.Issue.Status != domain.StatusDraft || second.Tags[0].ID != first.Tags[1].ID {
-		t.Fatalf("second = %+v, want draft reusing tag %v", second, first.Tags[1])
+	if second.Issue.Status != domain.StatusDraft || second.Tags[0].ID != first.Tags[0].ID {
+		t.Fatalf("second = %+v, want draft reusing tag %v", second, first.Tags[0])
 	}
 
 	tags, err := f.tags.List(t.Context(), "TRAX")
@@ -304,7 +304,7 @@ func TestIssueService_Update(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got.Issue.Title != "New" || !slices.Equal(tagNames(got), []domain.TagName{"ui", "bug"}) || len(got.Assignees) != 1 {
+	if got.Issue.Title != "New" || !slices.Equal(tagNames(got), []domain.TagName{"bug", "ui"}) || len(got.Assignees) != 1 {
 		t.Fatalf("Update() = %+v", got)
 	}
 

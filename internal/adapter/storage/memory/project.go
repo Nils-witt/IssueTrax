@@ -104,7 +104,7 @@ func (r *ProjectRepository) List(_ context.Context, page domain.PageRequest) (do
 	}
 
 	items, more := paginate(after, page.Limit)
-	result := domain.Page[domain.Project]{Items: items, Total: int64(len(all))}
+	result := domain.Page[domain.Project]{Items: append([]domain.Project{}, items...), Total: int64(len(all))}
 
 	if more {
 		last := items[len(items)-1]
