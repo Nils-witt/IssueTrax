@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"nilswitt.dev/issuetrax/docs"
 	"nilswitt.dev/issuetrax/frontend"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
 	"nilswitt.dev/issuetrax/internal/adapter/oidc"
@@ -77,6 +78,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Comments:        service.NewCommentService(repos),
 		Users:           service.NewUserService(repos),
 		Frontend:        dist,
+		OpenAPISpec:     docs.OpenAPI,
 		Logger:          logger,
 		PublicURL:       cfg.PublicURL,
 		CookieKey:       cfg.CookieKey,

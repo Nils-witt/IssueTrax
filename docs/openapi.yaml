@@ -12,7 +12,7 @@ info:
     navigate to `GET /auth/login?returnTo=/path`, which ends at
     `/auth/callback` and sets an HttpOnly session cookie
     (`__Host-issuetrax_session`, 24 h, not extended). Every `/api` endpoint
-    except `/api/version` requires that cookie and answers `401` with code
+    except `/api/version` and `/api/openapi.yaml` requires that cookie and answers `401` with code
     `unauthenticated` without it.
 
     **CSRF.** State-changing requests (`POST`, `PATCH`, `DELETE`) must be same-origin
@@ -102,6 +102,18 @@ paths:
                 properties:
                   version: { type: string }
                   commit: { type: string }
+
+  /api/openapi.yaml:
+    get:
+      tags: [auth]
+      summary: This API description
+      security: []
+      responses:
+        "200":
+          description: The OpenAPI document you are reading.
+          content:
+            application/yaml:
+              schema: { type: string }
 
   /api/me:
     get:

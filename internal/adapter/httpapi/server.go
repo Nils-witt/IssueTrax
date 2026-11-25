@@ -29,7 +29,10 @@ type Config struct {
 	Users    port.UserService
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
-	Logger   *slog.Logger
+	// OpenAPISpec is the OpenAPI document (YAML) served at
+	// /api/openapi.yaml. Optional: without it that path answers 404.
+	OpenAPISpec []byte
+	Logger      *slog.Logger
 	// PublicURL is the origin browsers use, e.g. https://trax.example.com.
 	// Cross-origin requests from it are trusted.
 	PublicURL string
@@ -50,6 +53,7 @@ type Handler struct {
 	users    port.UserService
 	logger   *slog.Logger
 	cookies  cookies
+	openAPI  []byte
 }
 
 // NewHandler builds the root http.Handler.
@@ -71,6 +75,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		users:    cfg.Users,
 		logger:   cfg.Logger,
 		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
+		openAPI:  cfg.OpenAPISpec,
 	}
 
 	spa, err := newSPAHandler(cfg.Frontend)
@@ -82,6 +87,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 	mux.HandleFunc("GET /healthz", h.healthz)
 	mux.HandleFunc("GET /api/version", h.version)
+
+	if len(h.openAPI) > 0 {
+		mux.HandleFunc("GET /api/openapi.yaml", h.openAPISpec)
+	}
 
 	mux.HandleFunc("GET /auth/login", h.login)
 	mux.HandleFunc("GET /auth/callback", h.callback)
@@ -149,6 +158,14 @@ func (h *Handler) version(w http.ResponseWriter, _ *http.Request) {
 		"version": version.Version,
 		"commit":  version.Commit,
 	})
+}
+
+// openAPISpec serves the API description. It is public, like /api/version:
+// it documents the API but grants no access to it.
+func (h *Handler) openAPISpec(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(h.openAPI)
 }
 
 func notFound(w http.ResponseWriter, _ *http.Request) {

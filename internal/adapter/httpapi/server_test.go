@@ -67,6 +67,7 @@ func TestHandler_PublicRoutes(t *testing.T) {
 	}{
 		{name: "healthz", path: "/healthz", wantStatus: http.StatusOK, wantBody: `"ok"`},
 		{name: "version", path: "/api/version", wantStatus: http.StatusOK, wantBody: `"version"`},
+		{name: "openapi spec", path: "/api/openapi.yaml", wantStatus: http.StatusOK, wantBody: "openapi: 3.1.0"},
 		{name: "unknown api path", path: "/api/nope", wantStatus: http.StatusNotFound, wantBody: `"code":"not_found"`},
 		{name: "unknown auth path", path: "/auth/nope", wantStatus: http.StatusNotFound, wantBody: `"code":"not_found"`},
 		{name: "static asset", path: "/assets/app.js", wantStatus: http.StatusOK, wantBody: "console.log"},

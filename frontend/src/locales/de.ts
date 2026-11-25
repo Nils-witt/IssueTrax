@@ -4,6 +4,7 @@ export const de: Messages = {
   app: {
     name: 'IssueTrax',
     signOut: 'Abmelden',
+    apiDocs: 'API',
     language: 'Sprache',
     loading: 'Lädt…',
     loadMore: 'Mehr laden',
@@ -18,6 +19,10 @@ export const de: Messages = {
     goHome: 'Zu den Projekten',
     unexpected: 'Etwas ist schiefgelaufen.',
     optional: 'optional',
+  },
+  apiDocs: {
+    title: 'API-Referenz',
+    download: 'OpenAPI-Spezifikation herunterladen',
   },
   projects: {
     title: 'Projekte',

@@ -28,6 +28,9 @@ export function Layout() {
           <Typography component={Link} to="/" variant="h6" sx={{ fontWeight: 700, color: 'inherit', textDecoration: 'none', flexGrow: 1 }}>
             {t('app.name')}
           </Typography>
+          <Button component={Link} to="/api-docs" size="small" color="inherit">
+            {t('app.apiDocs')}
+          </Button>
           <Select
             size="small"
             variant="standard"

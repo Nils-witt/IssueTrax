@@ -77,6 +77,7 @@ func newTestEnv(t *testing.T) *testEnv {
 			"index.html":    {Data: []byte("<html>spa</html>")},
 			"assets/app.js": {Data: []byte("console.log(1)")},
 		},
+		OpenAPISpec:     []byte("openapi: 3.1.0\n"),
 		Logger:          slog.New(slog.DiscardHandler),
 		PublicURL:       publicURL,
 		CookieKey:       []byte(strings.Repeat("k", 32)),

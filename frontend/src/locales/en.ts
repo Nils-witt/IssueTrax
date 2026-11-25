@@ -4,6 +4,7 @@ export const en = {
   app: {
     name: 'IssueTrax',
     signOut: 'Sign out',
+    apiDocs: 'API',
     language: 'Language',
     loading: 'Loading…',
     loadMore: 'Load more',
@@ -18,6 +19,10 @@ export const en = {
     goHome: 'Go to projects',
     unexpected: 'Something went wrong.',
     optional: 'optional',
+  },
+  apiDocs: {
+    title: 'API reference',
+    download: 'Download OpenAPI spec',
   },
   projects: {
     title: 'Projects',

@@ -38,6 +38,7 @@ const router = createBrowserRouter([
       { path: 'p/:key/issues/new', element: <NewIssuePage /> },
       { path: 'p/:key/issues/:number', element: <IssuePage /> },
       { path: 'p/:key/settings', element: <ProjectSettingsPage /> },
+      { path: 'api-docs', lazy: () => import('./pages/ApiDocsPage').then((m) => ({ Component: m.ApiDocsPage })) },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
