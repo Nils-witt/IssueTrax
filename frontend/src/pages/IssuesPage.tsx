@@ -1,13 +1,39 @@
-import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import Chip from '@mui/material/Chip';
+import FormControl from '@mui/material/FormControl';
+import InputAdornment from '@mui/material/InputAdornment';
+import InputLabel from '@mui/material/InputLabel';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import MenuItem from '@mui/material/MenuItem';
+import OutlinedInput from '@mui/material/OutlinedInput';
+import Paper from '@mui/material/Paper';
+import Select from '@mui/material/Select';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Typography from '@mui/material/Typography';
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useIssues, useTags, useUsers } from '../api/hooks';
 import { issueStatuses, type Issue, type MatchMode } from '../api/types';
 import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
 import { DateTime } from '../components/DateTime';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { KeyText } from '../components/KeyText';
+import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
+import { TagPicker } from '../components/TagPicker';
+import { UserPicker } from '../components/UserPicker';
 
 // The page's URL query uses the API's parameter names, so a filtered view
 // is a bookmarkable URL and maps 1:1 onto GET /api/projects/{key}/issues.
@@ -30,56 +56,71 @@ export function IssuesPage() {
     <>
       <ProjectNav projectKey={key} />
 
-      <div className="page-head">
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <FilterBar projectKey={key} />
-        <Link to={`/p/${key}/issues/new`} className="button primary">
+        <Button variant="contained" href={`/p/${key}/issues/new`} startIcon={<AddIcon />} sx={{ flexShrink: 0 }}>
           {t('issues.new')}
-        </Link>
-      </div>
+        </Button>
+      </Stack>
 
       <ErrorMessage error={issues.error} />
-      {issues.isPending && <p className="muted">{t('app.loading')}</p>}
+      {issues.isPending && <Loading />}
       {issues.isSuccess && (
-        <>
-          <p className="muted">{t('issues.count', { count: total })}</p>
-          {items.length === 0 ? <p>{t('issues.empty')}</p> : <IssueTable issues={items} />}
+        <Stack spacing={2}>
+          <Typography color="text.secondary">{t('issues.count', { count: total })}</Typography>
+          {items.length === 0 ? <Typography>{t('issues.empty')}</Typography> : <IssueTable issues={items} />}
           {issues.hasNextPage && (
-            <button type="button" onClick={() => void issues.fetchNextPage()} disabled={issues.isFetchingNextPage}>
-              {issues.isFetchingNextPage ? t('app.loading') : t('app.loadMore')}
-            </button>
+            <Box>
+              <Button variant="outlined" onClick={() => void issues.fetchNextPage()} loading={issues.isFetchingNextPage}>
+                {t('app.loadMore')}
+              </Button>
+            </Box>
           )}
-        </>
+        </Stack>
       )}
     </>
   );
 }
 
+// Columns beyond key, title and status are hidden on narrow screens.
+const wide = { display: { xs: 'none', md: 'flex' } } as const;
+
 function IssueTable({ issues }: { issues: Issue[] }) {
   const { t } = useTranslation();
 
   return (
-    <ul className="issue-list">
-      {issues.map((i) => (
-        <li key={i.id}>
-          <Link to={`/p/${i.projectKey}/issues/${i.number}`} className="issue-row">
-            <span className="issue-key">{i.key}</span>
-            <span className="issue-title">{i.title}</span>
-            <StatusBadge status={i.status} />
-            <span className="chips">
-              {i.tags.map((tag) => (
-                <span key={tag.id} className="chip">
-                  {tag.name}
-                </span>
-              ))}
-            </span>
-            <span className="muted">{i.assignees.map((a) => a.displayName).join(', ') || t('issues.nobody')}</span>
-            <span className="muted">
-              <DateTime value={i.updatedAt} />
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <Paper variant="outlined">
+      <List disablePadding>
+        {issues.map((i, index) => (
+          <ListItem key={i.id} disablePadding divider={index < issues.length - 1}>
+            <ListItemButton
+              href={`/p/${i.projectKey}/issues/${i.number}`}
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                alignItems: 'center',
+                gridTemplateColumns: { xs: '6rem 1fr auto', md: '6rem 1fr auto auto 9rem auto' },
+              }}
+            >
+              <KeyText>{i.key}</KeyText>
+              <Typography sx={{ fontWeight: 500 }}>{i.title}</Typography>
+              <StatusBadge status={i.status} />
+              <Stack direction="row" sx={{ ...wide, flexWrap: 'wrap', gap: 0.5 }}>
+                {i.tags.map((tag) => (
+                  <Chip key={tag.id} size="small" label={tag.name} />
+                ))}
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={wide}>
+                {i.assignees.map((a) => a.displayName).join(', ') || t('issues.nobody')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ ...wide, whiteSpace: 'nowrap' }}>
+                <DateTime value={i.updatedAt} />
+              </Typography>
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Paper>
   );
 }
 
@@ -102,14 +143,10 @@ function FilterBar({ projectKey }: { projectKey: string }) {
     );
   }
 
-  function toggle(name: string, value: string) {
+  function setAll(name: string, values: string[]) {
     update((p) => {
-      const values = p.getAll(name);
       p.delete(name);
-
-      for (const v of values.includes(value) ? values.filter((x) => x !== value) : [...values, value]) {
-        p.append(name, v);
-      }
+      for (const v of values) p.append(name, v);
     });
   }
 
@@ -133,78 +170,136 @@ function FilterBar({ projectKey }: { projectKey: string }) {
   const hasFilters = filterParams.some((name) => params.has(name));
 
   return (
-    <div className="filters">
-      <input
+    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+      <TextField
         type="search"
-        aria-label={t('filters.search')}
+        size="small"
         placeholder={t('filters.search')}
         value={q}
-        maxLength={200}
         onChange={(e) => setQ(e.target.value)}
+        sx={{ minWidth: '18rem' }}
+        slotProps={{
+          htmlInput: { maxLength: 200, 'aria-label': t('filters.search') },
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
+        }}
       />
 
-      <fieldset className="checks" title={t('filters.statusHint')}>
-        <legend>{t('filters.statuses')}</legend>
-        {issueStatuses.map((s) => (
-          <label key={s}>
-            <input type="checkbox" checked={params.getAll('status').includes(s)} onChange={() => toggle('status', s)} />
-            {t(`status.${s}`)}
-          </label>
-        ))}
-      </fieldset>
+      <MultiFilter
+        label={t('filters.statuses')}
+        title={t('filters.statusHint')}
+        options={issueStatuses.map((s) => ({ value: s, label: t(`status.${s}`) }))}
+        value={params.getAll('status')}
+        onChange={(v) => setAll('status', v)}
+      />
 
       {tags.data && tags.data.length > 0 && (
-        <fieldset className="checks">
-          <legend>{t('filters.tags')}</legend>
-          {tags.data.map((tag) => (
-            <label key={tag.id}>
-              <input type="checkbox" checked={params.getAll('tag').includes(tag.id)} onChange={() => toggle('tag', tag.id)} />
-              {tag.name}
-            </label>
-          ))}
-          <MatchSelect name="tagMode" value={params.get('tagMode')} onChange={(m) => update((p) => p.set('tagMode', m))} />
-        </fieldset>
+        <>
+          <TagPicker
+            id="tag-filter"
+            size="small"
+            label={t('filters.tags')}
+            tags={tags.data}
+            value={params.getAll('tag')}
+            onChange={(v) => setAll('tag', v)}
+            sx={{ minWidth: '14rem', maxWidth: '24rem' }}
+          />
+          <MatchToggle label={t('filters.tags')} value={params.get('tagMode')} onChange={(m) => update((p) => p.set('tagMode', m))} />
+        </>
       )}
 
       {users.data && users.data.length > 0 && (
-        <fieldset className="checks">
-          <legend>{t('filters.assignees')}</legend>
-          {users.data.map((u) => (
-            <label key={u.id}>
-              <input type="checkbox" checked={params.getAll('assignee').includes(u.id)} onChange={() => toggle('assignee', u.id)} />
-              {u.displayName}
-            </label>
-          ))}
-          <MatchSelect name="assigneeMode" value={params.get('assigneeMode')} onChange={(m) => update((p) => p.set('assigneeMode', m))} />
-        </fieldset>
+        <>
+          <UserPicker
+            id="assignee-filter"
+            size="small"
+            label={t('filters.assignees')}
+            users={users.data}
+            value={params.getAll('assignee')}
+            onChange={(v) => setAll('assignee', v)}
+            sx={{ minWidth: '14rem', maxWidth: '24rem' }}
+          />
+          <MatchToggle
+            label={t('filters.assignees')}
+            value={params.get('assigneeMode')}
+            onChange={(m) => update((p) => p.set('assigneeMode', m))}
+          />
+        </>
       )}
 
       {hasFilters && (
-        <button
-          type="button"
-          className="link"
+        <Button
+          size="small"
           onClick={() => {
             setQ('');
             update((p) => filterParams.forEach((name) => p.delete(name)));
           }}
         >
           {t('filters.clear')}
-        </button>
+        </Button>
       )}
-    </div>
+    </Stack>
   );
 }
 
-function MatchSelect({ name, value, onChange }: { name: string; value: string | null; onChange: (m: MatchMode) => void }) {
+interface MultiFilterProps {
+  label: string;
+  title?: string;
+  options: { value: string; label: string }[];
+  value: string[];
+  onChange: (value: string[]) => void;
+}
+
+/** A compact multi-select with a checkbox per option. */
+function MultiFilter({ label, title, options, value, onChange }: MultiFilterProps) {
+  const labelId = useId();
+  const labels = new Map(options.map((o) => [o.value, o.label]));
+
+  return (
+    <FormControl size="small" sx={{ minWidth: '10rem', maxWidth: '16rem' }} title={title}>
+      <InputLabel id={labelId}>{label}</InputLabel>
+      <Select
+        multiple
+        labelId={labelId}
+        value={value}
+        onChange={(e) => onChange(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+        input={<OutlinedInput label={label} />}
+        renderValue={(selected) => selected.map((v) => labels.get(v) ?? v).join(', ')}
+      >
+        {options.map((o) => (
+          <MenuItem key={o.value} value={o.value} dense>
+            <Checkbox size="small" checked={value.includes(o.value)} sx={{ py: 0 }} />
+            <ListItemText primary={o.label} />
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+/** Whether all or any of the selected values must match. */
+function MatchToggle({ label, value, onChange }: { label: string; value: string | null; onChange: (m: MatchMode) => void }) {
   const { t } = useTranslation();
 
   return (
-    <label className="match">
-      {t('filters.match')}{' '}
-      <select name={name} value={value === 'any' ? 'any' : 'all'} onChange={(e) => onChange(e.target.value as MatchMode)}>
-        <option value="all">{t('filters.matchAll')}</option>
-        <option value="any">{t('filters.matchAny')}</option>
-      </select>
-    </label>
+    <ToggleButtonGroup
+      size="small"
+      exclusive
+      value={value === 'any' ? 'any' : 'all'}
+      onChange={(_, m: MatchMode | null) => m && onChange(m)}
+      aria-label={`${label}: ${t('filters.match')}`}
+    >
+      <ToggleButton value="all" sx={{ py: 0.5 }}>
+        {t('filters.matchAll')}
+      </ToggleButton>
+      <ToggleButton value="any" sx={{ py: 0.5 }}>
+        {t('filters.matchAny')}
+      </ToggleButton>
+    </ToggleButtonGroup>
   );
 }

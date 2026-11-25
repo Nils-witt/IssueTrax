@@ -77,10 +77,8 @@ export const en = {
     renamed: 'Renamed.',
   },
   editor: {
-    write: 'Write',
-    preview: 'Preview',
     markdownHint: 'Markdown is supported.',
-    nothing: 'Nothing to preview.',
+    plainFallback: 'This text uses Markdown the visual editor cannot show, so it is edited as plain Markdown.',
   },
   errors: {
     validation_failed: 'Please check the highlighted fields.',

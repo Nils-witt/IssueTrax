@@ -77,10 +77,8 @@ export const de: Messages = {
     renamed: 'Umbenannt.',
   },
   editor: {
-    write: 'Schreiben',
-    preview: 'Vorschau',
     markdownHint: 'Markdown wird unterstützt.',
-    nothing: 'Nichts für die Vorschau.',
+    plainFallback: 'Dieser Text enthält Markdown, das der visuelle Editor nicht darstellen kann, und wird daher als reines Markdown bearbeitet.',
   },
   errors: {
     validation_failed: 'Bitte die markierten Felder prüfen.',

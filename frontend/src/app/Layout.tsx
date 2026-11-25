@@ -1,8 +1,16 @@
+import AppBar from '@mui/material/AppBar';
+import Button from '@mui/material/Button';
+import Container from '@mui/material/Container';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router';
 import { signOut } from '../api/client';
 import { useMe } from '../api/hooks';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { Loading } from '../components/Loading';
 import { languages, type Language } from '../i18n';
 
 /**
@@ -15,41 +23,42 @@ export function Layout() {
 
   return (
     <>
-      <header className="topbar">
-        <Link to="/" className="brand">
-          {t('app.name')}
-        </Link>
-        <div className="topbar-right">
-          <label className="lang">
-            <span className="sr-only">{t('app.language')}</span>
-            <select
-              value={i18n.resolvedLanguage}
-              onChange={(e) => void i18n.changeLanguage(e.target.value as Language)}
-            >
-              {languages.map((l) => (
-                <option key={l} value={l}>
-                  {l.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </label>
+      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Toolbar variant="dense" sx={{ gap: 2 }}>
+          <Typography component={Link} to="/" variant="h6" sx={{ fontWeight: 700, color: 'inherit', textDecoration: 'none', flexGrow: 1 }}>
+            {t('app.name')}
+          </Typography>
+          <Select
+            size="small"
+            variant="standard"
+            disableUnderline
+            value={i18n.resolvedLanguage ?? languages[0]}
+            onChange={(e) => void i18n.changeLanguage(e.target.value as Language)}
+            inputProps={{ 'aria-label': t('app.language') }}
+          >
+            {languages.map((l) => (
+              <MenuItem key={l} value={l}>
+                {l.toUpperCase()}
+              </MenuItem>
+            ))}
+          </Select>
           {me.data && (
             <>
-              <span className="user" title={me.data.email}>
+              <Typography variant="body2" title={me.data.email}>
                 {me.data.displayName}
-              </span>
-              <button type="button" className="link" onClick={() => void signOut()}>
+              </Typography>
+              <Button size="small" color="inherit" onClick={() => void signOut()}>
                 {t('app.signOut')}
-              </button>
+              </Button>
             </>
           )}
-        </div>
-      </header>
-      <main>
-        {me.isPending && <p className="muted">{t('app.loading')}</p>}
+        </Toolbar>
+      </AppBar>
+      <Container component="main" maxWidth="lg" sx={{ pt: 3, pb: 8 }}>
+        {me.isPending && <Loading />}
         {me.isError && <ErrorMessage error={me.error} />}
         {me.isSuccess && <Outlet />}
-      </main>
+      </Container>
     </>
   );
 }

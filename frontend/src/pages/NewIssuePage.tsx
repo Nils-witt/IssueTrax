@@ -1,3 +1,4 @@
+import Typography from '@mui/material/Typography';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { useCreateIssue } from '../api/hooks';
@@ -14,7 +15,9 @@ export function NewIssuePage() {
   return (
     <>
       <ProjectNav projectKey={key} />
-      <h2>{t('issues.new')}</h2>
+      <Typography variant="h5" component="h2" sx={{ mb: 3 }}>
+        {t('issues.new')}
+      </Typography>
       <IssueForm
         projectKey={key}
         initial={{ title: '', description: '', status: 'open', tags: [], assignees: [] }}

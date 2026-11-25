@@ -1,4 +1,13 @@
-import { useState } from 'react';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import MenuItem from '@mui/material/MenuItem';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import EditIcon from '@mui/icons-material/Edit';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { useIssue, useUpdateIssue } from '../api/hooks';
@@ -7,12 +16,12 @@ import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
 import { DateTime } from '../components/DateTime';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { KeyText } from '../components/KeyText';
+import { Loading } from '../components/Loading';
 import { Markdown } from '../components/Markdown';
-import { StatusBadge } from '../components/StatusBadge';
 import { IssueForm } from './IssueForm';
 
 export function IssuePage() {
-  const { t } = useTranslation();
   const key = useParam('key');
   const number = Number(useParam('number'));
   const issue = useIssue(key, number);
@@ -21,7 +30,7 @@ export function IssuePage() {
     <>
       <ProjectNav projectKey={key} />
       <ErrorMessage error={issue.error} />
-      {issue.isPending && <p className="muted">{t('app.loading')}</p>}
+      {issue.isPending && <Loading />}
       {issue.data && <IssueDetail key={issue.data.updatedAt} issue={issue.data} />}
     </>
   );
@@ -53,7 +62,9 @@ function IssueDetail({ issue }: { issue: Issue }) {
   if (editing) {
     return (
       <>
-        <h2>{issue.key}</h2>
+        <Typography variant="h5" component="h2" sx={{ mb: 3 }}>
+          <KeyText>{issue.key}</KeyText>
+        </Typography>
         <IssueForm
           projectKey={issue.projectKey}
           initial={{
@@ -75,72 +86,92 @@ function IssueDetail({ issue }: { issue: Issue }) {
   }
 
   return (
-    <article className="issue">
+    <Stack component="article" spacing={2}>
       {archived && (
-        <div className="banner" role="status">
-          {t('issues.archivedBanner')}{' '}
-          <button type="button" onClick={() => update.mutate({ status: 'open' })} disabled={update.isPending}>
-            {t('issues.unarchive')}
-          </button>
-        </div>
+        <Alert
+          severity="warning"
+          role="status"
+          action={
+            <Button color="inherit" size="small" onClick={() => update.mutate({ status: 'open' })} loading={update.isPending}>
+              {t('issues.unarchive')}
+            </Button>
+          }
+        >
+          {t('issues.archivedBanner')}
+        </Alert>
       )}
 
-      <div className="page-head">
-        <h2>
-          <span className="issue-key">{issue.key}</span> {issue.title}
-        </h2>
-        <button type="button" onClick={() => setEditing(true)} disabled={archived}>
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Typography variant="h5" component="h2">
+          <KeyText>{issue.key}</KeyText> {issue.title}
+        </Typography>
+        <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditing(true)} disabled={archived}>
           {t('app.edit')}
-        </button>
-      </div>
+        </Button>
+      </Stack>
 
       <ErrorMessage error={update.error} />
 
-      <div className="issue-layout">
-        <section className="issue-body">
-          {issue.description ? <Markdown>{issue.description}</Markdown> : <p className="muted">{t('issues.noDescription')}</p>}
-        </section>
+      <Box sx={{ display: 'grid', gap: 4, gridTemplateColumns: { xs: '1fr', md: '1fr 16rem' } }}>
+        <Box component="section">
+          {issue.description ? <Markdown>{issue.description}</Markdown> : <Typography color="text.secondary">{t('issues.noDescription')}</Typography>}
+        </Box>
 
-        <aside className="issue-meta">
-          <label>
-            {t('issues.status')}
-            <select
-              value={issue.status}
-              disabled={update.isPending}
-              onChange={(e) => update.mutate({ status: e.target.value as IssueStatus })}
-            >
-              {issueStatuses.map((s) => (
-                <option key={s} value={s}>
-                  {t(`status.${s}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <StatusBadge status={issue.status} />
-
-          <h3>{t('issues.tags')}</h3>
-          <p className="chips">
-            {issue.tags.length === 0 && <span className="muted">—</span>}
-            {issue.tags.map((tag) => (
-              <Link key={tag.id} className="chip" to={`/p/${issue.projectKey}?tag=${tag.id}`}>
-                {tag.name}
-              </Link>
+        <Stack component="aside" spacing={2.5}>
+          <TextField
+            select
+            size="small"
+            label={t('issues.status')}
+            value={issue.status}
+            disabled={update.isPending}
+            onChange={(e) => update.mutate({ status: e.target.value as IssueStatus })}
+          >
+            {issueStatuses.map((s) => (
+              <MenuItem key={s} value={s}>
+                {t(`status.${s}`)}
+              </MenuItem>
             ))}
-          </p>
+          </TextField>
 
-          <h3>{t('issues.assignees')}</h3>
-          <p>{issue.assignees.map((a) => a.displayName).join(', ') || <span className="muted">{t('issues.nobody')}</span>}</p>
+          <MetaSection title={t('issues.tags')}>
+            {issue.tags.length === 0 ? (
+              <Typography color="text.secondary">—</Typography>
+            ) : (
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                {issue.tags.map((tag) => (
+                  <Chip key={tag.id} size="small" label={tag.name} component={Link} to={`/p/${issue.projectKey}?tag=${tag.id}`} clickable />
+                ))}
+              </Stack>
+            )}
+          </MetaSection>
 
-          <p className="muted small">
+          <MetaSection title={t('issues.assignees')}>
+            <Typography color={issue.assignees.length ? undefined : 'text.secondary'}>
+              {issue.assignees.map((a) => a.displayName).join(', ') || t('issues.nobody')}
+            </Typography>
+          </MetaSection>
+
+          <Typography variant="body2" color="text.secondary">
             {t('issues.createdBy', { name: issue.createdBy.displayName || '?' })}
             <br />
             {t('issues.created')} <DateTime value={issue.createdAt} />
             <br />
             {t('issues.updated')} <DateTime value={issue.updatedAt} />
-          </p>
-        </aside>
-      </div>
-    </article>
+          </Typography>
+        </Stack>
+      </Box>
+    </Stack>
+  );
+}
+
+function MetaSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Box>
+      <Typography variant="overline" component="h3" color="text.secondary" sx={{ lineHeight: 2 }}>
+        {title}
+      </Typography>
+      {children}
+    </Box>
   );
 }
 

@@ -1,3 +1,4 @@
+import Box from '@mui/material/Box';
 import { lazy, Suspense } from 'react';
 
 // The Markdown stack (remark/micromark) is the bulk of the bundle, so it is
@@ -6,7 +7,7 @@ const MarkdownRenderer = lazy(() => import('./MarkdownRenderer'));
 
 export function Markdown({ children }: { children: string }) {
   return (
-    <Suspense fallback={<div className="markdown">{children}</div>}>
+    <Suspense fallback={<Box sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{children}</Box>}>
       <MarkdownRenderer>{children}</MarkdownRenderer>
     </Suspense>
   );

@@ -1,7 +1,12 @@
+import Box from '@mui/material/Box';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
+import Typography from '@mui/material/Typography';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
+import { useLocation } from 'react-router';
 import { useProject } from '../api/hooks';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { KeyText } from '../components/KeyText';
 
 /** Project title with Issues / Settings tabs, shown on project pages. */
 export function ProjectNav({ projectKey }: { projectKey: string }) {
@@ -14,19 +19,15 @@ export function ProjectNav({ projectKey }: { projectKey: string }) {
   const key = project.data?.key ?? projectKey.toUpperCase();
 
   return (
-    <div className="project-nav">
-      <h1>
-        <span className="project-key">{key}</span> {project.data?.name}
-      </h1>
-      <nav>
-        {/* "Issues" stays active on the list, issue and new-issue pages. */}
-        <Link to={`/p/${key}`} className={onSettings ? undefined : 'active'} aria-current={onSettings ? undefined : 'page'}>
-          {t('issues.tab')}
-        </Link>
-        <Link to={`/p/${key}/settings`} className={onSettings ? 'active' : undefined} aria-current={onSettings ? 'page' : undefined}>
-          {t('projects.settings')}
-        </Link>
-      </nav>
-    </div>
+    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+      <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
+        <KeyText>{key}</KeyText> {project.data?.name}
+      </Typography>
+      {/* "Issues" stays active on the list, issue and new-issue pages. */}
+      <Tabs value={onSettings ? 'settings' : 'issues'} component="nav">
+        <Tab value="issues" label={t('issues.tab')} href={`/p/${key}`} aria-current={onSettings ? undefined : 'page'} />
+        <Tab value="settings" label={t('projects.settings')} href={`/p/${key}/settings`} aria-current={onSettings ? 'page' : undefined} />
+      </Tabs>
+    </Box>
   );
 }

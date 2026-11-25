@@ -4,7 +4,7 @@ Before any Go coding, review, debugging, troubleshooting, or setup task, load th
 
 ## Project
 
-IssueTrax: Go backend (`nilswitt.dev/issuetrax`) serving a JSON API under `/api` (documented in `docs/openapi.yaml`) plus a Vite + React + TypeScript SPA (React Router, TanStack Query, i18next en/de) embedded via `//go:embed` (`frontend/embed.go`). Design decisions: `base_architecture.md`.
+IssueTrax: Go backend (`nilswitt.dev/issuetrax`) serving a JSON API under `/api` (documented in `docs/openapi.yaml`) plus a Vite + React + TypeScript SPA (React Router, TanStack Query, i18next en/de, MUI with Emotion; theme in `frontend/src/theme.ts`) embedded via `//go:embed` (`frontend/embed.go`). Design decisions: `base_architecture.md`.
 
 Architecture is hexagonal (ports & adapters), wired by manual constructor injection in `cmd/issuetrax/main.go`:
 

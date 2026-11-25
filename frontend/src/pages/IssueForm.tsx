@@ -1,9 +1,12 @@
+import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTags, useUsers } from '../api/hooks';
 import { issueStatuses, type CreateIssueInput, type IssueStatus } from '../api/types';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Field } from '../components/Field';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { TagInput } from '../components/TagInput';
 import { UserPicker } from '../components/UserPicker';
@@ -37,6 +40,7 @@ export function IssueForm({ projectKey, initial, withStatus, submitLabel, pendin
   const [values, setValues] = useState(initial);
 
   const set = <K extends keyof IssueFormValues>(k: K, v: IssueFormValues[K]) => setValues((prev) => ({ ...prev, [k]: v }));
+  const fieldError = (field: string) => fieldErrorText(t, error, field);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -44,47 +48,74 @@ export function IssueForm({ projectKey, initial, withStatus, submitLabel, pendin
   }
 
   return (
-    <form onSubmit={submit} className="form">
-      <Field id="title" label={t('issues.title')} error={fieldErrorText(t, error, 'title')}>
-        <input id="title" value={values.title} onChange={(e) => set('title', e.target.value)} maxLength={200} required autoFocus />
-      </Field>
+    <Stack component="form" onSubmit={submit} spacing={3} sx={{ maxWidth: '44rem' }}>
+      <TextField
+        id="title"
+        label={t('issues.title')}
+        value={values.title}
+        onChange={(e) => set('title', e.target.value)}
+        required
+        autoFocus
+        error={!!fieldError('title')}
+        helperText={fieldError('title')}
+        slotProps={{ htmlInput: { maxLength: 200 } }}
+      />
 
-      <Field id="description" label={`${t('issues.description')} (${t('app.optional')})`} error={fieldErrorText(t, error, 'description')}>
-        <MarkdownEditor id="description" value={values.description} onChange={(v) => set('description', v)} />
-      </Field>
+      <MarkdownEditor
+        id="description"
+        label={`${t('issues.description')} (${t('app.optional')})`}
+        value={values.description}
+        onChange={(v) => set('description', v)}
+        error={fieldError('description')}
+      />
 
       {withStatus && (
-        <Field id="status" label={t('issues.status')} error={fieldErrorText(t, error, 'status')}>
-          <select id="status" value={values.status} onChange={(e) => set('status', e.target.value as IssueStatus)}>
-            {issueStatuses.map((s) => (
-              <option key={s} value={s}>
-                {t(`status.${s}`)}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <TextField
+          select
+          id="status"
+          label={t('issues.status')}
+          value={values.status}
+          onChange={(e) => set('status', e.target.value as IssueStatus)}
+          error={!!fieldError('status')}
+          helperText={fieldError('status')}
+          sx={{ maxWidth: '16rem' }}
+        >
+          {issueStatuses.map((s) => (
+            <MenuItem key={s} value={s}>
+              {t(`status.${s}`)}
+            </MenuItem>
+          ))}
+        </TextField>
       )}
 
-      <Field id="tags" label={t('issues.tags')} error={fieldErrorText(t, error, 'tags')}>
-        <TagInput id="tags" value={values.tags} onChange={(v) => set('tags', v)} suggestions={tags.data?.map((tag) => tag.name) ?? []} />
-      </Field>
+      <TagInput
+        id="tags"
+        label={t('issues.tags')}
+        value={values.tags}
+        onChange={(v) => set('tags', v)}
+        suggestions={tags.data?.map((tag) => tag.name) ?? []}
+        error={fieldError('tags')}
+      />
 
       {users.data && (
-        <div className={fieldErrorText(t, error, 'assignees') ? 'field field-invalid' : 'field'}>
-          <UserPicker label={t('issues.assignees')} users={users.data} value={values.assignees} onChange={(v) => set('assignees', v)} />
-        </div>
+        <UserPicker
+          id="assignees"
+          label={t('issues.assignees')}
+          users={users.data}
+          value={values.assignees}
+          onChange={(v) => set('assignees', v)}
+          error={fieldError('assignees')}
+        />
       )}
 
       <ErrorMessage error={error} />
 
-      <div className="actions">
-        <button type="submit" className="primary" disabled={pending}>
-          {pending ? t('app.saving') : submitLabel}
-        </button>
-        <button type="button" className="link" onClick={onCancel}>
-          {t('app.cancel')}
-        </button>
-      </div>
-    </form>
+      <Stack direction="row" spacing={1}>
+        <Button type="submit" variant="contained" loading={pending}>
+          {submitLabel}
+        </Button>
+        <Button onClick={onCancel}>{t('app.cancel')}</Button>
+      </Stack>
+    </Stack>
   );
 }

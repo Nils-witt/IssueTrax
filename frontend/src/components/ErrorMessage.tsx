@@ -1,3 +1,4 @@
+import Alert from '@mui/material/Alert';
 import { useTranslation } from 'react-i18next';
 import { errorText } from '../lib/errors';
 
@@ -6,9 +7,5 @@ export function ErrorMessage({ error }: { error: unknown }) {
 
   if (!error) return null;
 
-  return (
-    <p role="alert" className="error">
-      {errorText(t, error)}
-    </p>
-  );
+  return <Alert severity="error">{errorText(t, error)}</Alert>;
 }

@@ -1,7 +1,16 @@
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardActionArea from '@mui/material/CardActionArea';
+import CardContent from '@mui/material/CardContent';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import AddIcon from '@mui/icons-material/Add';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 import { useProjects } from '../api/hooks';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { KeyText } from '../components/KeyText';
+import { Loading } from '../components/Loading';
 
 export function ProjectsPage() {
   const { t } = useTranslation();
@@ -11,41 +20,62 @@ export function ProjectsPage() {
   const total = projects.data?.pages[0]?.total ?? 0;
 
   return (
-    <>
-      <div className="page-head">
-        <h1>{t('projects.title')}</h1>
-        <Link to="/projects/new" className="button primary">
+    <Stack spacing={2}>
+      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h4" component="h1">
+          {t('projects.title')}
+        </Typography>
+        <Button variant="contained" href="/projects/new" startIcon={<AddIcon />}>
           {t('projects.new')}
-        </Link>
-      </div>
+        </Button>
+      </Stack>
 
       <ErrorMessage error={projects.error} />
-      {projects.isPending && <p className="muted">{t('app.loading')}</p>}
+      {projects.isPending && <Loading />}
       {projects.isSuccess && (
         <>
-          <p className="muted">{t('projects.count', { count: total })}</p>
+          <Typography color="text.secondary">{t('projects.count', { count: total })}</Typography>
           {items.length === 0 ? (
-            <p>{t('projects.empty')}</p>
+            <Typography>{t('projects.empty')}</Typography>
           ) : (
-            <ul className="cards">
+            <Box
+              component="ul"
+              sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gap: 1.5, gridTemplateColumns: 'repeat(auto-fill, minmax(16rem, 1fr))' }}
+            >
               {items.map((p) => (
                 <li key={p.id}>
-                  <Link to={`/p/${p.key}`} className="card">
-                    <span className="project-key">{p.key}</span>
-                    <strong>{p.name}</strong>
-                    {p.description && <span className="muted clamp">{p.description}</span>}
-                  </Link>
+                  <Card variant="outlined" sx={{ height: '100%' }}>
+                    <CardActionArea href={`/p/${p.key}`} sx={{ height: '100%', alignItems: 'flex-start' }}>
+                      <CardContent>
+                        <KeyText>{p.key}</KeyText>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                          {p.name}
+                        </Typography>
+                        {p.description && (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                          >
+                            {p.description}
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </CardActionArea>
+                  </Card>
                 </li>
               ))}
-            </ul>
+            </Box>
           )}
           {projects.hasNextPage && (
-            <button type="button" onClick={() => void projects.fetchNextPage()} disabled={projects.isFetchingNextPage}>
-              {projects.isFetchingNextPage ? t('app.loading') : t('app.loadMore')}
-            </button>
+            <Box>
+              <Button variant="outlined" onClick={() => void projects.fetchNextPage()} loading={projects.isFetchingNextPage}>
+                {t('app.loadMore')}
+              </Button>
+            </Box>
           )}
         </>
       )}
-    </>
+    </Stack>
   );
 }

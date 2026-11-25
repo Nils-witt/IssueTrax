@@ -1,9 +1,12 @@
+import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useCreateProject } from '../api/hooks';
 import { ErrorMessage } from '../components/ErrorMessage';
-import { Field } from '../components/Field';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { fieldErrorText } from '../lib/errors';
 
@@ -16,6 +19,8 @@ export function NewProjectPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
+  const fieldError = (field: string) => fieldErrorText(t, create.error, field);
+
   function submit(e: FormEvent) {
     e.preventDefault();
     create.mutate(
@@ -25,36 +30,50 @@ export function NewProjectPage() {
   }
 
   return (
-    <form onSubmit={submit} className="form">
-      <h1>{t('projects.new')}</h1>
+    <Stack component="form" onSubmit={submit} spacing={3} sx={{ maxWidth: '44rem' }}>
+      <Typography variant="h4" component="h1">
+        {t('projects.new')}
+      </Typography>
 
-      <Field id="key" label={t('projects.key')} hint={t('projects.keyHint')} error={fieldErrorText(t, create.error, 'key')}>
-        <input
-          id="key"
-          value={key}
-          onChange={(e) => setKey(e.target.value.toUpperCase())}
-          maxLength={10}
-          autoComplete="off"
-          required
-        />
-      </Field>
+      <TextField
+        id="key"
+        label={t('projects.key')}
+        value={key}
+        onChange={(e) => setKey(e.target.value.toUpperCase())}
+        required
+        autoComplete="off"
+        error={!!fieldError('key')}
+        helperText={fieldError('key') ?? t('projects.keyHint')}
+        slotProps={{ htmlInput: { maxLength: 10 } }}
+      />
 
-      <Field id="name" label={t('projects.name')} error={fieldErrorText(t, create.error, 'name')}>
-        <input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />
-      </Field>
+      <TextField
+        id="name"
+        label={t('projects.name')}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+        error={!!fieldError('name')}
+        helperText={fieldError('name')}
+        slotProps={{ htmlInput: { maxLength: 100 } }}
+      />
 
-      <Field id="description" label={`${t('projects.description')} (${t('app.optional')})`} error={fieldErrorText(t, create.error, 'description')}>
-        <MarkdownEditor id="description" value={description} onChange={setDescription} />
-      </Field>
+      <MarkdownEditor
+        id="description"
+        label={`${t('projects.description')} (${t('app.optional')})`}
+        value={description}
+        onChange={setDescription}
+        error={fieldError('description')}
+      />
 
       <ErrorMessage error={create.error} />
 
-      <div className="actions">
-        <button type="submit" className="primary" disabled={create.isPending}>
-          {create.isPending ? t('app.saving') : t('app.create')}
-        </button>
-        <Link to="/">{t('app.cancel')}</Link>
-      </div>
-    </form>
+      <Stack direction="row" spacing={1}>
+        <Button type="submit" variant="contained" loading={create.isPending}>
+          {t('app.create')}
+        </Button>
+        <Button href="/">{t('app.cancel')}</Button>
+      </Stack>
+    </Stack>
   );
 }
