@@ -1,0 +1,597 @@
+openapi: 3.1.0
+info:
+  title: IssueTrax API
+  version: "1.0"
+  description: |
+    JSON API of IssueTrax, a simple project-scoped issue tracker.
+
+    This document is hand-written documentation; the Go handlers in
+    `internal/adapter/httpapi` are the source of truth.
+
+    **Authentication.** Browsers sign in via OpenID Connect (Authentik):
+    navigate to `GET /auth/login?returnTo=/path`, which ends at
+    `/auth/callback` and sets an HttpOnly session cookie
+    (`__Host-issuetrax_session`, 24 h, not extended). Every `/api` endpoint
+    except `/api/version` requires that cookie and answers `401` with code
+    `unauthenticated` without it.
+
+    **CSRF.** State-changing requests (`POST`, `PATCH`) must be same-origin
+    (checked via `Sec-Fetch-Site` / `Origin`); cross-origin ones get `403`
+    with code `cross_origin_rejected`.
+
+    **Errors.** Every error has the shape of `Error`. `code` is stable and
+    meant for clients to translate; `message` is English; `fields` maps
+    input fields to codes on validation errors (`422`).
+
+    **Pagination.** Lists return `items`, the `total` number of matches and
+    an opaque `nextCursor` (null on the last page). Pass it back as
+    `cursor` with the same filters to get the next page.
+servers:
+  - url: /
+security:
+  - session: []
+
+tags:
+  - name: auth
+  - name: projects
+  - name: issues
+  - name: tags
+  - name: users
+
+paths:
+  /auth/login:
+    get:
+      tags: [auth]
+      summary: Start sign-in (browser navigation)
+      security: []
+      parameters:
+        - name: returnTo
+          in: query
+          description: Local path to open after sign-in. Anything that is not a local path becomes `/`.
+          schema: { type: string, example: /p/TRAX }
+      responses:
+        "302":
+          description: Redirect to the identity provider; sets a short-lived signed login cookie.
+
+  /auth/callback:
+    get:
+      tags: [auth]
+      summary: Finish sign-in (called by the identity provider)
+      security: []
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "302":
+          description: Signed in; sets the session cookie and redirects to `returnTo`.
+        "400":
+          description: Sign-in failed (HTML page with a retry link).
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Sign out
+      description: Deletes the session and clears the cookie. Navigate to `redirectUrl` to also end the identity provider session.
+      security: []
+      responses:
+        "200":
+          description: Signed out.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirectUrl]
+                properties:
+                  redirectUrl: { type: string, format: uri-reference }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+
+  /api/version:
+    get:
+      tags: [auth]
+      summary: Build information
+      security: []
+      responses:
+        "200":
+          description: Version and commit of the running binary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+                  commit: { type: string }
+
+  /api/me:
+    get:
+      tags: [users]
+      summary: The signed-in user
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/users:
+    get:
+      tags: [users]
+      summary: List users
+      description: Everyone who has signed in at least once, ordered by display name. Only these users can be assigned.
+      responses:
+        "200":
+          description: Users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/projects:
+    get:
+      tags: [projects]
+      summary: List projects
+      description: Ordered by name (A→Z, ignoring case).
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of projects.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProject" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "409":
+          description: "`project_key_taken` or `project_name_taken`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      summary: Get a project
+      responses:
+        "200":
+          description: The project.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [projects]
+      summary: Update a project
+      description: Partial update. The key is immutable; sending it yields `422` with field code `immutable`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProject" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`project_name_taken`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}/tags:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [tags]
+      summary: List the project's tags
+      description: Ordered by name. Tags are created by assigning a new name to an issue.
+      responses:
+        "200":
+          description: Tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Tag" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/projects/{key}/tags/{tagId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - name: tagId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [tags]
+      summary: Rename a tag
+      description: Tags cannot be deleted. The name is normalized like on creation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, example: Needs Review }
+      responses:
+        "200":
+          description: Renamed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tag" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`tag_name_taken`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}/issues:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [issues]
+      summary: List issues
+      description: |
+        Newest first (highest number). Different criteria combine with AND.
+        Without `status`, archived issues are hidden.
+      parameters:
+        - name: status
+          in: query
+          description: Repeat to include several statuses.
+          schema:
+            type: array
+            items: { $ref: "#/components/schemas/IssueStatus" }
+          style: form
+          explode: true
+        - name: tag
+          in: query
+          description: Tag IDs; repeat for several.
+          schema: { type: array, items: { type: string, format: uuid } }
+          style: form
+          explode: true
+        - name: tagMode
+          in: query
+          description: "`all` (default): the issue has every given tag; `any`: at least one."
+          schema: { $ref: "#/components/schemas/MatchMode" }
+        - name: assignee
+          in: query
+          description: User IDs; repeat for several.
+          schema: { type: array, items: { type: string, format: uuid } }
+          style: form
+          explode: true
+        - name: assigneeMode
+          in: query
+          description: "`all` (default) or `any`, as for tags."
+          schema: { $ref: "#/components/schemas/MatchMode" }
+        - name: q
+          in: query
+          description: Case-insensitive substring searched in title and description (max 200 characters).
+          schema: { type: string, maxLength: 200 }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of issues.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssuePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [issues]
+      summary: Create an issue
+      description: Unknown tag names are created in the project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateIssue" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}/issues/{number}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - name: number
+        in: path
+        required: true
+        description: The project-scoped number (42 in TRAX-42).
+        schema: { type: integer, format: int64, minimum: 1 }
+    get:
+      tags: [issues]
+      summary: Get an issue
+      responses:
+        "200":
+          description: The issue.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [issues]
+      summary: Update an issue
+      description: |
+        Partial update: absent fields stay unchanged; `tags` and `assignees`
+        replace the whole set. An archived issue accepts only a request that
+        changes nothing but `status` (unarchive first, then edit); anything
+        else yields `409` with code `issue_archived`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateIssue" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Issue" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`issue_archived`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: __Host-issuetrax_session
+      description: Set by `/auth/callback`. Named `issuetrax_session` in development mode.
+
+  parameters:
+    ProjectKey:
+      name: key
+      in: path
+      required: true
+      description: Project key, case-insensitive (TRAX).
+      schema: { type: string, example: TRAX }
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      description: "`nextCursor` from the previous page."
+      schema: { type: string }
+
+  responses:
+    Unauthenticated:
+      description: "No valid session (`unauthenticated`)."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found` or `not_found`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Validation:
+      description: "`validation_failed`; `fields` names the offending inputs."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: validation_failed
+              message: validation failed
+              fields: { title: required, tags: invalid }
+    InvalidJSON:
+      description: "The body is not a single JSON object of the expected shape (`invalid_json`); unknown fields are rejected."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CrossOrigin:
+      description: "Cross-origin state-changing request (`cross_origin_rejected`)."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code.
+              examples: [issue_archived, validation_failed, project_not_found]
+            message:
+              type: string
+              description: Human-readable English message.
+            fields:
+              type: object
+              description: "Validation only: field → code (`required`, `too_long`, `invalid`, `unknown`, `out_of_range`, `immutable`)."
+              additionalProperties: { type: string }
+
+    IssueStatus:
+      type: string
+      enum: [draft, open, closed, archived]
+
+    MatchMode:
+      type: string
+      enum: [all, any]
+      default: all
+
+    User:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        displayName: { type: string }
+
+    Project:
+      type: object
+      required: [id, key, name, description, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, pattern: "^[A-Z][A-Z0-9]{1,9}$", example: TRAX }
+        name: { type: string, maxLength: 100 }
+        description: { type: string, description: Markdown }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateProject:
+      type: object
+      required: [key, name]
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          description: "2–10 characters A-Z/0-9 starting with a letter; lower case is upper-cased. Immutable."
+          example: trax
+        name: { type: string, minLength: 1, maxLength: 100, description: Unique ignoring case. }
+        description: { type: string, description: Markdown, at most 256 KiB. }
+
+    UpdateProject:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string }
+
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,29}$", example: needs-review }
+
+    TagNames:
+      type: array
+      description: |
+        Tag names. Each is normalized (trimmed, lower-cased, runs of spaces or
+        underscores become `-`, so "Needs Review" → `needs-review`) and must
+        then match `^[a-z0-9][a-z0-9-]{0,29}$`. Unknown names are created.
+      items: { type: string }
+
+    Issue:
+      type: object
+      required: [id, key, number, projectKey, title, description, status, tags, assignees, createdBy, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, example: TRAX-42 }
+        number: { type: integer, format: int64, example: 42 }
+        projectKey: { type: string, example: TRAX }
+        title: { type: string, maxLength: 200 }
+        description: { type: string, description: Markdown }
+        status: { $ref: "#/components/schemas/IssueStatus" }
+        tags:
+          type: array
+          description: Ordered by name.
+          items: { $ref: "#/components/schemas/Tag" }
+        assignees:
+          type: array
+          description: Ordered by display name.
+          items: { $ref: "#/components/schemas/User" }
+        createdBy: { $ref: "#/components/schemas/User" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateIssue:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, description: Markdown, at most 256 KiB. }
+        status:
+          allOf: [{ $ref: "#/components/schemas/IssueStatus" }]
+          default: open
+        tags: { $ref: "#/components/schemas/TagNames" }
+        assignees:
+          type: array
+          description: User IDs of users who have signed in before.
+          items: { type: string, format: uuid }
+
+    UpdateIssue:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/IssueStatus" }
+        tags: { $ref: "#/components/schemas/TagNames" }
+        assignees:
+          type: array
+          items: { type: string, format: uuid }
+
+    ProjectPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    IssuePage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Issue" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }

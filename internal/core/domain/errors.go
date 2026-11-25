@@ -44,6 +44,7 @@ const (
 	FieldInvalid    = "invalid"
 	FieldUnknown    = "unknown"
 	FieldOutOfRange = "out_of_range"
+	FieldImmutable  = "immutable"
 )
 
 // Error is a classified domain error with a stable machine-readable code.

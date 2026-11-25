@@ -119,11 +119,13 @@ linters:
         linters:
           - gosec
         text: "G304"
-      # Repeated literals (keys, titles, tag names) are the readable way to
-      # write table-driven test fixtures; constants would obscure them.
+      # Repeated literals (keys, titles, tag names) and the shape of
+      # table-driven test loops are the readable way to write test fixtures;
+      # constants or shared helpers would obscure them.
       - path: _test\.go
         linters:
           - goconst
+          - dupl
 
   settings:
     dupl:

@@ -18,6 +18,10 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 	store := memory.NewStore()
 	valid := httpapi.Config{
 		Auth:      service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
+		Projects:  service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:    service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:      service.NewTagService(service.Repositories{Tx: store}),
+		Users:     service.NewUserService(service.Repositories{Tx: store}),
 		Frontend:  fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Logger:    slog.New(slog.DiscardHandler),
 		PublicURL: "https://trax.example",

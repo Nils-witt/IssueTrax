@@ -70,6 +70,10 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 
 	handler, err := httpapi.NewHandler(httpapi.Config{
 		Auth:            auth,
+		Projects:        service.NewProjectService(repos),
+		Issues:          service.NewIssueService(repos),
+		Tags:            service.NewTagService(repos),
+		Users:           service.NewUserService(repos),
 		Frontend:        dist,
 		Logger:          logger,
 		PublicURL:       cfg.PublicURL,

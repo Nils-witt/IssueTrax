@@ -21,7 +21,11 @@ const minCookieKeyBytes = 32
 
 // Config holds the handler's dependencies and settings.
 type Config struct {
-	Auth port.AuthService
+	Auth     port.AuthService
+	Projects port.ProjectService
+	Issues   port.IssueService
+	Tags     port.TagService
+	Users    port.UserService
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
 	Logger   *slog.Logger
@@ -37,9 +41,13 @@ type Config struct {
 
 // Handler routes HTTP requests to the core services and the SPA.
 type Handler struct {
-	auth    port.AuthService
-	logger  *slog.Logger
-	cookies cookies
+	auth     port.AuthService
+	projects port.ProjectService
+	issues   port.IssueService
+	tags     port.TagService
+	users    port.UserService
+	logger   *slog.Logger
+	cookies  cookies
 }
 
 // NewHandler builds the root http.Handler.
@@ -48,14 +56,18 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		return nil, fmt.Errorf("cookie key must be at least %d bytes", minCookieKeyBytes)
 	}
 
-	if cfg.Auth == nil || cfg.Logger == nil {
-		return nil, errors.New("auth service and logger are required")
+	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Users == nil || cfg.Logger == nil {
+		return nil, errors.New("all services and the logger are required")
 	}
 
 	h := &Handler{
-		auth:    cfg.Auth,
-		logger:  cfg.Logger,
-		cookies: cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
+		auth:     cfg.Auth,
+		projects: cfg.Projects,
+		issues:   cfg.Issues,
+		tags:     cfg.Tags,
+		users:    cfg.Users,
+		logger:   cfg.Logger,
+		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
 	}
 
 	spa, err := newSPAHandler(cfg.Frontend)
@@ -73,7 +85,19 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /auth/logout", h.logout)
 	mux.HandleFunc("/auth/", notFound)
 
+	// Everything else under /api requires a session.
 	mux.Handle("GET /api/me", h.authed(h.me))
+	mux.Handle("GET /api/users", h.authed(h.listUsers))
+	mux.Handle("GET /api/projects", h.authed(h.listProjects))
+	mux.Handle("POST /api/projects", h.authed(h.createProject))
+	mux.Handle("GET /api/projects/{key}", h.authed(h.getProject))
+	mux.Handle("PATCH /api/projects/{key}", h.authed(h.updateProject))
+	mux.Handle("GET /api/projects/{key}/tags", h.authed(h.listTags))
+	mux.Handle("PATCH /api/projects/{key}/tags/{tagId}", h.authed(h.renameTag))
+	mux.Handle("GET /api/projects/{key}/issues", h.authed(h.listIssues))
+	mux.Handle("POST /api/projects/{key}/issues", h.authed(h.createIssue))
+	mux.Handle("GET /api/projects/{key}/issues/{number}", h.authed(h.getIssue))
+	mux.Handle("PATCH /api/projects/{key}/issues/{number}", h.authed(h.updateIssue))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", notFound)

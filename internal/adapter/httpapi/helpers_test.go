@@ -66,7 +66,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	idp := &fakeIDP{callback: publicURL + "/auth/callback"}
 
 	h, err := httpapi.NewHandler(httpapi.Config{
-		Auth: service.NewAuthService(repos, idp),
+		Auth:     service.NewAuthService(repos, idp),
+		Projects: service.NewProjectService(repos),
+		Issues:   service.NewIssueService(repos),
+		Tags:     service.NewTagService(repos),
+		Users:    service.NewUserService(repos),
 		Frontend: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>spa</html>")},
 			"assets/app.js": {Data: []byte("console.log(1)")},

@@ -11,17 +11,6 @@ import (
 	"nilswitt.dev/issuetrax/internal/core/service"
 )
 
-// userResponse is the JSON representation of a domain.User.
-type userResponse struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"displayName"`
-}
-
-func toUserResponse(u domain.User) userResponse {
-	return userResponse{ID: u.ID.String(), Email: u.Email, DisplayName: u.DisplayName}
-}
-
 // authed wraps a handler that needs a signed-in user; without a valid
 // session it answers 401.
 func (h *Handler) authed(next func(http.ResponseWriter, *http.Request, domain.User)) http.Handler {
