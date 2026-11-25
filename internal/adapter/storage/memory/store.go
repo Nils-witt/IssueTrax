@@ -36,6 +36,7 @@ type data struct {
 	comments   map[domain.CommentID]domain.Comment
 	users      map[domain.UserID]domain.User
 	sessions   map[string]domain.Session
+	apiKeys    map[domain.APIKeyID]domain.APIKey
 }
 
 // NewStore returns an empty Store.
@@ -48,6 +49,7 @@ func NewStore() *Store {
 		comments:   map[domain.CommentID]domain.Comment{},
 		users:      map[domain.UserID]domain.User{},
 		sessions:   map[string]domain.Session{},
+		apiKeys:    map[domain.APIKeyID]domain.APIKey{},
 	}}
 }
 
@@ -92,6 +94,7 @@ func (d data) clone() data {
 		comments:   maps.Clone(d.comments),
 		users:      maps.Clone(d.users),
 		sessions:   maps.Clone(d.sessions),
+		apiKeys:    maps.Clone(d.apiKeys),
 	}
 }
 

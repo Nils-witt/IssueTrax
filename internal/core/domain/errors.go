@@ -39,6 +39,13 @@ const (
 	CodeUnauthenticated  = "unauthenticated"
 	CodeLoginFailed      = "login_failed"
 	CodeNotCommentAuthor = "not_comment_author"
+
+	CodeServiceAccountNotFound  = "service_account_not_found"
+	CodeServiceAccountNameTaken = "service_account_name_taken"
+	CodeUserIdentityTaken       = "user_identity_taken"
+	CodeAPIKeyNotFound          = "api_key_not_found" //nolint:gosec // an error code, not a credential
+	CodeInvalidAPIKey           = "invalid_api_key"
+	CodeSessionRequired         = "session_required"
 )
 
 // Stable per-field validation codes, used in Error.Fields.
@@ -93,6 +100,15 @@ var (
 	ErrNoSession        = &Error{kind: ErrUnauthenticated, Code: CodeUnauthenticated, Message: "authentication required"}
 	ErrLoginFailed      = &Error{kind: ErrUnauthenticated, Code: CodeLoginFailed, Message: "sign-in failed"}
 	ErrNotCommentAuthor = &Error{kind: ErrForbidden, Code: CodeNotCommentAuthor, Message: "only the author can change a comment"}
+
+	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}
+	ErrServiceAccountNameTaken = &Error{kind: ErrConflict, Code: CodeServiceAccountNameTaken, Message: "service account name is already taken"}
+	// ErrUserIdentityTaken is returned by user repositories when another
+	// user already has the same issuer and subject.
+	ErrUserIdentityTaken = &Error{kind: ErrConflict, Code: CodeUserIdentityTaken, Message: "user identity is already taken"}
+	ErrAPIKeyNotFound    = &Error{kind: ErrNotFound, Code: CodeAPIKeyNotFound, Message: "api key not found"}
+	ErrInvalidAPIKey     = &Error{kind: ErrUnauthenticated, Code: CodeInvalidAPIKey, Message: "invalid, expired or revoked api key"}
+	ErrSessionRequired   = &Error{kind: ErrForbidden, Code: CodeSessionRequired, Message: "this action requires a signed-in person, not an api key"}
 )
 
 // NewValidationError returns an ErrInvalid error for the given field codes.

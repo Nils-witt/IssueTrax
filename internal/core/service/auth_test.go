@@ -36,9 +36,10 @@ func (f *fakeIDP) EndSessionURL(idToken string) string {
 type authFixture struct {
 	*fixture
 
-	idp   *fakeIDP
-	auth  *service.AuthService
-	clock *time.Time
+	idp      *fakeIDP
+	auth     *service.AuthService
+	accounts *service.BotService
+	clock    *time.Time
 }
 
 func newAuthFixture(t *testing.T) *authFixture {
@@ -47,12 +48,14 @@ func newAuthFixture(t *testing.T) *authFixture {
 	f := newFixture(t)
 	now := testNow
 	idp := &fakeIDP{ident: domain.Identity{Issuer: "https://idp.example", Subject: "ada", Email: "ada@example.com", DisplayName: "Ada"}}
+	clock := service.WithClock(func() time.Time { return now })
 
 	return &authFixture{
-		fixture: f,
-		idp:     idp,
-		clock:   &now,
-		auth:    service.NewAuthService(f.repos, idp, service.WithClock(func() time.Time { return now })),
+		fixture:  f,
+		idp:      idp,
+		clock:    &now,
+		auth:     service.NewAuthService(f.repos, idp, clock),
+		accounts: service.NewBotService(f.repos, clock),
 	}
 }
 

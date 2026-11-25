@@ -7,8 +7,41 @@ export type MatchMode = 'all' | 'any';
 
 export interface User {
   id: string;
+  /** Empty for service accounts. */
   email: string;
   displayName: string;
+  /** True for "bot-<name>" users that call the API with API keys. */
+  serviceAccount: boolean;
+}
+
+/** A service account: the user "bot-<name>". */
+export interface ServiceAccount extends User {
+  /** The name without "bot-". */
+  name: string;
+  createdAt: string;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** The token's first characters, safe to display. */
+  prefix: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+/** A freshly created key; the token is never shown again. */
+export interface CreatedApiKey extends ApiKey {
+  token: string;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  /** RFC 3339; omitted or null for no expiry. */
+  expiresAt?: string | null;
 }
 
 export interface Project {

@@ -33,6 +33,10 @@ func (r *UserRepository) Create(ctx context.Context, u domain.User) error {
 		CreatedAt:   u.CreatedAt,
 		LastLoginAt: u.LastLoginAt,
 	})
+	if isUniqueViolation(err, "users_identity_key") {
+		return domain.ErrUserIdentityTaken
+	}
+
 	if err != nil {
 		return fmt.Errorf("insert user: %w", err)
 	}
@@ -90,6 +94,16 @@ func (r *UserRepository) GetMany(ctx context.Context, ids []domain.UserID) ([]do
 // List returns all users ordered by display name.
 func (r *UserRepository) List(ctx context.Context) ([]domain.User, error) {
 	rows, err := r.db.queries(ctx).ListUsers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("select users: %w", err)
+	}
+
+	return toUsers(rows), nil
+}
+
+// ListByIssuer returns the users of issuer ordered by display name.
+func (r *UserRepository) ListByIssuer(ctx context.Context, issuer string) ([]domain.User, error) {
+	rows, err := r.db.queries(ctx).ListUsersByIssuer(ctx, issuer)
 	if err != nil {
 		return nil, fmt.Errorf("select users: %w", err)
 	}

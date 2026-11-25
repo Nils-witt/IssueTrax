@@ -14,8 +14,9 @@ type UserService interface {
 
 // UserRepository is the driven port for persisting users.
 //
-// Get and GetByIdentity return domain.ErrUserNotFound. List orders by
-// display name. GetMany ignores unknown IDs.
+// Create returns domain.ErrUserIdentityTaken when issuer and subject are
+// already in use. Get and GetByIdentity return domain.ErrUserNotFound. List
+// and ListByIssuer order by display name. GetMany ignores unknown IDs.
 type UserRepository interface {
 	Create(ctx context.Context, user domain.User) error
 	Update(ctx context.Context, user domain.User) error
@@ -23,4 +24,5 @@ type UserRepository interface {
 	GetByIdentity(ctx context.Context, issuer, subject string) (domain.User, error)
 	GetMany(ctx context.Context, ids []domain.UserID) ([]domain.User, error)
 	List(ctx context.Context) ([]domain.User, error)
+	ListByIssuer(ctx context.Context, issuer string) ([]domain.User, error)
 }

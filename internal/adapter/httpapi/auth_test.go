@@ -157,16 +157,18 @@ func TestAuth_SecureCookies(t *testing.T) {
 	store := memory.NewStore()
 
 	h, err := httpapi.NewHandler(httpapi.Config{
-		Auth:      service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{callback: "https://trax.example/auth/callback"}),
-		Projects:  service.NewProjectService(service.Repositories{Tx: store}),
-		Issues:    service.NewIssueService(service.Repositories{Tx: store}),
-		Tags:      service.NewTagService(service.Repositories{Tx: store}),
-		Comments:  service.NewCommentService(service.Repositories{Tx: store}),
-		Users:     service.NewUserService(service.Repositories{Tx: store}),
-		Frontend:  fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Logger:    slog.New(slog.DiscardHandler),
-		PublicURL: "https://trax.example",
-		CookieKey: []byte(strings.Repeat("k", 32)),
+		Auth:     service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{callback: "https://trax.example/auth/callback"}),
+		Projects: service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:   service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:     service.NewTagService(service.Repositories{Tx: store}),
+		Comments: service.NewCommentService(service.Repositories{Tx: store}),
+		Users:    service.NewUserService(service.Repositories{Tx: store}),
+
+		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
+		Frontend:        fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Logger:          slog.New(slog.DiscardHandler),
+		PublicURL:       "https://trax.example",
+		CookieKey:       []byte(strings.Repeat("k", 32)),
 	})
 	if err != nil {
 		t.Fatal(err)

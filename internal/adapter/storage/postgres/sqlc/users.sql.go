@@ -151,6 +151,41 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
+const listUsersByIssuer = `-- name: ListUsersByIssuer :many
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+FROM users
+WHERE issuer = $1
+ORDER BY lower(display_name), id
+`
+
+func (q *Queries) ListUsersByIssuer(ctx context.Context, issuer string) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByIssuer, issuer)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Issuer,
+			&i.Subject,
+			&i.Email,
+			&i.DisplayName,
+			&i.CreatedAt,
+			&i.LastLoginAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUser = `-- name: UpdateUser :execrows
 UPDATE users
 SET email = $1, display_name = $2, last_login_at = $3

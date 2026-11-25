@@ -37,6 +37,7 @@ func newFixture(t *testing.T) *fixture {
 		Comments: memory.NewCommentRepository(store),
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
+		APIKeys:  memory.NewAPIKeyRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 

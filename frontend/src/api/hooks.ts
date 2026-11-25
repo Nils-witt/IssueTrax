@@ -2,12 +2,16 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { query, request } from './client';
 import type {
+  ApiKey,
   Comment,
+  CreateApiKeyInput,
+  CreatedApiKey,
   CreateIssueInput,
   CreateProjectInput,
   Issue,
   Page,
   Project,
+  ServiceAccount,
   Tag,
   UpdateIssueInput,
   UpdateTagInput,
@@ -26,7 +30,47 @@ export const keys = {
   issues: (key: string) => ['issues', key.toUpperCase()] as const,
   issue: (key: string, number: number) => ['issue', key.toUpperCase(), number] as const,
   comments: (key: string, number: number) => ['comments', key.toUpperCase(), number] as const,
+  serviceAccounts: ['serviceAccounts'] as const,
+  apiKeys: (accountId: string) => ['apiKeys', accountId] as const,
 };
+
+export function useServiceAccounts() {
+  return useQuery({ queryKey: keys.serviceAccounts, queryFn: () => request<ServiceAccount[]>('GET', '/api/service-accounts') });
+}
+
+export function useCreateServiceAccount() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) => request<ServiceAccount>('POST', '/api/service-accounts', { name }),
+    onSuccess: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.serviceAccounts }), qc.invalidateQueries({ queryKey: keys.users })]),
+  });
+}
+
+const accountPath = (id: string) => `/api/service-accounts/${encodeURIComponent(id)}/keys`;
+
+export function useApiKeys(accountId: string) {
+  return useQuery({ queryKey: keys.apiKeys(accountId), queryFn: () => request<ApiKey[]>('GET', accountPath(accountId)) });
+}
+
+export function useCreateApiKey(accountId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateApiKeyInput) => request<CreatedApiKey>('POST', accountPath(accountId), input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.apiKeys(accountId) }),
+  });
+}
+
+export function useRevokeApiKey(accountId: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (keyId: string) => request<null>('DELETE', `${accountPath(accountId)}/${encodeURIComponent(keyId)}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.apiKeys(accountId) }),
+  });
+}
 
 export function useMe() {
   return useQuery({ queryKey: keys.me, queryFn: () => request<User>('GET', '/api/me'), staleTime: Infinity });

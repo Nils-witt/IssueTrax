@@ -5,24 +5,59 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
 	"nilswitt.dev/issuetrax/internal/core/service"
 )
 
-// authed wraps a handler that needs a signed-in user; without a valid
-// session it answers 401.
+// authed wraps a handler that needs a caller: a signed-in user (session
+// cookie) or a service account (Authorization: Bearer <api key>). Without
+// valid credentials it answers 401. A request that sends an Authorization
+// header is judged by it alone, never by a cookie it may also carry.
 func (h *Handler) authed(next func(http.ResponseWriter, *http.Request, domain.User)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := h.auth.Authenticate(r.Context(), h.cookies.sessionToken(r))
+		user, err := h.authenticate(r)
 		if err != nil {
+			if errors.Is(err, domain.ErrInvalidAPIKey) {
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+			}
+
 			h.writeDomainError(w, r, err)
+
 			return
 		}
 
 		next(w, r, user)
 	})
+}
+
+// sessionOnly is like authed but also refuses service accounts with 403,
+// for actions only people may take (managing service accounts and keys).
+func (h *Handler) sessionOnly(next func(http.ResponseWriter, *http.Request, domain.User)) http.Handler {
+	return h.authed(func(w http.ResponseWriter, r *http.Request, user domain.User) {
+		if user.IsServiceAccount() {
+			h.writeDomainError(w, r, domain.ErrSessionRequired)
+			return
+		}
+
+		next(w, r, user)
+	})
+}
+
+func (h *Handler) authenticate(r *http.Request) (domain.User, error) {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return h.auth.Authenticate(r.Context(), h.cookies.sessionToken(r))
+	}
+
+	scheme, token, ok := strings.Cut(header, " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	return h.auth.AuthenticateAPIKey(r.Context(), strings.TrimSpace(token))
 }
 
 // login starts the OIDC flow: GET /auth/login?returnTo=/p/TRAX.

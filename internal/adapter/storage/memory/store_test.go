@@ -24,6 +24,7 @@ func TestContract(t *testing.T) {
 			Comments: memory.NewCommentRepository(s),
 			Users:    memory.NewUserRepository(s),
 			Sessions: memory.NewSessionRepository(s),
+			APIKeys:  memory.NewAPIKeyRepository(s),
 		}
 	})
 }

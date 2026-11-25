@@ -27,6 +27,8 @@ type Config struct {
 	Tags     port.TagService
 	Comments port.CommentService
 	Users    port.UserService
+	// ServiceAccounts manages "bot-<name>" users and their API keys.
+	ServiceAccounts port.ServiceAccountService
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
 	// OpenAPISpec is the OpenAPI document (YAML) served at
@@ -51,6 +53,7 @@ type Handler struct {
 	tags     port.TagService
 	comments port.CommentService
 	users    port.UserService
+	accounts port.ServiceAccountService
 	logger   *slog.Logger
 	cookies  cookies
 	openAPI  []byte
@@ -62,7 +65,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		return nil, fmt.Errorf("cookie key must be at least %d bytes", minCookieKeyBytes)
 	}
 
-	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Comments == nil || cfg.Users == nil || cfg.Logger == nil {
+	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Comments == nil || cfg.Users == nil ||
+		cfg.ServiceAccounts == nil || cfg.Logger == nil {
 		return nil, errors.New("all services and the logger are required")
 	}
 
@@ -73,6 +77,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		tags:     cfg.Tags,
 		comments: cfg.Comments,
 		users:    cfg.Users,
+		accounts: cfg.ServiceAccounts,
 		logger:   cfg.Logger,
 		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
 		openAPI:  cfg.OpenAPISpec,
@@ -97,9 +102,15 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("POST /auth/logout", h.logout)
 	mux.HandleFunc("/auth/", notFound)
 
-	// Everything else under /api requires a session.
+	// Everything else under /api requires a session or an API key;
+	// service accounts are managed by people only.
 	mux.Handle("GET /api/me", h.authed(h.me))
 	mux.Handle("GET /api/users", h.authed(h.listUsers))
+	mux.Handle("GET /api/service-accounts", h.sessionOnly(h.listServiceAccounts))
+	mux.Handle("POST /api/service-accounts", h.sessionOnly(h.createServiceAccount))
+	mux.Handle("GET /api/service-accounts/{id}/keys", h.sessionOnly(h.listAPIKeys))
+	mux.Handle("POST /api/service-accounts/{id}/keys", h.sessionOnly(h.createAPIKey))
+	mux.Handle("DELETE /api/service-accounts/{id}/keys/{keyId}", h.sessionOnly(h.revokeAPIKey))
 	mux.Handle("GET /api/projects", h.authed(h.listProjects))
 	mux.Handle("POST /api/projects", h.authed(h.createProject))
 	mux.Handle("GET /api/projects/{key}", h.authed(h.getProject))

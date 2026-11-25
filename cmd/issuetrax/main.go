@@ -59,6 +59,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Comments: postgres.NewCommentRepository(db),
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
+		APIKeys:  postgres.NewAPIKeyRepository(db),
 	}
 
 	idp, err := oidc.New(ctx, oidc.Config{
@@ -86,6 +87,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Tags:            service.NewTagService(repos),
 		Comments:        service.NewCommentService(repos),
 		Users:           service.NewUserService(repos),
+		ServiceAccounts: service.NewBotService(repos),
 		Frontend:        dist,
 		OpenAPISpec:     docs.OpenAPI,
 		Logger:          logger,

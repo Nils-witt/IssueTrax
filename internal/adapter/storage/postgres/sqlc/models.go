@@ -56,6 +56,19 @@ func (ns NullIssueStatus) Value() (driver.Value, error) {
 	return string(ns.IssueStatus), nil
 }
 
+type ApiKey struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Name       string
+	TokenHash  []byte
+	Prefix     string
+	CreatedBy  uuid.UUID
+	CreatedAt  time.Time
+	ExpiresAt  *time.Time
+	LastUsedAt *time.Time
+	RevokedAt  *time.Time
+}
+
 type Comment struct {
 	ID        uuid.UUID
 	IssueID   uuid.UUID

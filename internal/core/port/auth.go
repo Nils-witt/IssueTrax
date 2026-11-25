@@ -33,6 +33,9 @@ type AuthService interface {
 	CompleteLogin(ctx context.Context, saved LoginState, returnedState, code string) (token string, user domain.User, err error)
 	// Authenticate resolves a session token to its user or returns domain.ErrNoSession.
 	Authenticate(ctx context.Context, token string) (domain.User, error)
+	// AuthenticateAPIKey resolves an API key token to its service account
+	// or returns domain.ErrInvalidAPIKey.
+	AuthenticateAPIKey(ctx context.Context, token string) (domain.User, error)
 	// Logout ends the session (if any) and returns the IdP logout URL to
 	// visit next, or "" when the IdP does not support it.
 	Logout(ctx context.Context, token string) (idpLogoutURL string, err error)

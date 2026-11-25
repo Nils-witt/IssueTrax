@@ -11,10 +11,13 @@ type userResponse struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`
 	DisplayName string `json:"displayName"`
+	// ServiceAccount is true for "bot-<name>" users that call the API
+	// with API keys.
+	ServiceAccount bool `json:"serviceAccount"`
 }
 
 func toUserResponse(u domain.User) userResponse {
-	return userResponse{ID: u.ID.String(), Email: u.Email, DisplayName: u.DisplayName}
+	return userResponse{ID: u.ID.String(), Email: u.Email, DisplayName: u.DisplayName, ServiceAccount: u.IsServiceAccount()}
 }
 
 // GET /api/users: everyone who has signed in at least once (assignee picker).

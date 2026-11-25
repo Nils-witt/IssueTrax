@@ -17,16 +17,18 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 
 	store := memory.NewStore()
 	valid := httpapi.Config{
-		Auth:      service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
-		Projects:  service.NewProjectService(service.Repositories{Tx: store}),
-		Issues:    service.NewIssueService(service.Repositories{Tx: store}),
-		Tags:      service.NewTagService(service.Repositories{Tx: store}),
-		Comments:  service.NewCommentService(service.Repositories{Tx: store}),
-		Users:     service.NewUserService(service.Repositories{Tx: store}),
-		Frontend:  fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Logger:    slog.New(slog.DiscardHandler),
-		PublicURL: "https://trax.example",
-		CookieKey: []byte(strings.Repeat("k", 32)),
+		Auth:     service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
+		Projects: service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:   service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:     service.NewTagService(service.Repositories{Tx: store}),
+		Comments: service.NewCommentService(service.Repositories{Tx: store}),
+		Users:    service.NewUserService(service.Repositories{Tx: store}),
+
+		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
+		Frontend:        fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Logger:          slog.New(slog.DiscardHandler),
+		PublicURL:       "https://trax.example",
+		CookieKey:       []byte(strings.Repeat("k", 32)),
 	}
 
 	if _, err := httpapi.NewHandler(valid); err != nil {
@@ -38,6 +40,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		"bad public url":   func(c *httpapi.Config) { c.PublicURL = "trax.example" },
 		"no index.html":    func(c *httpapi.Config) { c.Frontend = fstest.MapFS{} },
 		"no auth service":  func(c *httpapi.Config) { c.Auth = nil },
+		"no accounts":      func(c *httpapi.Config) { c.ServiceAccounts = nil },
 	}
 
 	for name, mutate := range tests {

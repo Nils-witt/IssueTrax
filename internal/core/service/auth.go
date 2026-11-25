@@ -141,6 +141,50 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (domain.Us
 	return user, nil
 }
 
+// AuthenticateAPIKey resolves an API key token to its service account and
+// records when the key was last used.
+func (s *AuthService) AuthenticateAPIKey(ctx context.Context, token string) (domain.User, error) {
+	if !strings.HasPrefix(token, domain.APIKeyTokenPrefix) {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	key, err := s.repos.APIKeys.GetByHash(ctx, hashToken(token))
+	if errors.Is(err, domain.ErrAPIKeyNotFound) {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	if err != nil {
+		return domain.User{}, fmt.Errorf("get api key: %w", err)
+	}
+
+	now := s.opts.now()
+	if !key.Active(now) {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	user, err := s.repos.Users.Get(ctx, key.UserID)
+	if errors.Is(err, domain.ErrUserNotFound) {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	if err != nil {
+		return domain.User{}, fmt.Errorf("get api key user: %w", err)
+	}
+
+	// Only service accounts may use keys; people sign in via the IdP.
+	if !user.IsServiceAccount() {
+		return domain.User{}, domain.ErrInvalidAPIKey
+	}
+
+	if key.TouchLastUsed(now) {
+		if err := s.repos.APIKeys.Update(ctx, key); err != nil {
+			return domain.User{}, fmt.Errorf("record api key use: %w", err)
+		}
+	}
+
+	return user, nil
+}
+
 // Logout deletes the session and returns where to end the IdP session.
 func (s *AuthService) Logout(ctx context.Context, token string) (string, error) {
 	var idToken string
@@ -201,7 +245,7 @@ func randomToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// hashToken returns the storage key for a session token. A plain SHA-256 is
+// hashToken returns the storage key for a session or API key token. A plain SHA-256 is
 // sufficient because tokens carry 256 bits of entropy.
 func hashToken(token string) []byte {
 	sum := sha256.Sum256([]byte(token))

@@ -15,6 +15,15 @@ info:
     except `/api/version` and `/api/openapi.yaml` requires that cookie and answers `401` with code
     `unauthenticated` without it.
 
+    **Service accounts.** Automations call the API as a service account,
+    a user named `bot-<name>`, created by a signed-in person under
+    `/api/service-accounts`. They send an API key as
+    `Authorization: Bearer itx_…`. A request with an `Authorization`
+    header is judged by that header alone; an unknown, malformed, expired
+    or revoked key answers `401` with code `invalid_api_key`. Service
+    accounts can do everything a person can, except manage service
+    accounts and keys (`403`, code `session_required`).
+
     **CSRF.** State-changing requests (`POST`, `PATCH`, `DELETE`) must be same-origin
     (checked via `Sec-Fetch-Site` / `Origin`); cross-origin ones get `403`
     with code `cross_origin_rejected`.
@@ -30,6 +39,7 @@ servers:
   - url: /
 security:
   - session: []
+  - apiKey: []
 
 tags:
   - name: auth
@@ -38,6 +48,7 @@ tags:
   - name: tags
   - name: comments
   - name: users
+  - name: service-accounts
 
 paths:
   /auth/login:
@@ -362,6 +373,12 @@ paths:
         required: true
         description: The project-scoped number (42 in TRAX-42).
         schema: { type: integer, format: int64, minimum: 1 }
+    ServiceAccountID:
+      name: id
+      in: path
+      required: true
+      description: The service account's user ID.
+      schema: { type: string, format: uuid }
     get:
       tags: [issues]
       summary: Get an issue
@@ -486,6 +503,113 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/IssueArchived" }
 
+  /api/service-accounts:
+    get:
+      tags: [service-accounts]
+      summary: List service accounts
+      description: All service accounts, ordered by display name. Requires a signed-in person.
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Service accounts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ServiceAccount" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/SessionRequired" }
+    post:
+      tags: [service-accounts]
+      summary: Create a service account
+      description: |
+        Creates the user `bot-<name>`. The name is lower-cased and a leading
+        `bot-` is dropped, so `CI` and `bot-ci` both create `bot-ci`.
+        Service accounts cannot be deleted; revoke their keys instead.
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateServiceAccount" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceAccount" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/SessionRequired" }
+        "409":
+          description: "`service_account_name_taken`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/service-accounts/{id}/keys:
+    parameters:
+      - $ref: "#/components/parameters/ServiceAccountID"
+    get:
+      tags: [service-accounts]
+      summary: List a service account's API keys
+      description: Newest first, including revoked and expired keys. Tokens are never returned here.
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Keys.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/APIKey" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/SessionRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [service-accounts]
+      summary: Create an API key
+      description: |
+        Issues a new key. The response is the only place the `token` ever
+        appears; only its SHA-256 is stored. A service account may have
+        several keys, e.g. to rotate without downtime.
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAPIKey" }
+      responses:
+        "201":
+          description: Created; keep the token now.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatedAPIKey" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/SessionRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/service-accounts/{id}/keys/{keyId}:
+    parameters:
+      - $ref: "#/components/parameters/ServiceAccountID"
+      - name: keyId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [service-accounts]
+      summary: Revoke an API key
+      description: The key stops working immediately. It stays listed with `revokedAt` set. Revoking twice is fine.
+      security: [{ session: [] }]
+      responses:
+        "204": { description: Revoked. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/SessionRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
 components:
   securitySchemes:
     session:
@@ -493,6 +617,10 @@ components:
       in: cookie
       name: __Host-issuetrax_session
       description: Set by `/auth/callback`. Named `issuetrax_session` in development mode.
+    apiKey:
+      type: http
+      scheme: bearer
+      description: A service account's API key (`itx_…`), created via `POST /api/service-accounts/{id}/keys`.
 
   parameters:
     ProjectKey:
@@ -520,12 +648,12 @@ components:
 
   responses:
     Unauthenticated:
-      description: "No valid session (`unauthenticated`)."
+      description: "No valid session (`unauthenticated`) or API key (`invalid_api_key`)."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -551,6 +679,11 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     Forbidden:
       description: "`not_comment_author` (the comment belongs to someone else) or `cross_origin_rejected`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    SessionRequired:
+      description: "`session_required`: service accounts cannot manage service accounts or keys."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -592,11 +725,63 @@ components:
 
     User:
       type: object
-      required: [id, email, displayName]
+      required: [id, email, displayName, serviceAccount]
       properties:
         id: { type: string, format: uuid }
-        email: { type: string }
+        email: { type: string, description: Empty for service accounts. }
         displayName: { type: string }
+        serviceAccount: { type: boolean, description: "True for `bot-<name>` users that use API keys." }
+
+    ServiceAccount:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [name, createdAt]
+          properties:
+            name: { type: string, description: "The name without `bot-`.", example: ci }
+            createdAt: { type: string, format: date-time }
+
+    CreateServiceAccount:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: "`^[a-z0-9][a-z0-9-]{0,39}$` after lower-casing and dropping a leading `bot-`."
+          example: ci
+
+    APIKey:
+      type: object
+      required: [id, name, prefix, createdBy, createdAt, expiresAt, lastUsedAt, revokedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, description: What the key is for. }
+        prefix: { type: string, description: "The token's first characters, to tell keys apart.", example: itx_AbCd1234 }
+        createdBy: { type: string, format: uuid, description: The person who created the key. }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time, description: Updated at most once a minute. }
+        revokedAt: { type: [string, "null"], format: date-time }
+
+    CreatedAPIKey:
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [token]
+          properties:
+            token: { type: string, description: "Send as `Authorization: Bearer <token>`. Shown only once.", example: itx_AbCd1234… }
+
+    CreateAPIKey:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, description: "Required, at most 100 characters.", example: GitHub Actions }
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: Optional; must lie in the future (`out_of_range` otherwise).
 
     Project:
       type: object

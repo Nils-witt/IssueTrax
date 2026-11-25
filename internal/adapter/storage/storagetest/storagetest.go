@@ -43,7 +43,11 @@ var contract = []struct {
 	{name: "Comments/list by issue", run: testCommentsListByIssue},
 	{name: "Users/create, get and update", run: testUsersCreateGetAndUpdate},
 	{name: "Users/list and get many", run: testUsersListAndGetMany},
+	{name: "Users/identity is unique", run: testUsersIdentityIsUnique},
+	{name: "Users/list by issuer", run: testUsersListByIssuer},
 	{name: "Sessions/lifecycle", run: testSessionsLifecycle},
+	{name: "APIKeys/lifecycle", run: testAPIKeysLifecycle},
+	{name: "APIKeys/list by user", run: testAPIKeysListByUser},
 	{name: "Tx/commit and rollback", run: testTx},
 }
 
@@ -96,6 +100,16 @@ func user(t *testing.T, r service.Repositories, name string) domain.User {
 		ID: domain.UserID(newID()), Issuer: "https://idp", Subject: "sub-" + name,
 		Email: name + "@example.com", DisplayName: name, CreatedAt: now, LastLoginAt: now,
 	}
+	must(t, r.Users.Create(t.Context(), u))
+
+	return u
+}
+
+func serviceAccount(t *testing.T, r service.Repositories, name string) domain.User {
+	t.Helper()
+
+	u, err := domain.NewServiceAccount(domain.UserID(newID()), name, now)
+	must(t, err)
 	must(t, r.Users.Create(t.Context(), u))
 
 	return u

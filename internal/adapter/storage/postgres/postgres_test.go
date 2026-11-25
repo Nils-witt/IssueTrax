@@ -130,6 +130,7 @@ func repositories(db *postgres.DB) service.Repositories {
 		Comments: postgres.NewCommentRepository(db),
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
+		APIKeys:  postgres.NewAPIKeyRepository(db),
 	}
 }
 

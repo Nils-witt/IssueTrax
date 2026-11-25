@@ -2,6 +2,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import Chip from '@mui/material/Chip';
 import type { SxProps, Theme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
+import { useTranslation } from 'react-i18next';
 import type { User } from '../api/types';
 
 interface UserPickerProps {
@@ -18,6 +19,7 @@ interface UserPickerProps {
 
 /** Multi-select autocomplete of users (only users who have signed in once exist). */
 export function UserPicker({ id, users, value, onChange, label, error, size, sx, autoFocus }: UserPickerProps) {
+  const { t } = useTranslation();
   const selected = users.filter((u) => value.includes(u.id));
 
   return (
@@ -43,7 +45,8 @@ export function UserPicker({ id, users, value, onChange, label, error, size, sx,
           <span>
             {u.displayName}
             <br />
-            <small style={{ opacity: 0.7 }}>{u.email}</small>
+            {/* Service accounts have no e-mail; label them instead. */}
+            <small style={{ opacity: 0.7 }}>{u.serviceAccount ? t('serviceAccounts.bot') : u.email}</small>
           </span>
         </li>
       )}

@@ -20,10 +20,16 @@ type UserRepository struct{ s *Store }
 // NewUserRepository returns a UserRepository backed by s.
 func NewUserRepository(s *Store) *UserRepository { return &UserRepository{s: s} }
 
-// Create inserts user.
+// Create inserts user unless its identity is taken.
 func (r *UserRepository) Create(_ context.Context, user domain.User) error {
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
+
+	for _, u := range r.s.data.users {
+		if u.Issuer == user.Issuer && u.Subject == user.Subject {
+			return domain.ErrUserIdentityTaken
+		}
+	}
 
 	r.s.data.users[user.ID] = user
 
@@ -93,12 +99,35 @@ func (r *UserRepository) List(_ context.Context) ([]domain.User, error) {
 	users := slices.Collect(maps.Values(r.s.data.users))
 	r.s.mu.RUnlock()
 
+	sortUsers(users)
+
+	return users, nil
+}
+
+// ListByIssuer returns the users of issuer ordered by display name.
+func (r *UserRepository) ListByIssuer(_ context.Context, issuer string) ([]domain.User, error) {
+	r.s.mu.RLock()
+
+	users := []domain.User{}
+
+	for _, u := range r.s.data.users {
+		if u.Issuer == issuer {
+			users = append(users, u)
+		}
+	}
+
+	r.s.mu.RUnlock()
+
+	sortUsers(users)
+
+	return users, nil
+}
+
+func sortUsers(users []domain.User) {
 	slices.SortFunc(users, func(a, b domain.User) int {
 		return cmp.Or(
 			cmp.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName)),
 			cmp.Compare(a.ID.String(), b.ID.String()),
 		)
 	})
-
-	return users, nil
 }

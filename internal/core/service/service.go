@@ -22,6 +22,7 @@ type Repositories struct {
 	Comments port.CommentRepository
 	Users    port.UserRepository
 	Sessions port.SessionRepository
+	APIKeys  port.APIKeyRepository
 }
 
 // Option customizes a service.

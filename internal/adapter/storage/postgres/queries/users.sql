@@ -22,3 +22,9 @@ SELECT id, issuer, subject, email, display_name, created_at, last_login_at FROM 
 SELECT id, issuer, subject, email, display_name, created_at, last_login_at
 FROM users
 ORDER BY lower(display_name), id;
+
+-- name: ListUsersByIssuer :many
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+FROM users
+WHERE issuer = @issuer
+ORDER BY lower(display_name), id;

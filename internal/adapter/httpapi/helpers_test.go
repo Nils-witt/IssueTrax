@@ -60,6 +60,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Comments: memory.NewCommentRepository(store),
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
+		APIKeys:  memory.NewAPIKeyRepository(store),
 	}
 
 	srv := httptest.NewUnstartedServer(nil)
@@ -73,6 +74,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		Tags:     service.NewTagService(repos),
 		Comments: service.NewCommentService(repos),
 		Users:    service.NewUserService(repos),
+
+		ServiceAccounts: service.NewBotService(repos),
 		Frontend: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>spa</html>")},
 			"assets/app.js": {Data: []byte("console.log(1)")},

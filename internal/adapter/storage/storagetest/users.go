@@ -59,3 +59,37 @@ func testUsersListAndGetMany(t *testing.T, newRepos NewRepositories) {
 		t.Fatalf("GetMany() = %+v, %v", many, err)
 	}
 }
+
+func testUsersIdentityIsUnique(t *testing.T, newRepos NewRepositories) {
+	t.Helper()
+
+	r := newRepos(t)
+	ada := user(t, r, "ada")
+
+	dup := ada
+	dup.ID = domain.UserID(newID())
+	wantErr(t, r.Users.Create(t.Context(), dup), domain.ErrUserIdentityTaken)
+
+	dup.Issuer = "https://other-idp"
+	must(t, r.Users.Create(t.Context(), dup))
+}
+
+func testUsersListByIssuer(t *testing.T, newRepos NewRepositories) {
+	t.Helper()
+
+	r := newRepos(t)
+	user(t, r, "ada")
+	ops, ci := serviceAccount(t, r, "ops"), serviceAccount(t, r, "ci")
+
+	list, err := r.Users.ListByIssuer(t.Context(), domain.ServiceAccountIssuer)
+	must(t, err)
+
+	if len(list) != 2 || list[0] != ci || list[1] != ops {
+		t.Fatalf("ListByIssuer() = %+v, want [bot-ci bot-ops]", list)
+	}
+
+	list, err = r.Users.ListByIssuer(t.Context(), "https://nobody")
+	if err != nil || list == nil || len(list) != 0 {
+		t.Fatalf("ListByIssuer(unknown) = %#v, %v; want empty", list, err)
+	}
+}
