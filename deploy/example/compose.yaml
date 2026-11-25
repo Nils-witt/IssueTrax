@@ -1,0 +1,92 @@
+# Example production deployment of IssueTrax with PostgreSQL, autoheal and
+# watchtower. Authentik is not included: point ISSUETRAX_OIDC_ISSUER at your
+# existing instance (see "Authentik setup" in the README).
+#
+#   cp .env.example .env    # then fill in every value
+#   docker compose up -d
+#
+# IssueTrax listens on 127.0.0.1:8080 and speaks plain HTTP; put a TLS
+# terminating reverse proxy (Caddy, Traefik, nginx, ...) in front of it.
+#
+#   autoheal    restarts containers labelled autoheal=true when their Docker
+#               healthcheck reports "unhealthy" (Docker itself only restarts
+#               containers that exit).
+#   watchtower  pulls new images for containers labelled
+#               com.centurylinklabs.watchtower.enable=true and recreates them.
+#               Only IssueTrax is opted in; PostgreSQL major upgrades need a
+#               manual dump/restore and must never happen automatically.
+#
+# Both mount the Docker socket, which is equivalent to root on the host.
+name: issuetrax
+
+services:
+  issuetrax:
+    image: ghcr.io/nils-witt/issuetrax:${ISSUETRAX_TAG:-main}
+    restart: unless-stopped
+    environment:
+      ISSUETRAX_DATABASE_URL: postgres://issuetrax:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/issuetrax?sslmode=disable
+      ISSUETRAX_PUBLIC_URL: ${ISSUETRAX_PUBLIC_URL:?set ISSUETRAX_PUBLIC_URL in .env}
+      ISSUETRAX_OIDC_ISSUER: ${ISSUETRAX_OIDC_ISSUER:?set ISSUETRAX_OIDC_ISSUER in .env}
+      ISSUETRAX_OIDC_CLIENT_ID: ${ISSUETRAX_OIDC_CLIENT_ID:?set ISSUETRAX_OIDC_CLIENT_ID in .env}
+      ISSUETRAX_OIDC_CLIENT_SECRET: ${ISSUETRAX_OIDC_CLIENT_SECRET:?set ISSUETRAX_OIDC_CLIENT_SECRET in .env}
+      ISSUETRAX_COOKIE_KEY: ${ISSUETRAX_COOKIE_KEY:?set ISSUETRAX_COOKIE_KEY in .env}
+      ISSUETRAX_LOG_LEVEL: ${ISSUETRAX_LOG_LEVEL:-info}
+    ports:
+      - "127.0.0.1:8080:8080"
+    # The image is distroless (no shell/curl); the binary probes /healthz itself.
+    healthcheck:
+      test: ["CMD", "/issuetrax", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    labels:
+      autoheal: "true"
+      com.centurylinklabs.watchtower.enable: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: issuetrax
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: issuetrax
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U issuetrax -d issuetrax"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      autoheal: "true"
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 10
+      AUTOHEAL_START_PERIOD: 60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+
+  # containrrr/watchtower is archived and fails against Docker 29+; this is
+  # its maintained fork with the same labels and settings.
+  watchtower:
+    image: nickfedor/watchtower:latest
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: ${WATCHTOWER_SCHEDULE:-0 0 4 * * *}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  postgres-data:

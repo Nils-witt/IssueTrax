@@ -33,6 +33,15 @@ const shutdownTimeout = 15 * time.Second
 const sessionCleanupInterval = time.Hour
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			fmt.Fprintln(os.Stderr, "unhealthy:", err)
+			os.Exit(1)
+		}
+
+		return
+	}
+
 	if err := run(os.Args[1:]); err != nil {
 		slog.Error("issuetrax exited with error", slog.Any("error", err))
 		os.Exit(1)

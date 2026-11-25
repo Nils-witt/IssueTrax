@@ -27,4 +27,6 @@ FROM gcr.io/distroless/static-debian13:nonroot
 ENV ISSUETRAX_ADDR=:8080
 COPY --from=builder /out/issuetrax /issuetrax
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["/issuetrax", "healthcheck"]
 ENTRYPOINT ["/issuetrax"]
