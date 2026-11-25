@@ -27,7 +27,9 @@ services:
     image: ghcr.io/nils-witt/issuetrax:${ISSUETRAX_TAG:-main}
     restart: unless-stopped
     environment:
-      ISSUETRAX_DATABASE_URL: postgres://issuetrax:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/issuetrax?sslmode=disable
+      # Keyword/value DSN instead of a URL: the quoted password may contain
+      # URL-reserved characters such as / @ # ? : (only ' and \ are not allowed).
+      ISSUETRAX_DATABASE_URL: "host=postgres port=5432 user=issuetrax dbname=issuetrax sslmode=disable password='${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}'"
       ISSUETRAX_PUBLIC_URL: ${ISSUETRAX_PUBLIC_URL:?set ISSUETRAX_PUBLIC_URL in .env}
       ISSUETRAX_OIDC_ISSUER: ${ISSUETRAX_OIDC_ISSUER:?set ISSUETRAX_OIDC_ISSUER in .env}
       ISSUETRAX_OIDC_CLIENT_ID: ${ISSUETRAX_OIDC_CLIENT_ID:?set ISSUETRAX_OIDC_CLIENT_ID in .env}
