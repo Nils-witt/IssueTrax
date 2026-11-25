@@ -11,7 +11,8 @@ Architecture is hexagonal (ports & adapters), wired by manual constructor inject
 - `internal/core/domain` — entities and rules; no adapter imports.
 - `internal/core/port` — driving (`IssueService`) and driven (`IssueRepository`) interfaces.
 - `internal/core/service` — use-case implementations of driving ports.
-- `internal/adapter/httpapi` — inbound HTTP adapter (JSON DTOs live here, not in domain) + SPA fallback.
+- `internal/adapter/httpapi` — inbound HTTP adapter (JSON DTOs live here, not in domain): `/api` JSON, `/auth` browser sign-in (signed login cookie, session cookie, CSRF via `http.CrossOriginProtection`), SPA fallback.
+- `internal/adapter/oidc` — OpenID Connect client for Authentik (code flow + PKCE, ID token verification).
 - `internal/adapter/storage/postgres` — PostgreSQL repositories (pgx + sqlc; goose migrations embedded in `migrations/`, queries in `queries/`, generated code in `sqlc/` — never edit by hand, run `make generate`).
 - `internal/adapter/storage/memory` — in-memory repositories for service unit tests.
 - `internal/adapter/storage/storagetest` — repository contract suite every storage adapter must pass.
@@ -23,4 +24,4 @@ Dependencies point inward: adapters → port/service → domain.
 - `make build` — builds `frontend/dist` then `bin/issuetrax`. `frontend/dist` must exist before any Go build, vet, test or lint (`make frontend`).
 - `make test` runs everything incl. Postgres integration tests (`-tags integration`, testcontainers, needs Docker); `make test-unit` skips them. `make lint` (golangci-lint + oxlint) / `make audit` (govulncheck).
 - `make generate` regenerates sqlc code after changing `queries/*.sql` or migrations.
-- Dev: `make dev-db` (Postgres on localhost:55432 via `deploy/compose.yaml`), `make dev-backend` (port 8080) and `make dev-frontend` (Vite HMR, proxies `/api` to the backend).
+- Dev: `make dev-db` (Postgres on localhost:55432 and Authentik on localhost:9000 via `deploy/compose.yaml`; the Authentik app/test user `ada`/`ada` come from `deploy/authentik/blueprints/`), `make dev-backend` (port 8080, dev settings from the Makefile) and `make dev-frontend` (Vite HMR on :5173, proxies `/api` and `/auth` to the backend; open the app there).

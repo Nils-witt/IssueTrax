@@ -34,6 +34,7 @@ const (
 	CodeTagNameTaken     = "tag_name_taken"
 	CodeIssueArchived    = "issue_archived"
 	CodeUnauthenticated  = "unauthenticated"
+	CodeLoginFailed      = "login_failed"
 )
 
 // Stable per-field validation codes, used in Error.Fields.
@@ -84,6 +85,7 @@ var (
 	ErrTagNameTaken     = &Error{kind: ErrConflict, Code: CodeTagNameTaken, Message: "tag name is already taken"}
 	ErrArchived         = &Error{kind: ErrIssueArchived, Code: CodeIssueArchived, Message: "archived issues can only change their status"}
 	ErrNoSession        = &Error{kind: ErrUnauthenticated, Code: CodeUnauthenticated, Message: "authentication required"}
+	ErrLoginFailed      = &Error{kind: ErrUnauthenticated, Code: CodeLoginFailed, Message: "sign-in failed"}
 )
 
 // NewValidationError returns an ErrInvalid error for the given field codes.

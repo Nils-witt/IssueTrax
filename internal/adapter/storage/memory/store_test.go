@@ -22,6 +22,7 @@ func TestContract(t *testing.T) {
 			Issues:   memory.NewIssueRepository(s),
 			Tags:     memory.NewTagRepository(s),
 			Users:    memory.NewUserRepository(s),
+			Sessions: memory.NewSessionRepository(s),
 		}
 	})
 }

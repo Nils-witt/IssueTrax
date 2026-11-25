@@ -20,6 +20,7 @@ type Repositories struct {
 	Issues   port.IssueRepository
 	Tags     port.TagRepository
 	Users    port.UserRepository
+	Sessions port.SessionRepository
 }
 
 // Option customizes a service.

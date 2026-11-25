@@ -1,81 +1,116 @@
 package httpapi_test
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
+	"nilswitt.dev/issuetrax/internal/adapter/storage/memory"
+	"nilswitt.dev/issuetrax/internal/core/service"
 )
 
-func newTestServer(t *testing.T) *httptest.Server {
-	t.Helper()
-
-	dist := fstest.MapFS{
-		"index.html":    {Data: []byte("<html>spa</html>")},
-		"assets/app.js": {Data: []byte("console.log(1)")},
-	}
-
-	h, err := httpapi.NewHandler(dist, slog.New(slog.DiscardHandler))
-	if err != nil {
-		t.Fatalf("NewHandler() error = %v", err)
-	}
-
-	srv := httptest.NewServer(h)
-	t.Cleanup(srv.Close)
-
-	return srv
-}
-
-func TestHandler(t *testing.T) {
+func TestNewHandler_RejectsBadConfig(t *testing.T) {
 	t.Parallel()
 
-	srv := newTestServer(t)
+	store := memory.NewStore()
+	valid := httpapi.Config{
+		Auth:      service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
+		Frontend:  fstest.MapFS{"index.html": {Data: []byte("x")}},
+		Logger:    slog.New(slog.DiscardHandler),
+		PublicURL: "https://trax.example",
+		CookieKey: []byte(strings.Repeat("k", 32)),
+	}
+
+	if _, err := httpapi.NewHandler(valid); err != nil {
+		t.Fatalf("valid config: %v", err)
+	}
+
+	tests := map[string]func(c *httpapi.Config){
+		"short cookie key": func(c *httpapi.Config) { c.CookieKey = []byte("short") },
+		"bad public url":   func(c *httpapi.Config) { c.PublicURL = "trax.example" },
+		"no index.html":    func(c *httpapi.Config) { c.Frontend = fstest.MapFS{} },
+		"no auth service":  func(c *httpapi.Config) { c.Auth = nil },
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := valid
+			mutate(&cfg)
+
+			if _, err := httpapi.NewHandler(cfg); err == nil {
+				t.Fatal("NewHandler() = nil error")
+			}
+		})
+	}
+}
+
+func TestHandler_PublicRoutes(t *testing.T) {
+	t.Parallel()
+
+	env := newTestEnv(t)
 
 	tests := []struct {
 		name       string
-		method     string
 		path       string
-		body       string
 		wantStatus int
 		wantBody   string
 	}{
-		{name: "healthz", method: http.MethodGet, path: "/healthz", wantStatus: http.StatusOK, wantBody: `"ok"`},
-		{name: "unknown api path", method: http.MethodGet, path: "/api/nope", wantStatus: http.StatusNotFound, wantBody: `"error"`},
-		{name: "static asset", method: http.MethodGet, path: "/assets/app.js", wantStatus: http.StatusOK, wantBody: "console.log"},
-		{name: "spa fallback", method: http.MethodGet, path: "/issues/42", wantStatus: http.StatusOK, wantBody: "spa"},
+		{name: "healthz", path: "/healthz", wantStatus: http.StatusOK, wantBody: `"ok"`},
+		{name: "version", path: "/api/version", wantStatus: http.StatusOK, wantBody: `"version"`},
+		{name: "unknown api path", path: "/api/nope", wantStatus: http.StatusNotFound, wantBody: `"code":"not_found"`},
+		{name: "unknown auth path", path: "/auth/nope", wantStatus: http.StatusNotFound, wantBody: `"code":"not_found"`},
+		{name: "static asset", path: "/assets/app.js", wantStatus: http.StatusOK, wantBody: "console.log"},
+		{name: "spa fallback", path: "/p/TRAX/issues/42", wantStatus: http.StatusOK, wantBody: "spa"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			req, err := http.NewRequestWithContext(t.Context(), tt.method, srv.URL+tt.path, strings.NewReader(tt.body))
-			if err != nil {
-				t.Fatal(err)
+			r := env.do(t, http.DefaultClient, http.MethodGet, tt.path, "")
+			wantStatus(t, r, tt.wantStatus)
+
+			if !strings.Contains(r.body, tt.wantBody) {
+				t.Fatalf("body = %s, want it to contain %s", r.body, tt.wantBody)
 			}
 
-			resp, err := srv.Client().Do(req)
-			if err != nil {
-				t.Fatal(err)
+			if r.header.Get("Content-Security-Policy") == "" || r.header.Get("X-Content-Type-Options") != "nosniff" {
+				t.Fatalf("missing security headers: %v", r.header)
 			}
-			defer func() { _ = resp.Body.Close() }()
+		})
+	}
+}
 
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
+func TestHandler_CrossOriginProtection(t *testing.T) {
+	t.Parallel()
 
-			if resp.StatusCode != tt.wantStatus {
-				t.Fatalf("status = %d, want %d (body %s)", resp.StatusCode, tt.wantStatus, body)
-			}
+	env := newTestEnv(t)
 
-			if !strings.Contains(string(body), tt.wantBody) {
-				t.Fatalf("body = %s, want it to contain %s", body, tt.wantBody)
+	tests := []struct {
+		name    string
+		headers []string
+		want    int
+	}{
+		{name: "cross-site fetch", headers: []string{"Sec-Fetch-Site", "cross-site"}, want: http.StatusForbidden},
+		{name: "foreign origin", headers: []string{"Origin", "https://evil.example"}, want: http.StatusForbidden},
+		{name: "same-origin fetch", headers: []string{"Sec-Fetch-Site", "same-origin"}, want: http.StatusOK},
+		{name: "trusted public origin", headers: []string{"Origin", env.srv.URL, "Sec-Fetch-Site", "same-origin"}, want: http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := env.do(t, newClient(t), http.MethodPost, "/auth/logout", "", tt.headers...)
+			wantStatus(t, r, tt.want)
+
+			if tt.want == http.StatusForbidden && r.errorCode(t) != "cross_origin_rejected" {
+				t.Fatalf("body = %s", r.body)
 			}
 		})
 	}

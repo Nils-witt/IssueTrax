@@ -88,6 +88,14 @@ type Project struct {
 	UpdatedAt       time.Time
 }
 
+type Session struct {
+	TokenHash []byte
+	UserID    uuid.UUID
+	IDToken   string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type Tag struct {
 	ID        uuid.UUID
 	ProjectID uuid.UUID

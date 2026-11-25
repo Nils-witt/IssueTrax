@@ -41,6 +41,7 @@ var contract = []struct {
 	{name: "Tags/update", run: testTagsUpdate},
 	{name: "Users/create, get and update", run: testUsersCreateGetAndUpdate},
 	{name: "Users/list and get many", run: testUsersListAndGetMany},
+	{name: "Sessions/lifecycle", run: testSessionsLifecycle},
 	{name: "Tx/commit and rollback", run: testTx},
 }
 

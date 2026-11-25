@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': { target: backendTarget, changeOrigin: true },
+      '/auth': { target: backendTarget, changeOrigin: true },
       '/healthz': { target: backendTarget, changeOrigin: true },
     },
   },

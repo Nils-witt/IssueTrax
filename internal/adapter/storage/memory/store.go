@@ -34,6 +34,7 @@ type data struct {
 	issues     map[domain.IssueID]domain.Issue
 	tags       map[domain.TagID]domain.Tag
 	users      map[domain.UserID]domain.User
+	sessions   map[string]domain.Session
 }
 
 // NewStore returns an empty Store.
@@ -44,6 +45,7 @@ func NewStore() *Store {
 		issues:     map[domain.IssueID]domain.Issue{},
 		tags:       map[domain.TagID]domain.Tag{},
 		users:      map[domain.UserID]domain.User{},
+		sessions:   map[string]domain.Session{},
 	}}
 }
 
@@ -86,6 +88,7 @@ func (d data) clone() data {
 		issues:     issues,
 		tags:       maps.Clone(d.tags),
 		users:      maps.Clone(d.users),
+		sessions:   maps.Clone(d.sessions),
 	}
 }
 

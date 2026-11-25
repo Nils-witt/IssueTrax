@@ -10,7 +10,10 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
+	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -25,7 +28,21 @@ type Config struct {
 	DatabaseURL string
 	// MigrateOnStart applies pending schema migrations at startup.
 	MigrateOnStart bool
+	// PublicURL is the origin users open, e.g. https://trax.example.com.
+	PublicURL string
+	// OIDCIssuer is the identity provider's issuer URL (Authentik application).
+	OIDCIssuer string
+	// OIDCClientID and OIDCClientSecret identify IssueTrax at the IdP (secret).
+	OIDCClientID     string
+	OIDCClientSecret string
+	// CookieKey signs the login-state cookie (secret, >= 32 bytes).
+	CookieKey []byte
+	// Dev relaxes cookie security for http://localhost development.
+	Dev bool
 }
+
+// minCookieKeyBytes matches the requirement of the HTTP adapter.
+const minCookieKeyBytes = 32
 
 // Load parses args (typically os.Args[1:]) into a Config. Each flag defaults
 // to its environment variable, so env configures deployments and flags
@@ -38,11 +55,21 @@ func Load(args []string) (Config, error) {
 	migrate := fs.String("migrate-on-start", envOrDefault("ISSUETRAX_MIGRATE_ON_START", "true"),
 		"apply database migrations at startup (env ISSUETRAX_MIGRATE_ON_START)")
 
+	publicURL := fs.String("public-url", os.Getenv("ISSUETRAX_PUBLIC_URL"), "public origin users open (env ISSUETRAX_PUBLIC_URL)")
+	issuer := fs.String("oidc-issuer", os.Getenv("ISSUETRAX_OIDC_ISSUER"), "OIDC issuer URL (env ISSUETRAX_OIDC_ISSUER)")
+	clientID := fs.String("oidc-client-id", os.Getenv("ISSUETRAX_OIDC_CLIENT_ID"), "OIDC client ID (env ISSUETRAX_OIDC_CLIENT_ID)")
+	dev := fs.String("dev", envOrDefault("ISSUETRAX_DEV", "false"), "development mode: cookies without Secure for http://localhost (env ISSUETRAX_DEV)")
+
 	if err := fs.Parse(args); err != nil {
 		return Config{}, fmt.Errorf("parse flags: %w", err)
 	}
 
-	cfg := Config{Addr: *addr}
+	cfg := Config{
+		Addr:         *addr,
+		PublicURL:    strings.TrimSuffix(*publicURL, "/"),
+		OIDCIssuer:   *issuer,
+		OIDCClientID: *clientID,
+	}
 
 	var errs []error
 
@@ -56,9 +83,26 @@ func Load(args []string) (Config, error) {
 		errs = append(errs, fmt.Errorf("invalid migrate-on-start %q: %w", *migrate, err))
 	}
 
+	if cfg.Dev, err = strconv.ParseBool(*dev); err != nil {
+		errs = append(errs, fmt.Errorf("invalid dev %q: %w", *dev, err))
+	}
+
 	if cfg.DatabaseURL, err = secret("ISSUETRAX_DATABASE_URL"); err != nil {
 		errs = append(errs, err)
 	}
+
+	if cfg.OIDCClientSecret, err = secret("ISSUETRAX_OIDC_CLIENT_SECRET"); err != nil {
+		errs = append(errs, err)
+	}
+
+	cookieKey, err := secret("ISSUETRAX_COOKIE_KEY")
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	cfg.CookieKey = []byte(cookieKey)
+
+	errs = append(errs, cfg.validateAuth()...)
 
 	if cfg.Addr == "" {
 		errs = append(errs, errors.New("addr must not be empty"))
@@ -73,6 +117,52 @@ func Load(args []string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// validateAuth checks the sign-in related settings.
+func (c Config) validateAuth() []error {
+	var errs []error
+
+	required := map[string]string{
+		"ISSUETRAX_PUBLIC_URL":         c.PublicURL,
+		"ISSUETRAX_OIDC_ISSUER":        c.OIDCIssuer,
+		"ISSUETRAX_OIDC_CLIENT_ID":     c.OIDCClientID,
+		"ISSUETRAX_OIDC_CLIENT_SECRET": c.OIDCClientSecret,
+	}
+	for _, name := range slices.Sorted(maps.Keys(required)) {
+		if required[name] == "" {
+			errs = append(errs, fmt.Errorf("%s is required", name))
+		}
+	}
+
+	if len(c.CookieKey) < minCookieKeyBytes {
+		errs = append(errs, fmt.Errorf("ISSUETRAX_COOKIE_KEY must be at least %d bytes (e.g. `openssl rand -base64 32`)", minCookieKeyBytes))
+	}
+
+	if c.PublicURL != "" {
+		if err := c.validatePublicURL(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs
+}
+
+// validatePublicURL requires an origin, https unless in dev mode, and dev
+// mode only on localhost.
+func (c Config) validatePublicURL() error {
+	u, err := url.Parse(c.PublicURL)
+
+	switch {
+	case err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || (u.Path != "" && u.Path != "/"):
+		return fmt.Errorf("ISSUETRAX_PUBLIC_URL %q must be an origin like https://trax.example.com", c.PublicURL)
+	case c.Dev && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1":
+		return errors.New("ISSUETRAX_DEV=true is only allowed with a http://localhost public URL")
+	case !c.Dev && u.Scheme != "https":
+		return errors.New("ISSUETRAX_PUBLIC_URL must use https (set ISSUETRAX_DEV=true for local http)")
+	}
+
+	return nil
 }
 
 func envOrDefault(key, fallback string) string {

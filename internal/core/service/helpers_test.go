@@ -34,6 +34,7 @@ func newFixture(t *testing.T) *fixture {
 		Issues:   memory.NewIssueRepository(store),
 		Tags:     memory.NewTagRepository(store),
 		Users:    memory.NewUserRepository(store),
+		Sessions: memory.NewSessionRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 

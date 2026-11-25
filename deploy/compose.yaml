@@ -1,5 +1,11 @@
 # Local development services. Start with `make dev-db`.
-# Credentials here are for local development only.
+# Every credential in this file is for local development only.
+#
+#   PostgreSQL for IssueTrax    localhost:55432
+#   Authentik (OIDC provider)   http://localhost:9000  (admin: akadmin / admin, user: ada / ada)
+#
+# The Authentik application "issuetrax" is provisioned by
+# authentik/blueprints/issuetrax.yaml on first start.
 name: issuetrax-dev
 
 services:
@@ -19,5 +25,51 @@ services:
       timeout: 3s
       retries: 10
 
+  authentik-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - authentik-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  authentik-server:
+    image: authentik/server:${AUTHENTIK_TAG:-2026.8.7}
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: dev-only-authentik-secret-key-not-for-production
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_BOOTSTRAP_PASSWORD: admin
+      AUTHENTIK_BOOTSTRAP_EMAIL: admin@localhost.test
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - ./authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+
+  authentik-worker:
+    image: authentik/server:${AUTHENTIK_TAG:-2026.8.7}
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - ./authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+
 volumes:
   postgres-data:
+  authentik-db-data:

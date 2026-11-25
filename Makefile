@@ -9,8 +9,19 @@ LDFLAGS := -ldflags "-s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $
 
 FRONTEND_DIR := frontend
 
-# Matches deploy/compose.yaml; override by exporting ISSUETRAX_DATABASE_URL.
-ISSUETRAX_DATABASE_URL ?= postgres://issuetrax:issuetrax@localhost:55432/issuetrax?sslmode=disable
+# Development defaults matching deploy/compose.yaml (dev-only credentials).
+# Override any of them by exporting the variable.
+ISSUETRAX_DATABASE_URL       ?= postgres://issuetrax:issuetrax@localhost:55432/issuetrax?sslmode=disable
+ISSUETRAX_PUBLIC_URL         ?= http://localhost:5173
+ISSUETRAX_OIDC_ISSUER        ?= http://localhost:9000/application/o/issuetrax/
+ISSUETRAX_OIDC_CLIENT_ID     ?= issuetrax-dev
+ISSUETRAX_OIDC_CLIENT_SECRET ?= issuetrax-dev-secret
+ISSUETRAX_COOKIE_KEY         ?= dev-only-cookie-key-0123456789abcdef
+ISSUETRAX_DEV                ?= true
+DEV_ENV := ISSUETRAX_DATABASE_URL="$(ISSUETRAX_DATABASE_URL)" ISSUETRAX_PUBLIC_URL="$(ISSUETRAX_PUBLIC_URL)" \
+	ISSUETRAX_OIDC_ISSUER="$(ISSUETRAX_OIDC_ISSUER)" ISSUETRAX_OIDC_CLIENT_ID="$(ISSUETRAX_OIDC_CLIENT_ID)" \
+	ISSUETRAX_OIDC_CLIENT_SECRET="$(ISSUETRAX_OIDC_CLIENT_SECRET)" ISSUETRAX_COOKIE_KEY="$(ISSUETRAX_COOKIE_KEY)" \
+	ISSUETRAX_DEV="$(ISSUETRAX_DEV)"
 
 .PHONY: all build frontend frontend-deps run dev-backend dev-frontend dev-db generate test test-unit lint lint-fix fmt audit clean help
 
@@ -32,13 +43,13 @@ frontend:
 run: build
 	./bin/$(BINARY_NAME)
 
-## dev-db: Start the local development services (PostgreSQL) in Docker
+## dev-db: Start the local development services (PostgreSQL, Authentik on :9000) in Docker
 dev-db:
 	docker compose -f deploy/compose.yaml up -d
 
-## dev-backend: Run the Go server against the dev database (needs frontend/dist; run `make frontend` once)
+## dev-backend: Run the Go server with dev settings (needs `make dev-db`; open the app via `make dev-frontend`)
 dev-backend:
-	ISSUETRAX_DATABASE_URL="$(ISSUETRAX_DATABASE_URL)" $(GO) run ./cmd/$(BINARY_NAME)
+	$(DEV_ENV) $(GO) run ./cmd/$(BINARY_NAME)
 
 ## generate: Regenerate sqlc database code from internal/adapter/storage/postgres/queries
 generate:
