@@ -23,8 +23,6 @@ export interface IssueFormValues {
 interface IssueFormProps {
   projectKey: string;
   initial: IssueFormValues;
-  /** Hide the status select (the issue page changes status separately). */
-  withStatus: boolean;
   submitLabel: string;
   pending: boolean;
   error: unknown;
@@ -32,8 +30,8 @@ interface IssueFormProps {
   onCancel: () => void;
 }
 
-/** Shared form for creating and editing issues. */
-export function IssueForm({ projectKey, initial, withStatus, submitLabel, pending, error, onSubmit, onCancel }: IssueFormProps) {
+/** Form for creating an issue (an existing one is edited inline on its page). */
+export function IssueForm({ projectKey, initial, submitLabel, pending, error, onSubmit, onCancel }: IssueFormProps) {
   const { t } = useTranslation();
   const tags = useTags(projectKey);
   const users = useUsers();
@@ -44,7 +42,7 @@ export function IssueForm({ projectKey, initial, withStatus, submitLabel, pendin
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(withStatus ? values : { ...values, status: undefined });
+    onSubmit(values);
   }
 
   return (
@@ -69,24 +67,22 @@ export function IssueForm({ projectKey, initial, withStatus, submitLabel, pendin
         error={fieldError('description')}
       />
 
-      {withStatus && (
-        <TextField
-          select
-          id="status"
-          label={t('issues.status')}
-          value={values.status}
-          onChange={(e) => set('status', e.target.value as IssueStatus)}
-          error={!!fieldError('status')}
-          helperText={fieldError('status')}
-          sx={{ maxWidth: '16rem' }}
-        >
-          {issueStatuses.map((s) => (
-            <MenuItem key={s} value={s}>
-              {t(`status.${s}`)}
-            </MenuItem>
-          ))}
-        </TextField>
-      )}
+      <TextField
+        select
+        id="status"
+        label={t('issues.status')}
+        value={values.status}
+        onChange={(e) => set('status', e.target.value as IssueStatus)}
+        error={!!fieldError('status')}
+        helperText={fieldError('status')}
+        sx={{ maxWidth: '16rem' }}
+      >
+        {issueStatuses.map((s) => (
+          <MenuItem key={s} value={s}>
+            {t(`status.${s}`)}
+          </MenuItem>
+        ))}
+      </TextField>
 
       <TagInput
         id="tags"

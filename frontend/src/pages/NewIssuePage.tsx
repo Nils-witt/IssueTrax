@@ -21,7 +21,6 @@ export function NewIssuePage() {
       <IssueForm
         projectKey={key}
         initial={{ title: '', description: '', status: 'open', tags: [], assignees: [] }}
-        withStatus
         submitLabel={t('app.create')}
         pending={create.isPending}
         error={create.error}

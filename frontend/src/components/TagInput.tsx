@@ -15,13 +15,15 @@ interface TagInputProps {
   /** Existing tags of the project, offered as suggestions and used for chip colors. */
   tags: Tag[];
   error?: string;
+  size?: 'small' | 'medium';
+  autoFocus?: boolean;
 }
 
 /**
  * Chips plus a text field: pick an existing tag or type a new one and press
  * Enter or comma. New names are created by the server on save.
  */
-export function TagInput({ id, label, value, onChange, tags, error }: TagInputProps) {
+export function TagInput({ id, label, value, onChange, tags, error, size, autoFocus }: TagInputProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const suggestions = useMemo(() => tags.map((tag) => tag.name), [tags]);
@@ -43,6 +45,7 @@ export function TagInput({ id, label, value, onChange, tags, error }: TagInputPr
       multiple
       freeSolo
       id={id}
+      size={size}
       options={suggestions}
       filterSelectedOptions
       value={value}
@@ -79,6 +82,7 @@ export function TagInput({ id, label, value, onChange, tags, error }: TagInputPr
         <TextField
           {...params}
           label={label}
+          autoFocus={autoFocus}
           placeholder={t('tags.placeholder')}
           error={draftInvalid || !!error}
           helperText={error ?? (draftInvalid ? t('fieldErrors.invalid') : undefined)}

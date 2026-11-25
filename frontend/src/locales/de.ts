@@ -48,6 +48,9 @@ export const de: Messages = {
     updated: 'Geändert',
     noDescription: 'Keine Beschreibung.',
     nobody: 'Niemand',
+    editAssignees: 'Zuständige bearbeiten',
+    editTitle: 'Titel bearbeiten',
+    editDescription: 'Beschreibung bearbeiten',
     archivedBanner: 'Dieses Ticket ist archiviert und schreibgeschützt.',
     unarchive: 'Aus Archiv holen',
   },
@@ -70,6 +73,7 @@ export const de: Messages = {
   },
   tags: {
     add: 'Tag hinzufügen',
+    edit: 'Tags bearbeiten',
     placeholder: 'Tag eingeben und Enter drücken',
     remove: 'Tag {{name}} entfernen',
     none: 'Noch keine Tags. Tags entstehen, wenn man sie einem Ticket hinzufügt.',

@@ -13,10 +13,11 @@ interface UserPickerProps {
   error?: string;
   size?: 'small' | 'medium';
   sx?: SxProps<Theme>;
+  autoFocus?: boolean;
 }
 
 /** Multi-select autocomplete of users (only users who have signed in once exist). */
-export function UserPicker({ id, users, value, onChange, label, error, size, sx }: UserPickerProps) {
+export function UserPicker({ id, users, value, onChange, label, error, size, sx, autoFocus }: UserPickerProps) {
   const selected = users.filter((u) => value.includes(u.id));
 
   return (
@@ -52,7 +53,7 @@ export function UserPicker({ id, users, value, onChange, label, error, size, sx 
           return <Chip key={key} size="small" label={u.displayName} title={u.email} {...itemProps} />;
         })
       }
-      renderInput={(params) => <TextField {...params} label={label} error={!!error} helperText={error} />}
+      renderInput={(params) => <TextField {...params} label={label} autoFocus={autoFocus} error={!!error} helperText={error} />}
     />
   );
 }

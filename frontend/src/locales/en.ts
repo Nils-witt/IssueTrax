@@ -48,6 +48,9 @@ export const en = {
     updated: 'Updated',
     noDescription: 'No description.',
     nobody: 'Nobody',
+    editAssignees: 'Edit assignees',
+    editTitle: 'Edit title',
+    editDescription: 'Edit description',
     archivedBanner: 'This issue is archived and read-only.',
     unarchive: 'Unarchive',
   },
@@ -70,6 +73,7 @@ export const en = {
   },
   tags: {
     add: 'Add tag',
+    edit: 'Edit tags',
     placeholder: 'Type a tag and press Enter',
     remove: 'Remove tag {{name}}',
     none: 'No tags yet. Tags are created by adding them to an issue.',
