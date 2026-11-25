@@ -21,6 +21,7 @@ func TestContract(t *testing.T) {
 			Projects: memory.NewProjectRepository(s),
 			Issues:   memory.NewIssueRepository(s),
 			Tags:     memory.NewTagRepository(s),
+			Comments: memory.NewCommentRepository(s),
 			Users:    memory.NewUserRepository(s),
 			Sessions: memory.NewSessionRepository(s),
 		}

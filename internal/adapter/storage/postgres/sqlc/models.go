@@ -56,6 +56,15 @@ func (ns NullIssueStatus) Value() (driver.Value, error) {
 	return string(ns.IssueStatus), nil
 }
 
+type Comment struct {
+	ID        uuid.UUID
+	IssueID   uuid.UUID
+	AuthorID  uuid.UUID
+	Body      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Issue struct {
 	ID          uuid.UUID
 	ProjectID   uuid.UUID

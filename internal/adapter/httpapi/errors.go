@@ -56,6 +56,8 @@ func (h *Handler) writeDomainError(w http.ResponseWriter, r *http.Request, err e
 		status = http.StatusConflict
 	case errors.Is(err, domain.ErrUnauthenticated):
 		status = http.StatusUnauthorized
+	case errors.Is(err, domain.ErrForbidden):
+		status = http.StatusForbidden
 	}
 
 	writeJSON(w, status, errorResponse{Error: errorDetail{Code: de.Code, Message: de.Message, Fields: de.Fields}})

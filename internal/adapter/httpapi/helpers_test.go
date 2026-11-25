@@ -57,6 +57,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Projects: memory.NewProjectRepository(store),
 		Issues:   memory.NewIssueRepository(store),
 		Tags:     memory.NewTagRepository(store),
+		Comments: memory.NewCommentRepository(store),
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
 	}
@@ -70,6 +71,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Projects: service.NewProjectService(repos),
 		Issues:   service.NewIssueService(repos),
 		Tags:     service.NewTagService(repos),
+		Comments: service.NewCommentService(repos),
 		Users:    service.NewUserService(repos),
 		Frontend: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>spa</html>")},

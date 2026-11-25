@@ -21,6 +21,7 @@ type fixture struct {
 	projects *service.ProjectService
 	issues   *service.IssueService
 	tags     *service.TagService
+	comments *service.CommentService
 	users    *service.UserService
 }
 
@@ -33,6 +34,7 @@ func newFixture(t *testing.T) *fixture {
 		Projects: memory.NewProjectRepository(store),
 		Issues:   memory.NewIssueRepository(store),
 		Tags:     memory.NewTagRepository(store),
+		Comments: memory.NewCommentRepository(store),
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
 	}
@@ -43,6 +45,7 @@ func newFixture(t *testing.T) *fixture {
 		projects: service.NewProjectService(repos, clock),
 		issues:   service.NewIssueService(repos, clock),
 		tags:     service.NewTagService(repos),
+		comments: service.NewCommentService(repos, clock),
 		users:    service.NewUserService(repos),
 	}
 }

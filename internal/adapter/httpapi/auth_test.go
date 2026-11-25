@@ -161,6 +161,7 @@ func TestAuth_SecureCookies(t *testing.T) {
 		Projects:  service.NewProjectService(service.Repositories{Tx: store}),
 		Issues:    service.NewIssueService(service.Repositories{Tx: store}),
 		Tags:      service.NewTagService(service.Repositories{Tx: store}),
+		Comments:  service.NewCommentService(service.Repositories{Tx: store}),
 		Users:     service.NewUserService(service.Repositories{Tx: store}),
 		Frontend:  fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Logger:    slog.New(slog.DiscardHandler),

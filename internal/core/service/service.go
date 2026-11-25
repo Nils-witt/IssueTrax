@@ -19,6 +19,7 @@ type Repositories struct {
 	Projects port.ProjectRepository
 	Issues   port.IssueRepository
 	Tags     port.TagRepository
+	Comments port.CommentRepository
 	Users    port.UserRepository
 	Sessions port.SessionRepository
 }

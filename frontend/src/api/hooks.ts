@@ -2,6 +2,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { query, request } from './client';
 import type {
+  Comment,
   CreateIssueInput,
   CreateProjectInput,
   Issue,
@@ -24,6 +25,7 @@ export const keys = {
   tags: (key: string) => ['tags', key.toUpperCase()] as const,
   issues: (key: string) => ['issues', key.toUpperCase()] as const,
   issue: (key: string, number: number) => ['issue', key.toUpperCase(), number] as const,
+  comments: (key: string, number: number) => ['comments', key.toUpperCase(), number] as const,
 };
 
 export function useMe() {
@@ -141,6 +143,46 @@ export function useUpdateIssue(key: string, number: number) {
 
   return useMutation({
     mutationFn: (input: UpdateIssueInput) => request<Issue>('PATCH', `/api/projects/${pk(key)}/issues/${number}`, input),
+    onSuccess,
+  });
+}
+
+const commentsPath = (key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/comments`;
+
+export function useComments(key: string, number: number) {
+  return useQuery({ queryKey: keys.comments(key, number), queryFn: () => request<Comment[]>('GET', commentsPath(key, number)) });
+}
+
+function useCommentsChanged(key: string, number: number) {
+  const qc = useQueryClient();
+
+  return () => qc.invalidateQueries({ queryKey: keys.comments(key, number) });
+}
+
+export function useCreateComment(key: string, number: number) {
+  const onSuccess = useCommentsChanged(key, number);
+
+  return useMutation({
+    mutationFn: (body: string) => request<Comment>('POST', commentsPath(key, number), { body }),
+    onSuccess,
+  });
+}
+
+export function useUpdateComment(key: string, number: number) {
+  const onSuccess = useCommentsChanged(key, number);
+
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) =>
+      request<Comment>('PATCH', `${commentsPath(key, number)}/${encodeURIComponent(id)}`, { body }),
+    onSuccess,
+  });
+}
+
+export function useDeleteComment(key: string, number: number) {
+  const onSuccess = useCommentsChanged(key, number);
+
+  return useMutation({
+    mutationFn: (id: string) => request<null>('DELETE', `${commentsPath(key, number)}/${encodeURIComponent(id)}`),
     onSuccess,
   });
 }

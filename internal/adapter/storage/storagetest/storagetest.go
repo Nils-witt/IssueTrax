@@ -39,6 +39,8 @@ var contract = []struct {
 	{name: "Tags/ensure is idempotent per project", run: testTagsEnsureIsIdempotentPerProject},
 	{name: "Tags/lookups", run: testTagsLookups},
 	{name: "Tags/update", run: testTagsUpdate},
+	{name: "Comments/create, get, update and delete", run: testCommentsLifecycle},
+	{name: "Comments/list by issue", run: testCommentsListByIssue},
 	{name: "Users/create, get and update", run: testUsersCreateGetAndUpdate},
 	{name: "Users/list and get many", run: testUsersListAndGetMany},
 	{name: "Sessions/lifecycle", run: testSessionsLifecycle},

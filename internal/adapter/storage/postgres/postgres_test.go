@@ -127,6 +127,7 @@ func repositories(db *postgres.DB) service.Repositories {
 		Projects: postgres.NewProjectRepository(db),
 		Issues:   postgres.NewIssueRepository(db),
 		Tags:     postgres.NewTagRepository(db),
+		Comments: postgres.NewCommentRepository(db),
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
 	}

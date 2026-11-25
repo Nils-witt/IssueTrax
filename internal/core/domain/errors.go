@@ -20,6 +20,8 @@ var (
 	ErrIssueArchived = errors.New("issue is archived")
 	// ErrUnauthenticated means no valid session was presented.
 	ErrUnauthenticated = errors.New("unauthenticated")
+	// ErrForbidden means the caller may not perform the change (e.g. edit someone else's comment).
+	ErrForbidden = errors.New("forbidden")
 )
 
 // Stable error codes. Clients (e.g. the SPA's translations) key off these.
@@ -29,12 +31,14 @@ const (
 	CodeIssueNotFound    = "issue_not_found"
 	CodeTagNotFound      = "tag_not_found"
 	CodeUserNotFound     = "user_not_found"
+	CodeCommentNotFound  = "comment_not_found"
 	CodeProjectKeyTaken  = "project_key_taken"
 	CodeProjectNameTaken = "project_name_taken"
 	CodeTagNameTaken     = "tag_name_taken"
 	CodeIssueArchived    = "issue_archived"
 	CodeUnauthenticated  = "unauthenticated"
 	CodeLoginFailed      = "login_failed"
+	CodeNotCommentAuthor = "not_comment_author"
 )
 
 // Stable per-field validation codes, used in Error.Fields.
@@ -81,12 +85,14 @@ var (
 	ErrIssueNotFound    = &Error{kind: ErrNotFound, Code: CodeIssueNotFound, Message: "issue not found"}
 	ErrTagNotFound      = &Error{kind: ErrNotFound, Code: CodeTagNotFound, Message: "tag not found"}
 	ErrUserNotFound     = &Error{kind: ErrNotFound, Code: CodeUserNotFound, Message: "user not found"}
+	ErrCommentNotFound  = &Error{kind: ErrNotFound, Code: CodeCommentNotFound, Message: "comment not found"}
 	ErrProjectKeyTaken  = &Error{kind: ErrConflict, Code: CodeProjectKeyTaken, Message: "project key is already taken"}
 	ErrProjectNameTaken = &Error{kind: ErrConflict, Code: CodeProjectNameTaken, Message: "project name is already taken"}
 	ErrTagNameTaken     = &Error{kind: ErrConflict, Code: CodeTagNameTaken, Message: "tag name is already taken"}
 	ErrArchived         = &Error{kind: ErrIssueArchived, Code: CodeIssueArchived, Message: "archived issues can only change their status"}
 	ErrNoSession        = &Error{kind: ErrUnauthenticated, Code: CodeUnauthenticated, Message: "authentication required"}
 	ErrLoginFailed      = &Error{kind: ErrUnauthenticated, Code: CodeLoginFailed, Message: "sign-in failed"}
+	ErrNotCommentAuthor = &Error{kind: ErrForbidden, Code: CodeNotCommentAuthor, Message: "only the author can change a comment"}
 )
 
 // NewValidationError returns an ErrInvalid error for the given field codes.

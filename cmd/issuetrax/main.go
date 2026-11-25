@@ -46,6 +46,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Projects: postgres.NewProjectRepository(db),
 		Issues:   postgres.NewIssueRepository(db),
 		Tags:     postgres.NewTagRepository(db),
+		Comments: postgres.NewCommentRepository(db),
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
 	}
@@ -73,6 +74,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Projects:        service.NewProjectService(repos),
 		Issues:          service.NewIssueService(repos),
 		Tags:            service.NewTagService(repos),
+		Comments:        service.NewCommentService(repos),
 		Users:           service.NewUserService(repos),
 		Frontend:        dist,
 		Logger:          logger,

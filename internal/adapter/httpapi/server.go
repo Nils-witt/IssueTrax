@@ -25,6 +25,7 @@ type Config struct {
 	Projects port.ProjectService
 	Issues   port.IssueService
 	Tags     port.TagService
+	Comments port.CommentService
 	Users    port.UserService
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
@@ -45,6 +46,7 @@ type Handler struct {
 	projects port.ProjectService
 	issues   port.IssueService
 	tags     port.TagService
+	comments port.CommentService
 	users    port.UserService
 	logger   *slog.Logger
 	cookies  cookies
@@ -56,7 +58,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		return nil, fmt.Errorf("cookie key must be at least %d bytes", minCookieKeyBytes)
 	}
 
-	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Users == nil || cfg.Logger == nil {
+	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Comments == nil || cfg.Users == nil || cfg.Logger == nil {
 		return nil, errors.New("all services and the logger are required")
 	}
 
@@ -65,6 +67,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		projects: cfg.Projects,
 		issues:   cfg.Issues,
 		tags:     cfg.Tags,
+		comments: cfg.Comments,
 		users:    cfg.Users,
 		logger:   cfg.Logger,
 		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
@@ -98,6 +101,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/projects/{key}/issues", h.authed(h.createIssue))
 	mux.Handle("GET /api/projects/{key}/issues/{number}", h.authed(h.getIssue))
 	mux.Handle("PATCH /api/projects/{key}/issues/{number}", h.authed(h.updateIssue))
+	mux.Handle("GET /api/projects/{key}/issues/{number}/comments", h.authed(h.listComments))
+	mux.Handle("POST /api/projects/{key}/issues/{number}/comments", h.authed(h.createComment))
+	mux.Handle("PATCH /api/projects/{key}/issues/{number}/comments/{commentId}", h.authed(h.updateComment))
+	mux.Handle("DELETE /api/projects/{key}/issues/{number}/comments/{commentId}", h.authed(h.deleteComment))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", notFound)

@@ -47,6 +47,16 @@ export interface Issue {
   updatedAt: string;
 }
 
+export interface Comment {
+  id: string;
+  /** Markdown. */
+  body: string;
+  author: User;
+  createdAt: string;
+  /** Equals createdAt until the body is edited. */
+  updatedAt: string;
+}
+
 export interface Page<T> {
   items: T[];
   total: number;

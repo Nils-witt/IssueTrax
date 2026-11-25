@@ -34,6 +34,7 @@ func TestError_Unwrap(t *testing.T) {
 		{name: "conflict", err: domain.ErrTagNameTaken, kind: domain.ErrConflict},
 		{name: "archived", err: domain.ErrArchived, kind: domain.ErrIssueArchived},
 		{name: "unauthenticated", err: domain.ErrNoSession, kind: domain.ErrUnauthenticated},
+		{name: "forbidden", err: domain.ErrNotCommentAuthor, kind: domain.ErrForbidden},
 		{name: "validation", err: domain.NewValidationError(map[string]string{"x": "y"}), kind: domain.ErrInvalid},
 	}
 

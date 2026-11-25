@@ -33,6 +33,7 @@ type data struct {
 	nextNumber map[domain.ProjectID]int64
 	issues     map[domain.IssueID]domain.Issue
 	tags       map[domain.TagID]domain.Tag
+	comments   map[domain.CommentID]domain.Comment
 	users      map[domain.UserID]domain.User
 	sessions   map[string]domain.Session
 }
@@ -44,6 +45,7 @@ func NewStore() *Store {
 		nextNumber: map[domain.ProjectID]int64{},
 		issues:     map[domain.IssueID]domain.Issue{},
 		tags:       map[domain.TagID]domain.Tag{},
+		comments:   map[domain.CommentID]domain.Comment{},
 		users:      map[domain.UserID]domain.User{},
 		sessions:   map[string]domain.Session{},
 	}}
@@ -87,6 +89,7 @@ func (d data) clone() data {
 		nextNumber: maps.Clone(d.nextNumber),
 		issues:     issues,
 		tags:       maps.Clone(d.tags),
+		comments:   maps.Clone(d.comments),
 		users:      maps.Clone(d.users),
 		sessions:   maps.Clone(d.sessions),
 	}

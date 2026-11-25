@@ -17,6 +17,7 @@ import { useIssue, useTags, useUpdateIssue, useUsers } from '../api/hooks';
 import { issueStatuses, type Issue, type IssueStatus } from '../api/types';
 import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
+import { CommentSection } from '../components/CommentSection';
 import { DateTime } from '../components/DateTime';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { KeyText } from '../components/KeyText';
@@ -38,10 +39,21 @@ export function IssuePage() {
       <ProjectNav projectKey={key} />
       <ErrorMessage error={issue.error} />
       {issue.isPending && <Loading />}
-      {issue.data && <IssueDetail key={issue.data.updatedAt} issue={issue.data} />}
+      {issue.data && (
+        <>
+          <IssueDetail key={issue.data.updatedAt} issue={issue.data} />
+          {/* Outside the keyed IssueDetail so a comment draft survives issue edits. */}
+          <Box sx={{ ...detailGrid, mt: 4 }}>
+            <CommentSection issue={issue.data} />
+          </Box>
+        </>
+      )}
     </>
   );
 }
+
+/** Main column plus metadata sidebar, shared by the issue and its comments. */
+const detailGrid = { display: 'grid', gap: 4, gridTemplateColumns: { xs: '1fr', md: '1fr 16rem' } } as const;
 
 function IssueDetail({ issue }: { issue: Issue }) {
   const { t } = useTranslation();
@@ -75,7 +87,7 @@ function IssueDetail({ issue }: { issue: Issue }) {
 
       <ErrorMessage error={update.error} />
 
-      <Box sx={{ display: 'grid', gap: 4, gridTemplateColumns: { xs: '1fr', md: '1fr 16rem' } }}>
+      <Box sx={detailGrid}>
         <DescriptionEditor
           issue={issue}
           disabled={archived}

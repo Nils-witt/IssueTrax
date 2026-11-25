@@ -15,7 +15,7 @@ info:
     except `/api/version` requires that cookie and answers `401` with code
     `unauthenticated` without it.
 
-    **CSRF.** State-changing requests (`POST`, `PATCH`) must be same-origin
+    **CSRF.** State-changing requests (`POST`, `PATCH`, `DELETE`) must be same-origin
     (checked via `Sec-Fetch-Site` / `Origin`); cross-origin ones get `403`
     with code `cross_origin_rejected`.
 
@@ -36,6 +36,7 @@ tags:
   - name: projects
   - name: issues
   - name: tags
+  - name: comments
   - name: users
 
 paths:
@@ -390,6 +391,89 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
 
+  /api/projects/{key}/issues/{number}/comments:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueNumber"
+    get:
+      tags: [comments]
+      summary: List an issue's comments
+      description: All comments, oldest first (not paginated).
+      responses:
+        "200":
+          description: Comments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Comment" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [comments]
+      summary: Comment on an issue
+      description: The signed-in user becomes the author. Archived issues accept no new comments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentBody" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IssueArchived" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}/issues/{number}/comments/{commentId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueNumber"
+      - name: commentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      tags: [comments]
+      summary: Edit a comment
+      description: |
+        Replaces the body. Only the author may edit (`403` with code
+        `not_comment_author` otherwise); comments on archived issues cannot
+        change. `updatedAt` only moves when the body actually changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommentBody" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IssueArchived" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [comments]
+      summary: Delete a comment
+      description: Permanently removes the comment. Only the author may delete it; comments on archived issues cannot be deleted.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IssueArchived" }
+
 components:
   securitySchemes:
     session:
@@ -415,6 +499,12 @@ components:
       in: query
       description: "`nextCursor` from the previous page."
       schema: { type: string }
+    IssueNumber:
+      name: number
+      in: path
+      required: true
+      description: The project-scoped number (42 in TRAX-42).
+      schema: { type: integer, format: int64, minimum: 1 }
 
   responses:
     Unauthenticated:
@@ -423,7 +513,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -444,6 +534,16 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     CrossOrigin:
       description: "Cross-origin state-changing request (`cross_origin_rejected`)."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: "`not_comment_author` (the comment belongs to someone else) or `cross_origin_rejected`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    IssueArchived:
+      description: "`issue_archived`: the issue is archived and read-only."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -558,6 +658,26 @@ components:
         createdBy: { $ref: "#/components/schemas/User" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    Comment:
+      type: object
+      required: [id, body, author, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        body: { type: string, description: Markdown }
+        author: { $ref: "#/components/schemas/User" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time, description: Equals `createdAt` until the body is edited. }
+
+    CommentBody:
+      type: object
+      required: [body]
+      additionalProperties: false
+      properties:
+        body:
+          type: string
+          description: Markdown, trimmed; required and at most 256 KiB.
+          example: "Reproduced on **Firefox** too."
 
     CreateIssue:
       type: object
