@@ -1,17 +1,19 @@
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useProject, useRenameTag, useTags, useUpdateProject } from '../api/hooks';
+import { useProject, useTags, useUpdateProject, useUpdateTag } from '../api/hooks';
 import type { Project, Tag } from '../api/types';
 import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { fieldErrorText } from '../lib/errors';
+import { tagChipSx } from '../lib/tagColor';
 
 export function ProjectSettingsPage() {
   const { t } = useTranslation();
@@ -34,7 +36,7 @@ export function ProjectSettingsPage() {
       {tags.data && tags.data.length === 0 && <Typography color="text.secondary">{t('tags.none')}</Typography>}
       <Stack component="ul" spacing={1.5} sx={{ listStyle: 'none', p: 0, m: 0 }}>
         {tags.data?.map((tag) => (
-          <TagRow key={`${tag.id}:${tag.name}`} projectKey={key} tag={tag} />
+          <TagRow key={`${tag.id}:${tag.name}:${tag.color}`} projectKey={key} tag={tag} />
         ))}
       </Stack>
     </>
@@ -91,14 +93,21 @@ function ProjectForm({ project }: { project: Project }) {
 
 function TagRow({ projectKey, tag }: { projectKey: string; tag: Tag }) {
   const { t } = useTranslation();
-  const rename = useRenameTag(projectKey);
+  const update = useUpdateTag(projectKey);
   const [name, setName] = useState(tag.name);
+  const [color, setColor] = useState(tag.color);
 
-  const nameError = fieldErrorText(t, rename.error, 'name');
+  const nameError = fieldErrorText(t, update.error, 'name');
+  const colorError = fieldErrorText(t, update.error, 'color');
+  const changed = name !== tag.name || color !== tag.color;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    rename.mutate({ id: tag.id, name });
+    update.mutate({
+      id: tag.id,
+      ...(name !== tag.name && { name }),
+      ...(color !== tag.color && { color }),
+    });
   }
 
   return (
@@ -110,12 +119,23 @@ function TagRow({ projectKey, tag }: { projectKey: string; tag: Tag }) {
           onChange={(e) => setName(e.target.value)}
           error={!!nameError}
           helperText={nameError}
-          slotProps={{ htmlInput: { maxLength: 30, 'aria-label': t('tags.rename') } }}
+          slotProps={{ htmlInput: { maxLength: 30, 'aria-label': t('tags.name') } }}
         />
-        <Button type="submit" variant="outlined" loading={rename.isPending} disabled={name === tag.name}>
-          {t('tags.rename')}
+        <TextField
+          size="small"
+          type="color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          error={!!colorError}
+          helperText={colorError}
+          sx={{ width: '4.5rem' }}
+          slotProps={{ htmlInput: { 'aria-label': t('tags.color'), style: { padding: 4, height: 32, cursor: 'pointer' } } }}
+        />
+        <Chip label={name || tag.name} sx={[{ mt: 0.5 }, tagChipSx(color)].flat()} />
+        <Button type="submit" variant="outlined" loading={update.isPending} disabled={!changed}>
+          {t('app.save')}
         </Button>
-        <ErrorMessage error={rename.error && !nameError ? rename.error : null} />
+        <ErrorMessage error={update.error && !nameError && !colorError ? update.error : null} />
       </Stack>
     </li>
   );

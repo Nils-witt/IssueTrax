@@ -73,8 +73,8 @@ export const de: Messages = {
     placeholder: 'Tag eingeben und Enter drücken',
     remove: 'Tag {{name}} entfernen',
     none: 'Noch keine Tags. Tags entstehen, wenn man sie einem Ticket hinzufügt.',
-    rename: 'Umbenennen',
-    renamed: 'Umbenannt.',
+    name: 'Name',
+    color: 'Farbe',
   },
   editor: {
     markdownHint: 'Markdown wird unterstützt.',

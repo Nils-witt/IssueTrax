@@ -3,6 +3,7 @@ import Chip from '@mui/material/Chip';
 import type { SxProps, Theme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
 import type { Tag } from '../api/types';
+import { tagChipSx } from '../lib/tagColor';
 
 interface TagPickerProps {
   id: string;
@@ -38,7 +39,7 @@ export function TagPicker({ id, tags, value, onChange, label, size, sx }: TagPic
       renderValue={(tags, getItemProps) =>
         tags.map((tag, index) => {
           const { key, ...itemProps } = getItemProps({ index });
-          return <Chip key={key} size="small" label={tag.name} {...itemProps} />;
+          return <Chip key={key} size="small" label={tag.name} sx={tagChipSx(tag.color)} {...itemProps} />;
         })
       }
       renderInput={(params) => <TextField {...params} label={label} />}

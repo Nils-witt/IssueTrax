@@ -34,6 +34,7 @@ import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
 import { TagPicker } from '../components/TagPicker';
 import { UserPicker } from '../components/UserPicker';
+import { tagChipSx } from '../lib/tagColor';
 
 // The page's URL query uses the API's parameter names, so a filtered view
 // is a bookmarkable URL and maps 1:1 onto GET /api/projects/{key}/issues.
@@ -107,7 +108,7 @@ function IssueTable({ issues }: { issues: Issue[] }) {
               <StatusBadge status={i.status} />
               <Stack direction="row" sx={{ ...wide, flexWrap: 'wrap', gap: 0.5 }}>
                 {i.tags.map((tag) => (
-                  <Chip key={tag.id} size="small" label={tag.name} />
+                  <Chip key={tag.id} size="small" label={tag.name} sx={tagChipSx(tag.color)} />
                 ))}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={wide}>

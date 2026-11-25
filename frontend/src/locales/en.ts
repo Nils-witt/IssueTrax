@@ -73,8 +73,8 @@ export const en = {
     placeholder: 'Type a tag and press Enter',
     remove: 'Remove tag {{name}}',
     none: 'No tags yet. Tags are created by adding them to an issue.',
-    rename: 'Rename',
-    renamed: 'Renamed.',
+    name: 'Name',
+    color: 'Color',
   },
   editor: {
     markdownHint: 'Markdown is supported.',

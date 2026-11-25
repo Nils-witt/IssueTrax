@@ -78,11 +78,11 @@ func testTagsUpdate(t *testing.T, newRepos NewRepositories) {
 	bug := tag(t, r, p, "bug")
 	tag(t, r, p, "ui")
 
-	bug.Name = "defect"
+	bug.Name, bug.Color = "defect", "#123456"
 	must(t, r.Tags.Update(t.Context(), bug))
 
 	got, err := r.Tags.Get(t.Context(), p.ID, bug.ID)
-	if err != nil || got.Name != "defect" {
+	if err != nil || got.Name != "defect" || got.Color != "#123456" {
 		t.Fatalf("after Update() = %+v, %v", got, err)
 	}
 

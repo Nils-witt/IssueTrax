@@ -93,7 +93,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/projects/{key}", h.authed(h.getProject))
 	mux.Handle("PATCH /api/projects/{key}", h.authed(h.updateProject))
 	mux.Handle("GET /api/projects/{key}/tags", h.authed(h.listTags))
-	mux.Handle("PATCH /api/projects/{key}/tags/{tagId}", h.authed(h.renameTag))
+	mux.Handle("PATCH /api/projects/{key}/tags/{tagId}", h.authed(h.updateTag))
 	mux.Handle("GET /api/projects/{key}/issues", h.authed(h.listIssues))
 	mux.Handle("POST /api/projects/{key}/issues", h.authed(h.createIssue))
 	mux.Handle("GET /api/projects/{key}/issues/{number}", h.authed(h.getIssue))

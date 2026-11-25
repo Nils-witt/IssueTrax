@@ -93,7 +93,7 @@ export function IssueForm({ projectKey, initial, withStatus, submitLabel, pendin
         label={t('issues.tags')}
         value={values.tags}
         onChange={(v) => set('tags', v)}
-        suggestions={tags.data?.map((tag) => tag.name) ?? []}
+        tags={tags.data ?? []}
         error={fieldError('tags')}
       />
 

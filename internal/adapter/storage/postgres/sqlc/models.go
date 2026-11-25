@@ -101,6 +101,7 @@ type Tag struct {
 	ProjectID uuid.UUID
 	Name      string
 	CreatedAt time.Time
+	Color     string
 }
 
 type User struct {

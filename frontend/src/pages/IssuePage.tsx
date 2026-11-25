@@ -19,6 +19,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
 import { Markdown } from '../components/Markdown';
+import { tagChipSx } from '../lib/tagColor';
 import { IssueForm } from './IssueForm';
 
 export function IssuePage() {
@@ -139,7 +140,15 @@ function IssueDetail({ issue }: { issue: Issue }) {
             ) : (
               <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
                 {issue.tags.map((tag) => (
-                  <Chip key={tag.id} size="small" label={tag.name} component={Link} to={`/p/${issue.projectKey}?tag=${tag.id}`} clickable />
+                  <Chip
+                    key={tag.id}
+                    size="small"
+                    label={tag.name}
+                    sx={tagChipSx(tag.color)}
+                    component={Link}
+                    to={`/p/${issue.projectKey}?tag=${tag.id}`}
+                    clickable
+                  />
                 ))}
               </Stack>
             )}

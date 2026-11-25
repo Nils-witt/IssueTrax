@@ -236,21 +236,23 @@ paths:
         schema: { type: string, format: uuid }
     patch:
       tags: [tags]
-      summary: Rename a tag
-      description: Tags cannot be deleted. The name is normalized like on creation.
+      summary: Rename or recolor a tag
+      description: |
+        Partial update; absent fields stay unchanged. Tags cannot be deleted.
+        The name is normalized like on creation; the color is lower-cased.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name]
               additionalProperties: false
               properties:
                 name: { type: string, example: Needs Review }
+                color: { type: string, pattern: "^#[0-9a-fA-F]{6}$", example: "#1D76DB" }
       responses:
         "200":
-          description: Renamed.
+          description: Updated.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Tag" }
@@ -516,10 +518,15 @@ components:
 
     Tag:
       type: object
-      required: [id, name]
+      required: [id, name, color]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,29}$", example: needs-review }
+        color:
+          type: string
+          pattern: "^#[0-9a-f]{6}$"
+          example: "#1d76db"
+          description: Display color. New tags get a palette color derived from their name.
 
     TagNames:
       type: array

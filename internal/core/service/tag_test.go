@@ -25,20 +25,21 @@ func TestTagService_List(t *testing.T) {
 	}
 }
 
-func TestTagService_Rename(t *testing.T) {
+func TestTagService_Update(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
 		project   domain.ProjectKey
-		newName   string
+		in        port.UpdateTagInput
 		wantCode  string
 		wantField string
 	}{
-		{name: "normalizes", project: "TRAX", newName: "Front End"},
-		{name: "taken", project: "TRAX", newName: "ui", wantCode: domain.CodeTagNameTaken},
-		{name: "invalid", project: "TRAX", newName: "#", wantField: "name"},
-		{name: "other project", project: "OTHER", newName: "x", wantCode: domain.CodeTagNotFound},
+		{name: "normalizes", project: "TRAX", in: port.UpdateTagInput{Name: new("Front End"), Color: new("#ABCDEF")}},
+		{name: "taken", project: "TRAX", in: port.UpdateTagInput{Name: new("ui")}, wantCode: domain.CodeTagNameTaken},
+		{name: "invalid name", project: "TRAX", in: port.UpdateTagInput{Name: new("#")}, wantField: "name"},
+		{name: "invalid color", project: "TRAX", in: port.UpdateTagInput{Color: new("blue")}, wantField: "color"},
+		{name: "other project", project: "OTHER", in: port.UpdateTagInput{Name: new("x")}, wantCode: domain.CodeTagNotFound},
 	}
 
 	for _, tt := range tests {
@@ -51,7 +52,7 @@ func TestTagService_Rename(t *testing.T) {
 			f.addProject(t, "OTHER", "Other")
 			issue := f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "x", Tags: []string{"bug", "ui"}})
 
-			_, err := f.tags.Rename(t.Context(), tt.project, issue.Tags[0].ID, tt.newName)
+			_, err := f.tags.Update(t.Context(), tt.project, issue.Tags[0].ID, tt.in)
 
 			switch {
 			case tt.wantField != "":
@@ -69,8 +70,8 @@ func TestTagService_Rename(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if got.Tags[0].Name != "front-end" {
-				t.Fatalf("issue tag after rename = %q, want front-end", got.Tags[0].Name)
+			if got.Tags[0].Name != "front-end" || got.Tags[0].Color != "#abcdef" {
+				t.Fatalf("issue tag after update = %+v, want front-end #abcdef", got.Tags[0])
 			}
 		})
 	}
@@ -81,7 +82,7 @@ func TestTagService_Rename(t *testing.T) {
 		f := newFixture(t)
 		f.addProject(t, "TRAX", "IssueTrax")
 
-		_, err := f.tags.Rename(t.Context(), "TRAX", domain.TagID(uuid.New()), "x")
+		_, err := f.tags.Update(t.Context(), "TRAX", domain.TagID(uuid.New()), port.UpdateTagInput{Name: new("x")})
 		wantCode(t, err, domain.CodeTagNotFound)
 	})
 }

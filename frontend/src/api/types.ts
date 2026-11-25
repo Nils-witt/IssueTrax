@@ -23,6 +23,13 @@ export interface Project {
 export interface Tag {
   id: string;
   name: string;
+  /** Display color, "#rrggbb". */
+  color: string;
+}
+
+export interface UpdateTagInput {
+  name?: string;
+  color?: string;
 }
 
 export interface Issue {

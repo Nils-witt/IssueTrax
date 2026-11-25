@@ -84,6 +84,7 @@ func (r *TagRepository) Ensure(ctx context.Context, tag domain.Tag) (domain.Tag,
 		ID:        uuid.UUID(tag.ID),
 		ProjectID: uuid.UUID(tag.ProjectID),
 		Name:      string(tag.Name),
+		Color:     string(tag.Color),
 		CreatedAt: tag.CreatedAt,
 	})
 	if err != nil {
@@ -102,9 +103,9 @@ func (r *TagRepository) Ensure(ctx context.Context, tag domain.Tag) (domain.Tag,
 	return toTag(row), nil
 }
 
-// Update stores tag's name.
+// Update stores tag's name and color.
 func (r *TagRepository) Update(ctx context.Context, tag domain.Tag) error {
-	n, err := r.db.queries(ctx).UpdateTag(ctx, sqlc.UpdateTagParams{ID: uuid.UUID(tag.ID), Name: string(tag.Name)})
+	n, err := r.db.queries(ctx).UpdateTag(ctx, sqlc.UpdateTagParams{ID: uuid.UUID(tag.ID), Name: string(tag.Name), Color: string(tag.Color)})
 
 	switch {
 	case isUniqueViolation(err, "tags_project_name_key"):
@@ -123,6 +124,7 @@ func toTag(row sqlc.Tag) domain.Tag {
 		ID:        domain.TagID(row.ID),
 		ProjectID: domain.ProjectID(row.ProjectID),
 		Name:      domain.TagName(row.Name),
+		Color:     domain.TagColor(row.Color),
 		CreatedAt: row.CreatedAt.UTC(),
 	}
 }

@@ -1,8 +1,10 @@
 import Autocomplete from '@mui/material/Autocomplete';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Tag } from '../api/types';
+import { tagChipSx } from '../lib/tagColor';
 import { isValidTag, normalizeTag } from '../lib/tags';
 
 interface TagInputProps {
@@ -10,8 +12,8 @@ interface TagInputProps {
   label: string;
   value: string[];
   onChange: (tags: string[]) => void;
-  /** Existing tag names of the project, offered as suggestions. */
-  suggestions: string[];
+  /** Existing tags of the project, offered as suggestions and used for chip colors. */
+  tags: Tag[];
   error?: string;
 }
 
@@ -19,9 +21,11 @@ interface TagInputProps {
  * Chips plus a text field: pick an existing tag or type a new one and press
  * Enter or comma. New names are created by the server on save.
  */
-export function TagInput({ id, label, value, onChange, suggestions, error }: TagInputProps) {
+export function TagInput({ id, label, value, onChange, tags, error }: TagInputProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
+  const suggestions = useMemo(() => tags.map((tag) => tag.name), [tags]);
+  const colorOf = useMemo(() => new Map(tags.map((tag) => [tag.name, tag.color])), [tags]);
 
   const normalized = normalizeTag(draft);
   const draftInvalid = normalized !== '' && !isValidTag(normalized);
@@ -56,10 +60,19 @@ export function TagInput({ id, label, value, onChange, suggestions, error }: Tag
           add(draft);
         }
       }}
-      renderValue={(tags, getItemProps) =>
-        tags.map((name, index) => {
+      renderValue={(names, getItemProps) =>
+        names.map((name, index) => {
           const { key, ...itemProps } = getItemProps({ index });
-          return <Chip key={key} size="small" label={name} title={t('tags.remove', { name })} {...itemProps} />;
+          return (
+            <Chip
+              key={key}
+              size="small"
+              label={name}
+              title={t('tags.remove', { name })}
+              sx={tagChipSx(colorOf.get(name))}
+              {...itemProps}
+            />
+          );
         })
       }
       renderInput={(params) => (

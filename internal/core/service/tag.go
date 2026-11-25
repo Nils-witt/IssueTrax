@@ -36,8 +36,8 @@ func (s *TagService) List(ctx context.Context, key domain.ProjectKey) ([]domain.
 	return tags, nil
 }
 
-// Rename gives a tag a new (normalized) name. Issues keep the tag.
-func (s *TagService) Rename(ctx context.Context, key domain.ProjectKey, id domain.TagID, name string) (domain.Tag, error) {
+// Update renames and/or recolors a tag. Issues keep the tag.
+func (s *TagService) Update(ctx context.Context, key domain.ProjectKey, id domain.TagID, in port.UpdateTagInput) (domain.Tag, error) {
 	var tag domain.Tag
 
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
@@ -51,12 +51,12 @@ func (s *TagService) Rename(ctx context.Context, key domain.ProjectKey, id domai
 			return fmt.Errorf("get tag %s: %w", id, err)
 		}
 
-		if err := tag.Rename(name); err != nil {
+		if err := tag.Apply(domain.TagChanges{Name: in.Name, Color: in.Color}); err != nil {
 			return err
 		}
 
 		if err := s.repos.Tags.Update(ctx, tag); err != nil {
-			return fmt.Errorf("rename tag %s: %w", id, err)
+			return fmt.Errorf("update tag %s: %w", id, err)
 		}
 
 		return nil

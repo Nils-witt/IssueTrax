@@ -13,7 +13,7 @@ import (
 )
 
 const findTagsByNames = `-- name: FindTagsByNames :many
-SELECT id, project_id, name, created_at FROM tags WHERE project_id = $1 AND name = ANY ($2::text[])
+SELECT id, project_id, name, created_at, color FROM tags WHERE project_id = $1 AND name = ANY ($2::text[])
 `
 
 type FindTagsByNamesParams struct {
@@ -35,6 +35,7 @@ func (q *Queries) FindTagsByNames(ctx context.Context, arg FindTagsByNamesParams
 			&i.ProjectID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -47,7 +48,7 @@ func (q *Queries) FindTagsByNames(ctx context.Context, arg FindTagsByNamesParams
 }
 
 const getTag = `-- name: GetTag :one
-SELECT id, project_id, name, created_at FROM tags WHERE project_id = $1 AND id = $2
+SELECT id, project_id, name, created_at, color FROM tags WHERE project_id = $1 AND id = $2
 `
 
 type GetTagParams struct {
@@ -63,12 +64,13 @@ func (q *Queries) GetTag(ctx context.Context, arg GetTagParams) (Tag, error) {
 		&i.ProjectID,
 		&i.Name,
 		&i.CreatedAt,
+		&i.Color,
 	)
 	return i, err
 }
 
 const getTagByName = `-- name: GetTagByName :one
-SELECT id, project_id, name, created_at FROM tags WHERE project_id = $1 AND name = $2
+SELECT id, project_id, name, created_at, color FROM tags WHERE project_id = $1 AND name = $2
 `
 
 type GetTagByNameParams struct {
@@ -84,12 +86,13 @@ func (q *Queries) GetTagByName(ctx context.Context, arg GetTagByNameParams) (Tag
 		&i.ProjectID,
 		&i.Name,
 		&i.CreatedAt,
+		&i.Color,
 	)
 	return i, err
 }
 
 const getTags = `-- name: GetTags :many
-SELECT id, project_id, name, created_at FROM tags WHERE id = ANY ($1::uuid[])
+SELECT id, project_id, name, created_at, color FROM tags WHERE id = ANY ($1::uuid[])
 `
 
 func (q *Queries) GetTags(ctx context.Context, ids []uuid.UUID) ([]Tag, error) {
@@ -106,6 +109,7 @@ func (q *Queries) GetTags(ctx context.Context, ids []uuid.UUID) ([]Tag, error) {
 			&i.ProjectID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -118,10 +122,10 @@ func (q *Queries) GetTags(ctx context.Context, ids []uuid.UUID) ([]Tag, error) {
 }
 
 const insertTagIfAbsent = `-- name: InsertTagIfAbsent :many
-INSERT INTO tags (id, project_id, name, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO tags (id, project_id, name, created_at, color)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (project_id, name) DO NOTHING
-RETURNING id, project_id, name, created_at
+RETURNING id, project_id, name, created_at, color
 `
 
 type InsertTagIfAbsentParams struct {
@@ -129,6 +133,7 @@ type InsertTagIfAbsentParams struct {
 	ProjectID uuid.UUID
 	Name      string
 	CreatedAt time.Time
+	Color     string
 }
 
 // Returns no row when the project already has a tag with that name.
@@ -138,6 +143,7 @@ func (q *Queries) InsertTagIfAbsent(ctx context.Context, arg InsertTagIfAbsentPa
 		arg.ProjectID,
 		arg.Name,
 		arg.CreatedAt,
+		arg.Color,
 	)
 	if err != nil {
 		return nil, err
@@ -151,6 +157,7 @@ func (q *Queries) InsertTagIfAbsent(ctx context.Context, arg InsertTagIfAbsentPa
 			&i.ProjectID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -163,7 +170,7 @@ func (q *Queries) InsertTagIfAbsent(ctx context.Context, arg InsertTagIfAbsentPa
 }
 
 const listTagsByProject = `-- name: ListTagsByProject :many
-SELECT id, project_id, name, created_at FROM tags WHERE project_id = $1 ORDER BY name
+SELECT id, project_id, name, created_at, color FROM tags WHERE project_id = $1 ORDER BY name
 `
 
 func (q *Queries) ListTagsByProject(ctx context.Context, projectID uuid.UUID) ([]Tag, error) {
@@ -180,6 +187,7 @@ func (q *Queries) ListTagsByProject(ctx context.Context, projectID uuid.UUID) ([
 			&i.ProjectID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.Color,
 		); err != nil {
 			return nil, err
 		}
@@ -192,16 +200,17 @@ func (q *Queries) ListTagsByProject(ctx context.Context, projectID uuid.UUID) ([
 }
 
 const updateTag = `-- name: UpdateTag :execrows
-UPDATE tags SET name = $1 WHERE id = $2
+UPDATE tags SET name = $1, color = $2 WHERE id = $3
 `
 
 type UpdateTagParams struct {
-	Name string
-	ID   uuid.UUID
+	Name  string
+	Color string
+	ID    uuid.UUID
 }
 
 func (q *Queries) UpdateTag(ctx context.Context, arg UpdateTagParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateTag, arg.Name, arg.ID)
+	result, err := q.db.Exec(ctx, updateTag, arg.Name, arg.Color, arg.ID)
 	if err != nil {
 		return 0, err
 	}

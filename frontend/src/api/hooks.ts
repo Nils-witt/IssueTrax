@@ -9,6 +9,7 @@ import type {
   Project,
   Tag,
   UpdateIssueInput,
+  UpdateTagInput,
   UpdateProjectInput,
   User,
 } from './types';
@@ -71,12 +72,12 @@ export function useTags(key: string) {
   return useQuery({ queryKey: keys.tags(key), queryFn: () => request<Tag[]>('GET', `/api/projects/${pk(key)}/tags`) });
 }
 
-export function useRenameTag(key: string) {
+export function useUpdateTag(key: string) {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      request<Tag>('PATCH', `/api/projects/${pk(key)}/tags/${encodeURIComponent(id)}`, { name }),
+    mutationFn: ({ id, ...input }: UpdateTagInput & { id: string }) =>
+      request<Tag>('PATCH', `/api/projects/${pk(key)}/tags/${encodeURIComponent(id)}`, input),
     onSuccess: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: keys.tags(key) }),
