@@ -1,0 +1,23 @@
+# Build output
+/bin/
+/coverage.out
+/coverage.html
+*.test
+*.exe
+
+# Embedded frontend build (produced by `make frontend`)
+/frontend/dist/
+
+# Node
+node_modules/
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Local env
+.env
+.env.*
+!.env.example
