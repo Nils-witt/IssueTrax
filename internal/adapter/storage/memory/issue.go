@@ -1,13 +1,10 @@
-// Package memory is an in-memory implementation of the storage ports. It is
-// meant for development and tests; data is lost on restart.
 package memory
 
 import (
 	"cmp"
 	"context"
-	"maps"
 	"slices"
-	"sync"
+	"strings"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
 	"nilswitt.dev/issuetrax/internal/core/port"
@@ -16,49 +13,122 @@ import (
 // Compile-time check that IssueRepository satisfies the driven port.
 var _ port.IssueRepository = (*IssueRepository)(nil)
 
-// IssueRepository stores issues in a map guarded by a RWMutex.
-type IssueRepository struct {
-	mu     sync.RWMutex
-	issues map[domain.IssueID]domain.Issue
-}
+// IssueRepository implements port.IssueRepository on a Store.
+type IssueRepository struct{ s *Store }
 
-// NewIssueRepository returns an empty IssueRepository.
-func NewIssueRepository() *IssueRepository {
-	return &IssueRepository{issues: make(map[domain.IssueID]domain.Issue)}
-}
+// NewIssueRepository returns an IssueRepository backed by s.
+func NewIssueRepository(s *Store) *IssueRepository { return &IssueRepository{s: s} }
 
-// Save inserts or replaces issue.
-func (r *IssueRepository) Save(_ context.Context, issue domain.Issue) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+// Create inserts issue.
+func (r *IssueRepository) Create(_ context.Context, issue domain.Issue) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
 
-	r.issues[issue.ID] = issue
+	r.s.data.issues[issue.ID] = cloneIssue(issue)
 
 	return nil
 }
 
-// Get returns the issue with the given ID, or domain.ErrIssueNotFound.
-func (r *IssueRepository) Get(_ context.Context, id domain.IssueID) (domain.Issue, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+// Update replaces an existing issue.
+func (r *IssueRepository) Update(_ context.Context, issue domain.Issue) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
 
-	issue, ok := r.issues[id]
-	if !ok {
-		return domain.Issue{}, domain.ErrIssueNotFound
+	if _, ok := r.s.data.issues[issue.ID]; !ok {
+		return domain.ErrIssueNotFound
 	}
 
-	return issue, nil
+	r.s.data.issues[issue.ID] = cloneIssue(issue)
+
+	return nil
 }
 
-// List returns all issues ordered by creation time, oldest first.
-func (r *IssueRepository) List(_ context.Context) ([]domain.Issue, error) {
-	r.mu.RLock()
-	issues := slices.Collect(maps.Values(r.issues))
-	r.mu.RUnlock()
+// Get returns the issue with the given project-scoped number.
+func (r *IssueRepository) Get(_ context.Context, project domain.ProjectID, number int64) (domain.Issue, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
 
-	slices.SortFunc(issues, func(a, b domain.Issue) int {
-		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID, b.ID))
-	})
+	for _, i := range r.s.data.issues {
+		if i.ProjectID == project && i.Number == number {
+			return cloneIssue(i), nil
+		}
+	}
 
-	return issues, nil
+	return domain.Issue{}, domain.ErrIssueNotFound
+}
+
+// List returns one page of matching issues, newest (highest number) first.
+func (r *IssueRepository) List(
+	_ context.Context, project domain.ProjectID, filter port.IssueFilter, page domain.PageRequest,
+) (domain.Page[domain.Issue], error) {
+	cursor, hasCursor, err := domain.DecodeCursor[domain.IssueCursor](page.Cursor)
+	if err != nil {
+		return domain.Page[domain.Issue]{}, err
+	}
+
+	r.s.mu.RLock()
+
+	var matching []domain.Issue
+
+	for _, i := range r.s.data.issues {
+		if i.ProjectID == project && matches(i, filter) {
+			matching = append(matching, cloneIssue(i))
+		}
+	}
+
+	r.s.mu.RUnlock()
+
+	slices.SortFunc(matching, func(a, b domain.Issue) int { return cmp.Compare(b.Number, a.Number) })
+
+	after := matching
+	if hasCursor {
+		after = slices.DeleteFunc(slices.Clone(matching), func(i domain.Issue) bool { return i.Number >= cursor.Number })
+	}
+
+	items, more := paginate(after, page.Limit)
+	result := domain.Page[domain.Issue]{Items: items, Total: int64(len(matching))}
+
+	if more {
+		result.NextCursor = domain.EncodeCursor(domain.IssueCursor{Number: items[len(items)-1].Number})
+	}
+
+	if result.Items == nil {
+		result.Items = []domain.Issue{}
+	}
+
+	return result, nil
+}
+
+func matches(i domain.Issue, f port.IssueFilter) bool {
+	if len(f.Statuses) > 0 && !slices.Contains(f.Statuses, i.Status) {
+		return false
+	}
+
+	if !matchSet(i.Tags, f.TagIDs, f.TagMode) || !matchSet(i.Assignees, f.AssigneeIDs, f.AssigneeMode) {
+		return false
+	}
+
+	if f.Query == "" {
+		return true
+	}
+
+	q := strings.ToLower(f.Query)
+
+	return strings.Contains(strings.ToLower(i.Title), q) || strings.Contains(strings.ToLower(i.Description), q)
+}
+
+// matchSet reports whether have contains all (or, for MatchAny, at least one)
+// of want. An empty want matches everything.
+func matchSet[T comparable](have, want []T, mode port.MatchMode) bool {
+	if len(want) == 0 {
+		return true
+	}
+
+	contains := func(w T) bool { return slices.Contains(have, w) }
+
+	if mode == port.MatchAny {
+		return slices.ContainsFunc(want, contains)
+	}
+
+	return !slices.ContainsFunc(want, func(w T) bool { return !contains(w) })
 }

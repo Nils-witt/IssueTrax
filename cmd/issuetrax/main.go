@@ -17,9 +17,7 @@ import (
 
 	"nilswitt.dev/issuetrax/frontend"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
-	"nilswitt.dev/issuetrax/internal/adapter/storage/memory"
 	"nilswitt.dev/issuetrax/internal/config"
-	"nilswitt.dev/issuetrax/internal/core/service"
 	"nilswitt.dev/issuetrax/internal/version"
 )
 
@@ -46,16 +44,12 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Wiring: driven adapters -> core services -> driving adapters.
-	issueRepo := memory.NewIssueRepository()
-	issueService := service.NewIssueService(issueRepo)
-
 	dist, err := fs.Sub(frontend.DistFS, "dist")
 	if err != nil {
 		return fmt.Errorf("open embedded frontend: %w", err)
 	}
 
-	handler, err := httpapi.NewHandler(issueService, dist, logger)
+	handler, err := httpapi.NewHandler(dist, logger)
 	if err != nil {
 		return fmt.Errorf("build http handler: %w", err)
 	}

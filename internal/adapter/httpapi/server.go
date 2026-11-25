@@ -9,23 +9,18 @@ import (
 	"log/slog"
 	"net/http"
 
-	"nilswitt.dev/issuetrax/internal/core/port"
 	"nilswitt.dev/issuetrax/internal/version"
 )
 
-// maxRequestBodyBytes caps JSON request bodies.
-const maxRequestBodyBytes = 1 << 20
-
 // Handler routes HTTP requests to the core services and the SPA.
 type Handler struct {
-	issues port.IssueService
 	logger *slog.Logger
 }
 
 // NewHandler builds the root http.Handler. frontend must contain the built
 // SPA with index.html at its root.
-func NewHandler(issues port.IssueService, frontend fs.FS, logger *slog.Logger) (http.Handler, error) {
-	h := &Handler{issues: issues, logger: logger}
+func NewHandler(frontend fs.FS, logger *slog.Logger) (http.Handler, error) {
+	h := &Handler{logger: logger}
 
 	spa, err := newSPAHandler(frontend)
 	if err != nil {
@@ -36,9 +31,6 @@ func NewHandler(issues port.IssueService, frontend fs.FS, logger *slog.Logger) (
 
 	mux.HandleFunc("GET /healthz", h.healthz)
 	mux.HandleFunc("GET /api/version", h.version)
-	mux.HandleFunc("GET /api/issues", h.listIssues)
-	mux.HandleFunc("POST /api/issues", h.createIssue)
-	mux.HandleFunc("GET /api/issues/{id}", h.getIssue)
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
