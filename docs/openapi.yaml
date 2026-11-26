@@ -52,6 +52,7 @@ tags:
   - name: issues
   - name: tags
   - name: comments
+  - name: attachments
   - name: users
   - name: service-accounts
   - name: audit
@@ -580,6 +581,106 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/IssueArchived" }
 
+  /api/projects/{key}/issues/{number}/attachments:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueNumber"
+    get:
+      tags: [attachments]
+      summary: List an issue's attachments
+      description: All attachments (metadata only), oldest first (not paginated).
+      responses:
+        "200":
+          description: Attachments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Attachment" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [attachments]
+      summary: Attach a file to an issue
+      description: |
+        Uploads one file as `multipart/form-data` in the field `file`; other
+        fields are ignored. The part's file name (reduced to its base name)
+        and `Content-Type` are stored as sent. Files must be 1 byte to
+        10 MiB (`fields.file`: `required` or `too_long`); the file name must
+        be at most 255 bytes without control characters (`fields.fileName`).
+        The signed-in user becomes the uploader. Archived issues accept no
+        new attachments.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400":
+          description: "The body is not a well-formed multipart form (`invalid_upload`)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IssueArchived" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/projects/{key}/issues/{number}/attachments/{attachmentId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueNumber"
+      - name: attachmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [attachments]
+      summary: Download an attachment
+      description: |
+        Serves the file. PNG, JPEG, GIF and WebP images (detected from the
+        content) are served `inline` with their detected type; everything
+        else is served with the stored media type as a download
+        (`Content-Disposition: attachment`). Responses carry a sandboxing
+        `Content-Security-Policy`, an `ETag` and support `Range` and
+        conditional requests. Attachments of archived issues stay readable.
+      responses:
+        "200":
+          description: The file.
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: "attachment; filename=report.pdf" }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "206": { description: Partial content for a `Range` request. }
+        "304": { description: Not modified (`If-None-Match` / `If-Modified-Since`). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [attachments]
+      summary: Delete an attachment
+      description: |
+        Permanently removes the attachment and its content. Only the
+        uploader may delete it (`403` with code `not_attachment_uploader`
+        otherwise); attachments of archived issues cannot be deleted.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IssueArchived" }
+
   /api/service-accounts:
     get:
       tags: [service-accounts]
@@ -730,7 +831,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -755,7 +856,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Forbidden:
-      description: "`not_comment_author` (the comment belongs to someone else) or `cross_origin_rejected`."
+      description: "`not_comment_author` (the comment belongs to someone else), `not_attachment_uploader` (someone else uploaded the attachment) or `cross_origin_rejected`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -831,6 +932,8 @@ components:
         - comment.create
         - comment.update
         - comment.delete
+        - attachment.create
+        - attachment.delete
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -844,20 +947,21 @@ components:
         were renamed or recolored (reload its tags and issues). `issue`: an
         issue was created or updated, possibly creating tags (reload it, the
         project's issue list and tags). `comments`: an issue's comments
-        changed.
+        changed. `attachments`: a file was attached to or removed from an
+        issue.
       properties:
-        type: { type: string, enum: [project, tags, issue, comments] }
+        type: { type: string, enum: [project, tags, issue, comments, attachments] }
         project: { type: string, example: TRAX }
         issue:
           type: integer
           format: int64
-          description: The issue number, for `issue` and `comments` only.
+          description: The issue number, for `issue`, `comments` and `attachments` only.
           example: 42
       example: { type: issue, project: TRAX, issue: 42 }
 
     AuditTargetType:
       type: string
-      enum: [user, project, issue, tag, comment, service_account, api_key]
+      enum: [user, project, issue, tag, comment, attachment, service_account, api_key]
 
     AuditChange:
       type: object
@@ -1041,6 +1145,20 @@ components:
         author: { $ref: "#/components/schemas/User" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time, description: Equals `createdAt` until the body is edited. }
+
+    Attachment:
+      type: object
+      required: [id, fileName, mediaType, size, uploader, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string, example: screenshot.png }
+        mediaType:
+          type: string
+          description: As declared by the uploader (normalized), `application/octet-stream` when missing or malformed. Not verified against the content.
+          example: image/png
+        size: { type: integer, format: int64, description: In bytes. }
+        uploader: { $ref: "#/components/schemas/User" }
+        createdAt: { type: string, format: date-time }
 
     CommentBody:
       type: object

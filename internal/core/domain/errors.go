@@ -40,6 +40,9 @@ const (
 	CodeLoginFailed      = "login_failed"
 	CodeNotCommentAuthor = "not_comment_author"
 
+	CodeAttachmentNotFound    = "attachment_not_found"
+	CodeNotAttachmentUploader = "not_attachment_uploader"
+
 	CodeServiceAccountNotFound  = "service_account_not_found"
 	CodeServiceAccountNameTaken = "service_account_name_taken"
 	CodeUserIdentityTaken       = "user_identity_taken"
@@ -101,6 +104,9 @@ var (
 	ErrNoSession        = &Error{kind: ErrUnauthenticated, Code: CodeUnauthenticated, Message: "authentication required"}
 	ErrLoginFailed      = &Error{kind: ErrUnauthenticated, Code: CodeLoginFailed, Message: "sign-in failed"}
 	ErrNotCommentAuthor = &Error{kind: ErrForbidden, Code: CodeNotCommentAuthor, Message: "only the author can change a comment"}
+
+	ErrAttachmentNotFound    = &Error{kind: ErrNotFound, Code: CodeAttachmentNotFound, Message: "attachment not found"}
+	ErrNotAttachmentUploader = &Error{kind: ErrForbidden, Code: CodeNotAttachmentUploader, Message: "only the uploader can delete an attachment"}
 
 	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}
 	ErrServiceAccountNameTaken = &Error{kind: ErrConflict, Code: CodeServiceAccountNameTaken, Message: "service account name is already taken"}

@@ -53,15 +53,16 @@ func main() {
 // driving adapters.
 func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.Logger) (http.Handler, cleaner, error) {
 	repos := service.Repositories{
-		Tx:       db,
-		Projects: postgres.NewProjectRepository(db),
-		Issues:   postgres.NewIssueRepository(db),
-		Tags:     postgres.NewTagRepository(db),
-		Comments: postgres.NewCommentRepository(db),
-		Users:    postgres.NewUserRepository(db),
-		Sessions: postgres.NewSessionRepository(db),
-		APIKeys:  postgres.NewAPIKeyRepository(db),
-		Audit:    postgres.NewAuditRepository(db),
+		Tx:          db,
+		Projects:    postgres.NewProjectRepository(db),
+		Issues:      postgres.NewIssueRepository(db),
+		Tags:        postgres.NewTagRepository(db),
+		Comments:    postgres.NewCommentRepository(db),
+		Attachments: postgres.NewAttachmentRepository(db),
+		Users:       postgres.NewUserRepository(db),
+		Sessions:    postgres.NewSessionRepository(db),
+		APIKeys:     postgres.NewAPIKeyRepository(db),
+		Audit:       postgres.NewAuditRepository(db),
 	}
 
 	idp, err := oidc.New(ctx, oidc.Config{
@@ -98,6 +99,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Issues:          service.NewIssueService(repos, notify),
 		Tags:            service.NewTagService(repos, notify),
 		Comments:        service.NewCommentService(repos, notify),
+		Attachments:     service.NewAttachmentService(repos, notify),
 		Users:           service.NewUserService(repos),
 		ServiceAccounts: service.NewBotService(repos),
 		Audit:           audit,

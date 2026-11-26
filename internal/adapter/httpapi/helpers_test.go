@@ -62,15 +62,16 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	store := memory.NewStore()
 	repos := service.Repositories{
-		Tx:       store,
-		Projects: memory.NewProjectRepository(store),
-		Issues:   memory.NewIssueRepository(store),
-		Tags:     memory.NewTagRepository(store),
-		Comments: memory.NewCommentRepository(store),
-		Users:    memory.NewUserRepository(store),
-		Sessions: memory.NewSessionRepository(store),
-		APIKeys:  memory.NewAPIKeyRepository(store),
-		Audit:    memory.NewAuditRepository(store),
+		Tx:          store,
+		Projects:    memory.NewProjectRepository(store),
+		Issues:      memory.NewIssueRepository(store),
+		Tags:        memory.NewTagRepository(store),
+		Comments:    memory.NewCommentRepository(store),
+		Attachments: memory.NewAttachmentRepository(store),
+		Users:       memory.NewUserRepository(store),
+		Sessions:    memory.NewSessionRepository(store),
+		APIKeys:     memory.NewAPIKeyRepository(store),
+		Audit:       memory.NewAuditRepository(store),
 	}
 
 	srv := httptest.NewUnstartedServer(nil)
@@ -80,12 +81,13 @@ func newTestEnv(t *testing.T) *testEnv {
 	notify := service.WithChangeNotifier(changes)
 
 	h, err := httpapi.NewHandler(httpapi.Config{
-		Auth:     service.NewAuthService(repos, idp, service.WithAdminGroup(testAdminGroup)),
-		Projects: service.NewProjectService(repos, notify),
-		Issues:   service.NewIssueService(repos, notify),
-		Tags:     service.NewTagService(repos, notify),
-		Comments: service.NewCommentService(repos, notify),
-		Users:    service.NewUserService(repos),
+		Auth:        service.NewAuthService(repos, idp, service.WithAdminGroup(testAdminGroup)),
+		Projects:    service.NewProjectService(repos, notify),
+		Issues:      service.NewIssueService(repos, notify),
+		Tags:        service.NewTagService(repos, notify),
+		Comments:    service.NewCommentService(repos, notify),
+		Attachments: service.NewAttachmentService(repos, notify),
+		Users:       service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),
 		Audit:           service.NewAuditService(repos, 0),

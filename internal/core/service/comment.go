@@ -24,7 +24,7 @@ func NewCommentService(repos Repositories, opts ...Option) *CommentService {
 
 // List returns the issue's comments, oldest first.
 func (s *CommentService) List(ctx context.Context, key domain.ProjectKey, number int64) ([]port.CommentView, error) {
-	issue, err := s.issue(ctx, key, number)
+	issue, err := issueByNumber(ctx, s.repos, key, number)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (s *CommentService) Create(
 	var comment domain.Comment
 
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
-		issue, err := s.editableIssue(ctx, key, number)
+		issue, err := editableIssue(ctx, s.repos, key, number)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ func (s *CommentService) Update(
 	var comment domain.Comment
 
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
-		issue, err := s.editableIssue(ctx, key, number)
+		issue, err := editableIssue(ctx, s.repos, key, number)
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func (s *CommentService) Update(
 // Delete removes actor's own comment.
 func (s *CommentService) Delete(ctx context.Context, actor domain.UserID, key domain.ProjectKey, number int64, id domain.CommentID) error {
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
-		issue, err := s.editableIssue(ctx, key, number)
+		issue, err := editableIssue(ctx, s.repos, key, number)
 		if err != nil {
 			return err
 		}
@@ -166,36 +166,6 @@ func (s *CommentService) record(
 	})
 }
 
-func (s *CommentService) issue(ctx context.Context, key domain.ProjectKey, number int64) (domain.Issue, error) {
-	project, err := projectByKey(ctx, s.repos.Projects, key)
-	if err != nil {
-		return domain.Issue{}, err
-	}
-
-	issue, err := s.repos.Issues.Get(ctx, project.ID, number)
-	if err != nil {
-		return domain.Issue{}, fmt.Errorf("get issue %s-%d: %w", project.Key, number, err)
-	}
-
-	return issue, nil
-}
-
-// editableIssue loads the issue and rejects archived ones. Inside a
-// transaction the issue row stays locked, so its status cannot change
-// before the comment is written.
-func (s *CommentService) editableIssue(ctx context.Context, key domain.ProjectKey, number int64) (domain.Issue, error) {
-	issue, err := s.issue(ctx, key, number)
-	if err != nil {
-		return domain.Issue{}, err
-	}
-
-	if err := issue.CheckEditable(false); err != nil {
-		return domain.Issue{}, err
-	}
-
-	return issue, nil
-}
-
 func (s *CommentService) view(ctx context.Context, c domain.Comment) (port.CommentView, error) {
 	views, err := s.views(ctx, []domain.Comment{c})
 	if err != nil {
@@ -207,31 +177,11 @@ func (s *CommentService) view(ctx context.Context, c domain.Comment) (port.Comme
 
 // views resolves comment authors with one lookup.
 func (s *CommentService) views(ctx context.Context, comments []domain.Comment) ([]port.CommentView, error) {
-	ids := make([]domain.UserID, 0, len(comments))
-	for _, c := range comments {
-		ids = append(ids, c.Author)
-	}
+	return withUsers(ctx, s.repos, "comment authors", comments, commentAuthor, newCommentView)
+}
 
-	users, err := s.repos.Users.GetMany(ctx, unique(ids))
-	if err != nil {
-		return nil, fmt.Errorf("get comment authors: %w", err)
-	}
+func commentAuthor(c domain.Comment) domain.UserID { return c.Author }
 
-	byID := make(map[domain.UserID]domain.User, len(users))
-	for _, u := range users {
-		byID[u.ID] = u
-	}
-
-	views := make([]port.CommentView, 0, len(comments))
-
-	for _, c := range comments {
-		author, ok := byID[c.Author]
-		if !ok {
-			author = domain.User{ID: c.Author}
-		}
-
-		views = append(views, port.CommentView{Comment: c, Author: author})
-	}
-
-	return views, nil
+func newCommentView(c domain.Comment, author domain.User) port.CommentView {
+	return port.CommentView{Comment: c, Author: author}
 }

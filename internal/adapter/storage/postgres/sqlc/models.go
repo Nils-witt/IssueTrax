@@ -70,6 +70,17 @@ type ApiKey struct {
 	RevokedAt  *time.Time
 }
 
+type Attachment struct {
+	ID         uuid.UUID
+	IssueID    uuid.UUID
+	UploaderID uuid.UUID
+	FileName   string
+	MediaType  string
+	Size       int64
+	Content    []byte
+	CreatedAt  time.Time
+}
+
 type AuditLog struct {
 	ID          uuid.UUID
 	At          time.Time

@@ -22,12 +22,13 @@ var testActor = domain.UserID(uuid.MustParse("00000000-0000-0000-0000-0000000000
 
 // fixture wires all services to one fresh in-memory store.
 type fixture struct {
-	repos    service.Repositories
-	projects *service.ProjectService
-	issues   *service.IssueService
-	tags     *service.TagService
-	comments *service.CommentService
-	users    *service.UserService
+	repos       service.Repositories
+	projects    *service.ProjectService
+	issues      *service.IssueService
+	tags        *service.TagService
+	comments    *service.CommentService
+	attachments *service.AttachmentService
+	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
 }
@@ -61,28 +62,30 @@ func newFixture(t *testing.T) *fixture {
 
 	store := memory.NewStore()
 	repos := service.Repositories{
-		Tx:       store,
-		Projects: memory.NewProjectRepository(store),
-		Issues:   memory.NewIssueRepository(store),
-		Tags:     memory.NewTagRepository(store),
-		Comments: memory.NewCommentRepository(store),
-		Users:    memory.NewUserRepository(store),
-		Sessions: memory.NewSessionRepository(store),
-		APIKeys:  memory.NewAPIKeyRepository(store),
-		Audit:    memory.NewAuditRepository(store),
+		Tx:          store,
+		Projects:    memory.NewProjectRepository(store),
+		Issues:      memory.NewIssueRepository(store),
+		Tags:        memory.NewTagRepository(store),
+		Comments:    memory.NewCommentRepository(store),
+		Attachments: memory.NewAttachmentRepository(store),
+		Users:       memory.NewUserRepository(store),
+		Sessions:    memory.NewSessionRepository(store),
+		APIKeys:     memory.NewAPIKeyRepository(store),
+		Audit:       memory.NewAuditRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 	changes := &changeRecorder{}
 	notify := service.WithChangeNotifier(changes)
 
 	return &fixture{
-		repos:    repos,
-		projects: service.NewProjectService(repos, clock, notify),
-		issues:   service.NewIssueService(repos, clock, notify),
-		tags:     service.NewTagService(repos, clock, notify),
-		comments: service.NewCommentService(repos, clock, notify),
-		users:    service.NewUserService(repos),
-		changes:  changes,
+		repos:       repos,
+		projects:    service.NewProjectService(repos, clock, notify),
+		issues:      service.NewIssueService(repos, clock, notify),
+		tags:        service.NewTagService(repos, clock, notify),
+		comments:    service.NewCommentService(repos, clock, notify),
+		attachments: service.NewAttachmentService(repos, clock, notify),
+		users:       service.NewUserService(repos),
+		changes:     changes,
 	}
 }
 

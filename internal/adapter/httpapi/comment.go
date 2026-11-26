@@ -35,24 +35,7 @@ type commentRequest struct {
 
 // GET /api/projects/{key}/issues/{number}/comments.
 func (h *Handler) listComments(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	number, ok := issueNumber(r)
-	if !ok {
-		h.writeDomainError(w, r, domain.ErrIssueNotFound)
-		return
-	}
-
-	comments, err := h.comments.List(r.Context(), projectKey(r), number)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	resp := make([]commentResponse, 0, len(comments))
-	for _, c := range comments {
-		resp = append(resp, toCommentResponse(c))
-	}
-
-	writeJSON(w, http.StatusOK, resp)
+	listOfIssue(h, w, r, h.comments.List, toCommentResponse)
 }
 
 // POST /api/projects/{key}/issues/{number}/comments.

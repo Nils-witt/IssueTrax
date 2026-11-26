@@ -17,6 +17,7 @@ import { useIssue, useTags, useUpdateIssue, useUsers } from '../api/hooks';
 import { issueStatuses, type Issue, type IssueStatus } from '../api/types';
 import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
+import { AttachmentSection } from '../components/AttachmentSection';
 import { CommentSection } from '../components/CommentSection';
 import { DateTime } from '../components/DateTime';
 import { ErrorMessage } from '../components/ErrorMessage';
@@ -42,9 +43,12 @@ export function IssuePage() {
       {issue.data && (
         <>
           <IssueDetail key={issue.data.updatedAt} issue={issue.data} />
-          {/* Outside the keyed IssueDetail so a comment draft survives issue edits. */}
+          {/* Outside the keyed IssueDetail so uploads and comment drafts survive issue edits. */}
           <Box sx={{ ...detailGrid, mt: 4 }}>
-            <CommentSection issue={issue.data} />
+            <Stack spacing={4} sx={{ minWidth: 0 }}>
+              <AttachmentSection issue={issue.data} />
+              <CommentSection issue={issue.data} />
+            </Stack>
           </Box>
         </>
       )}
@@ -52,7 +56,7 @@ export function IssuePage() {
   );
 }
 
-/** Main column plus metadata sidebar, shared by the issue and its comments. */
+/** Main column plus metadata sidebar, shared by the issue and its attachments and comments. */
 const detailGrid = { display: 'grid', gap: 4, gridTemplateColumns: { xs: '1fr', md: '1fr 16rem' } } as const;
 
 function IssueDetail({ issue }: { issue: Issue }) {

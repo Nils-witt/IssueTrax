@@ -41,6 +41,8 @@ var contract = []struct {
 	{name: "Tags/update", run: testTagsUpdate},
 	{name: "Comments/create, get, update and delete", run: testCommentsLifecycle},
 	{name: "Comments/list by issue", run: testCommentsListByIssue},
+	{name: "Attachments/create, get, content and delete", run: testAttachmentsLifecycle},
+	{name: "Attachments/list by issue", run: testAttachmentsListByIssue},
 	{name: "Users/create, get and update", run: testUsersCreateGetAndUpdate},
 	{name: "Users/list and get many", run: testUsersListAndGetMany},
 	{name: "Users/identity is unique", run: testUsersIdentityIsUnique},

@@ -20,10 +20,12 @@ type Repositories struct {
 	Issues   port.IssueRepository
 	Tags     port.TagRepository
 	Comments port.CommentRepository
-	Users    port.UserRepository
-	Sessions port.SessionRepository
-	APIKeys  port.APIKeyRepository
-	Audit    port.AuditRepository
+	// Attachments stores files attached to issues.
+	Attachments port.AttachmentRepository
+	Users       port.UserRepository
+	Sessions    port.SessionRepository
+	APIKeys     port.APIKeyRepository
+	Audit       port.AuditRepository
 }
 
 // Option customizes a service.
@@ -95,6 +97,74 @@ func projectByKey(ctx context.Context, repo port.ProjectRepository, key domain.P
 	}
 
 	return project, nil
+}
+
+// issueByNumber loads issue number of the project with a raw key.
+func issueByNumber(ctx context.Context, repos Repositories, key domain.ProjectKey, number int64) (domain.Issue, error) {
+	project, err := projectByKey(ctx, repos.Projects, key)
+	if err != nil {
+		return domain.Issue{}, err
+	}
+
+	issue, err := repos.Issues.Get(ctx, project.ID, number)
+	if err != nil {
+		return domain.Issue{}, fmt.Errorf("get issue %s-%d: %w", project.Key, number, err)
+	}
+
+	return issue, nil
+}
+
+// editableIssue loads the issue and rejects archived ones. Inside a
+// transaction the issue row stays locked, so its status cannot change
+// before the dependent change (a comment, an attachment) is written.
+func editableIssue(ctx context.Context, repos Repositories, key domain.ProjectKey, number int64) (domain.Issue, error) {
+	issue, err := issueByNumber(ctx, repos, key, number)
+	if err != nil {
+		return domain.Issue{}, err
+	}
+
+	if err := issue.CheckEditable(false); err != nil {
+		return domain.Issue{}, err
+	}
+
+	return issue, nil
+}
+
+// withUsers builds a view of each item with the user userOf names
+// resolved, loading all users with one lookup; what names those users in
+// errors. Unknown users are passed as a User with only the ID set.
+func withUsers[T, V any](
+	ctx context.Context, repos Repositories, what string, items []T, userOf func(T) domain.UserID, view func(T, domain.User) V,
+) ([]V, error) {
+	ids := make([]domain.UserID, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, userOf(item))
+	}
+
+	users, err := repos.Users.GetMany(ctx, unique(ids))
+	if err != nil {
+		return nil, fmt.Errorf("get %s: %w", what, err)
+	}
+
+	byID := make(map[domain.UserID]domain.User, len(users))
+	for _, u := range users {
+		byID[u.ID] = u
+	}
+
+	views := make([]V, 0, len(items))
+
+	for _, item := range items {
+		id := userOf(item)
+
+		user, ok := byID[id]
+		if !ok {
+			user = domain.User{ID: id}
+		}
+
+		views = append(views, view(item, user))
+	}
+
+	return views, nil
 }
 
 // unique returns s without duplicates, keeping first occurrences in order.

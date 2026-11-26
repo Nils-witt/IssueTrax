@@ -40,6 +40,8 @@ export const auditActions = [
   'comment.create',
   'comment.update',
   'comment.delete',
+  'attachment.create',
+  'attachment.delete',
   'service_account.create',
   'api_key.create',
   'api_key.revoke',
@@ -147,6 +149,21 @@ export interface Comment {
   createdAt: string;
   /** Equals createdAt until the body is edited. */
   updatedAt: string;
+}
+
+/** Largest file the server accepts as an attachment (10 MiB). */
+export const maxAttachmentBytes = 10 * 1024 * 1024;
+
+/** A file attached to an issue; its content is served at attachmentUrl(). */
+export interface Attachment {
+  id: string;
+  fileName: string;
+  /** As declared by the uploader; not verified. */
+  mediaType: string;
+  /** In bytes. */
+  size: number;
+  uploader: User;
+  createdAt: string;
 }
 
 export interface Page<T> {

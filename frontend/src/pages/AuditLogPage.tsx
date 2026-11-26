@@ -29,7 +29,8 @@ function issuePath(label: string): string | null {
 }
 
 function Target({ entry }: { entry: AuditEntry }) {
-  const path = entry.targetType === 'issue' || entry.targetType === 'comment' ? issuePath(entry.targetLabel) : null;
+  const issueTarget = entry.targetType === 'issue' || entry.targetType === 'comment' || entry.targetType === 'attachment';
+  const path = issueTarget ? issuePath(entry.targetLabel) : null;
 
   if (!path) return <>{entry.targetLabel}</>;
 

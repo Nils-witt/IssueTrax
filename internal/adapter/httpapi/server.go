@@ -26,7 +26,9 @@ type Config struct {
 	Issues   port.IssueService
 	Tags     port.TagService
 	Comments port.CommentService
-	Users    port.UserService
+	// Attachments stores and serves files attached to issues.
+	Attachments port.AttachmentService
+	Users       port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
 	// Audit reads the audit log (admins only).
@@ -51,18 +53,19 @@ type Config struct {
 
 // Handler routes HTTP requests to the core services and the SPA.
 type Handler struct {
-	auth     port.AuthService
-	projects port.ProjectService
-	issues   port.IssueService
-	tags     port.TagService
-	comments port.CommentService
-	users    port.UserService
-	accounts port.ServiceAccountService
-	audit    port.AuditService
-	changes  port.ChangeFeed
-	logger   *slog.Logger
-	cookies  cookies
-	openAPI  []byte
+	auth        port.AuthService
+	projects    port.ProjectService
+	issues      port.IssueService
+	tags        port.TagService
+	comments    port.CommentService
+	attachments port.AttachmentService
+	users       port.UserService
+	accounts    port.ServiceAccountService
+	audit       port.AuditService
+	changes     port.ChangeFeed
+	logger      *slog.Logger
+	cookies     cookies
+	openAPI     []byte
 	// wsOrigins are the origins (besides the request host) allowed to
 	// open WebSockets: the public URL's.
 	wsOrigins []string
@@ -79,18 +82,19 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	h := &Handler{
-		auth:     cfg.Auth,
-		projects: cfg.Projects,
-		issues:   cfg.Issues,
-		tags:     cfg.Tags,
-		comments: cfg.Comments,
-		users:    cfg.Users,
-		accounts: cfg.ServiceAccounts,
-		audit:    cfg.Audit,
-		changes:  cfg.Changes,
-		logger:   cfg.Logger,
-		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
-		openAPI:  cfg.OpenAPISpec,
+		auth:        cfg.Auth,
+		projects:    cfg.Projects,
+		issues:      cfg.Issues,
+		tags:        cfg.Tags,
+		comments:    cfg.Comments,
+		attachments: cfg.Attachments,
+		users:       cfg.Users,
+		accounts:    cfg.ServiceAccounts,
+		audit:       cfg.Audit,
+		changes:     cfg.Changes,
+		logger:      cfg.Logger,
+		cookies:     cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
+		openAPI:     cfg.OpenAPISpec,
 	}
 
 	csrf, err := crossOriginProtection(cfg.PublicURL)
@@ -148,6 +152,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/projects/{key}/issues/{number}/comments", h.authed(h.createComment))
 	mux.Handle("PATCH /api/projects/{key}/issues/{number}/comments/{commentId}", h.authed(h.updateComment))
 	mux.Handle("DELETE /api/projects/{key}/issues/{number}/comments/{commentId}", h.authed(h.deleteComment))
+	mux.Handle("GET /api/projects/{key}/issues/{number}/attachments", h.authed(h.listAttachments))
+	mux.Handle("POST /api/projects/{key}/issues/{number}/attachments", h.authed(h.uploadAttachment))
+	mux.Handle("GET /api/projects/{key}/issues/{number}/attachments/{attachmentId}", h.authed(h.downloadAttachment))
+	mux.Handle("DELETE /api/projects/{key}/issues/{number}/attachments/{attachmentId}", h.authed(h.deleteAttachment))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", notFound)
@@ -158,8 +166,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 
 // missingDependency reports whether a required service or the logger is nil.
 func (c Config) missingDependency() bool {
-	return c.Auth == nil || c.Projects == nil || c.Issues == nil || c.Tags == nil || c.Comments == nil || c.Users == nil ||
-		c.ServiceAccounts == nil || c.Audit == nil || c.Changes == nil || c.Logger == nil
+	return c.Auth == nil || c.Projects == nil || c.Issues == nil || c.Tags == nil || c.Comments == nil || c.Attachments == nil ||
+		c.Users == nil || c.ServiceAccounts == nil || c.Audit == nil || c.Changes == nil || c.Logger == nil
 }
 
 // crossOriginProtection rejects cross-origin state-changing requests

@@ -29,6 +29,8 @@ const (
 	AuditCommentCreate        AuditAction = "comment.create"
 	AuditCommentUpdate        AuditAction = "comment.update"
 	AuditCommentDelete        AuditAction = "comment.delete"
+	AuditAttachmentCreate     AuditAction = "attachment.create"
+	AuditAttachmentDelete     AuditAction = "attachment.delete"
 	AuditServiceAccountCreate AuditAction = "service_account.create"
 	AuditAPIKeyCreate         AuditAction = "api_key.create"
 	AuditAPIKeyRevoke         AuditAction = "api_key.revoke" //nolint:gosec // an action name, not a credential
@@ -38,6 +40,7 @@ const (
 var AuditActions = []AuditAction{
 	AuditLogin, AuditLoginFailed, AuditLogout, AuditProjectCreate, AuditProjectUpdate, AuditIssueCreate,
 	AuditIssueUpdate, AuditTagUpdate, AuditCommentCreate, AuditCommentUpdate, AuditCommentDelete,
+	AuditAttachmentCreate, AuditAttachmentDelete,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
 }
 
@@ -51,6 +54,7 @@ const (
 	AuditTargetIssue          = "issue"
 	AuditTargetTag            = "tag"
 	AuditTargetComment        = "comment"
+	AuditTargetAttachment     = "attachment"
 	AuditTargetServiceAccount = "service_account"
 	AuditTargetAPIKey         = "api_key"
 )

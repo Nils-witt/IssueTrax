@@ -10,10 +10,11 @@ import (
 
 // Transport-level error codes (domain errors carry their own codes).
 const (
-	codeNotFound    = "not_found"
-	codeInvalidJSON = "invalid_json"
-	codeInternal    = "internal_error"
-	codeCrossOrigin = "cross_origin_rejected"
+	codeNotFound      = "not_found"
+	codeInvalidJSON   = "invalid_json"
+	codeInvalidUpload = "invalid_upload"
+	codeInternal      = "internal_error"
+	codeCrossOrigin   = "cross_origin_rejected"
 )
 
 // errorResponse is the JSON shape of every API error:

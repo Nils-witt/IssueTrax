@@ -17,15 +17,16 @@ func TestContract(t *testing.T) {
 		s := memory.NewStore()
 
 		return service.Repositories{
-			Tx:       s,
-			Projects: memory.NewProjectRepository(s),
-			Issues:   memory.NewIssueRepository(s),
-			Tags:     memory.NewTagRepository(s),
-			Comments: memory.NewCommentRepository(s),
-			Users:    memory.NewUserRepository(s),
-			Sessions: memory.NewSessionRepository(s),
-			APIKeys:  memory.NewAPIKeyRepository(s),
-			Audit:    memory.NewAuditRepository(s),
+			Tx:          s,
+			Projects:    memory.NewProjectRepository(s),
+			Issues:      memory.NewIssueRepository(s),
+			Tags:        memory.NewTagRepository(s),
+			Comments:    memory.NewCommentRepository(s),
+			Attachments: memory.NewAttachmentRepository(s),
+			Users:       memory.NewUserRepository(s),
+			Sessions:    memory.NewSessionRepository(s),
+			APIKeys:     memory.NewAPIKeyRepository(s),
+			Audit:       memory.NewAuditRepository(s),
 		}
 	})
 }

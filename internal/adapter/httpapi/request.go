@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,6 +79,32 @@ func parseIDs[T ~[16]byte](raw []string, field string) ([]T, error) {
 	}
 
 	return ids, nil
+}
+
+// listOfIssue answers a GET of an issue's comments or attachments: the
+// whole list from list, each item converted for JSON.
+func listOfIssue[V, R any](
+	h *Handler, w http.ResponseWriter, r *http.Request,
+	list func(ctx context.Context, key domain.ProjectKey, number int64) ([]V, error), convert func(V) R,
+) {
+	number, ok := issueNumber(r)
+	if !ok {
+		h.writeDomainError(w, r, domain.ErrIssueNotFound)
+		return
+	}
+
+	items, err := list(r.Context(), projectKey(r), number)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	resp := make([]R, 0, len(items))
+	for _, item := range items {
+		resp = append(resp, convert(item))
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // pageResponse is the JSON shape of every paginated list. nextCursor is

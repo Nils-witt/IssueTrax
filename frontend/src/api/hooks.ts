@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { query, request } from './client';
 import type {
   ApiKey,
+  Attachment,
   AuditEntry,
   AuditFilter,
   Comment,
@@ -35,6 +36,7 @@ export const keys = {
   issues: (key: string) => ['issues', key.toUpperCase()] as const,
   issue: (key: string, number: number) => ['issue', key.toUpperCase(), number] as const,
   comments: (key: string, number: number) => ['comments', key.toUpperCase(), number] as const,
+  attachments: (key: string, number: number) => ['attachments', key.toUpperCase(), number] as const,
   serviceAccounts: ['serviceAccounts'] as const,
   apiKeys: (accountId: string) => ['apiKeys', accountId] as const,
   auditLog: (filter: AuditFilter) => ['auditLog', filter] as const,
@@ -241,7 +243,7 @@ export function useBulkUpdateIssues(key: string) {
   });
 }
 
-const commentsPath =(key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/comments`;
+const commentsPath = (key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/comments`;
 
 export function useComments(key: string, number: number) {
   return useQuery({ queryKey: keys.comments(key, number), queryFn: () => request<Comment[]>('GET', commentsPath(key, number)) });
@@ -277,6 +279,45 @@ export function useDeleteComment(key: string, number: number) {
 
   return useMutation({
     mutationFn: (id: string) => request<null>('DELETE', `${commentsPath(key, number)}/${encodeURIComponent(id)}`),
+    onSuccess,
+  });
+}
+
+const attachmentsPath = (key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/attachments`;
+
+/** Where an attachment's file is served (a download, or inline for images). */
+export function attachmentUrl(key: string, number: number, id: string): string {
+  return `${attachmentsPath(key, number)}/${encodeURIComponent(id)}`;
+}
+
+export function useAttachments(key: string, number: number) {
+  return useQuery({ queryKey: keys.attachments(key, number), queryFn: () => request<Attachment[]>('GET', attachmentsPath(key, number)) });
+}
+
+function useAttachmentsChanged(key: string, number: number) {
+  const qc = useQueryClient();
+
+  return () => qc.invalidateQueries({ queryKey: keys.attachments(key, number) });
+}
+
+export function useUploadAttachment(key: string, number: number) {
+  const onSuccess = useAttachmentsChanged(key, number);
+
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return request<Attachment>('POST', attachmentsPath(key, number), form);
+    },
+    onSuccess,
+  });
+}
+
+export function useDeleteAttachment(key: string, number: number) {
+  const onSuccess = useAttachmentsChanged(key, number);
+
+  return useMutation({
+    mutationFn: (id: string) => request<null>('DELETE', attachmentUrl(key, number, id)),
     onSuccess,
   });
 }

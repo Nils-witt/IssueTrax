@@ -31,15 +31,25 @@ interface ErrorBody {
   error?: { code?: string; message?: string; fields?: Record<string, string> };
 }
 
+/**
+ * Sends a JSON request and decodes the JSON answer. A FormData body is sent
+ * as multipart/form-data instead (the browser sets the boundary).
+ */
 export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let res: Response;
 
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  let payload: BodyInit | undefined;
+
+  if (body instanceof FormData) {
+    payload = body;
+  } else if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    payload = JSON.stringify(body);
+  }
+
   try {
-    res = await fetch(path, {
-      method,
-      headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    res = await fetch(path, { method, headers, body: payload });
   } catch {
     throw new ApiError(0, 'network', 'network error');
   }

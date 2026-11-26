@@ -34,23 +34,26 @@ type data struct {
 	issues     map[domain.IssueID]domain.Issue
 	tags       map[domain.TagID]domain.Tag
 	comments   map[domain.CommentID]domain.Comment
-	users      map[domain.UserID]domain.User
-	sessions   map[string]domain.Session
-	apiKeys    map[domain.APIKeyID]domain.APIKey
-	audit      []domain.AuditEntry
+	// attachments are never changed in place, so snapshots share content.
+	attachments map[domain.AttachmentID]storedAttachment
+	users       map[domain.UserID]domain.User
+	sessions    map[string]domain.Session
+	apiKeys     map[domain.APIKeyID]domain.APIKey
+	audit       []domain.AuditEntry
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
 	return &Store{data: data{
-		projects:   map[domain.ProjectID]domain.Project{},
-		nextNumber: map[domain.ProjectID]int64{},
-		issues:     map[domain.IssueID]domain.Issue{},
-		tags:       map[domain.TagID]domain.Tag{},
-		comments:   map[domain.CommentID]domain.Comment{},
-		users:      map[domain.UserID]domain.User{},
-		sessions:   map[string]domain.Session{},
-		apiKeys:    map[domain.APIKeyID]domain.APIKey{},
+		projects:    map[domain.ProjectID]domain.Project{},
+		nextNumber:  map[domain.ProjectID]int64{},
+		issues:      map[domain.IssueID]domain.Issue{},
+		tags:        map[domain.TagID]domain.Tag{},
+		comments:    map[domain.CommentID]domain.Comment{},
+		attachments: map[domain.AttachmentID]storedAttachment{},
+		users:       map[domain.UserID]domain.User{},
+		sessions:    map[string]domain.Session{},
+		apiKeys:     map[domain.APIKeyID]domain.APIKey{},
 	}}
 }
 
@@ -88,15 +91,16 @@ func (d data) clone() data {
 	}
 
 	return data{
-		projects:   maps.Clone(d.projects),
-		nextNumber: maps.Clone(d.nextNumber),
-		issues:     issues,
-		tags:       maps.Clone(d.tags),
-		comments:   maps.Clone(d.comments),
-		users:      maps.Clone(d.users),
-		sessions:   maps.Clone(d.sessions),
-		apiKeys:    maps.Clone(d.apiKeys),
-		audit:      slices.Clone(d.audit),
+		projects:    maps.Clone(d.projects),
+		nextNumber:  maps.Clone(d.nextNumber),
+		issues:      issues,
+		tags:        maps.Clone(d.tags),
+		comments:    maps.Clone(d.comments),
+		attachments: maps.Clone(d.attachments),
+		users:       maps.Clone(d.users),
+		sessions:    maps.Clone(d.sessions),
+		apiKeys:     maps.Clone(d.apiKeys),
+		audit:       slices.Clone(d.audit),
 	}
 }
 

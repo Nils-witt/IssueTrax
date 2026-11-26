@@ -14,6 +14,8 @@ const (
 	ChangeIssue ChangeKind = "issue"
 	// ChangeComments: a comment on an issue was added, edited or deleted.
 	ChangeComments ChangeKind = "comments"
+	// ChangeAttachments: a file was attached to or removed from an issue.
+	ChangeAttachments ChangeKind = "attachments"
 )
 
 // Change announces that data was committed. It carries only what changed,
@@ -22,6 +24,7 @@ const (
 type Change struct {
 	Kind    ChangeKind
 	Project ProjectKey
-	// Issue is the issue number for ChangeIssue and ChangeComments, else 0.
+	// Issue is the issue number for ChangeIssue, ChangeComments and
+	// ChangeAttachments, else 0.
 	Issue int64
 }
