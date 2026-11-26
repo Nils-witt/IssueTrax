@@ -135,6 +135,18 @@ export const en = {
     closed: 'Closed',
     archived: 'Archived',
   },
+  bulk: {
+    selectAll: 'Select all listed issues',
+    select: 'Select {{key}}',
+    selected_one: '{{count}} selected',
+    selected_other: '{{count}} selected',
+    setStatus: 'Set status',
+    add: 'Add',
+    remove: 'Remove',
+    clear: 'Clear selection',
+    failed_one: '{{count}} issue could not be updated:',
+    failed_other: '{{count}} issues could not be updated:',
+  },
   filters: {
     search: 'Search title and description',
     statuses: 'Status',

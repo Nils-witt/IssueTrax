@@ -135,6 +135,18 @@ export const de: Messages = {
     closed: 'Geschlossen',
     archived: 'Archiviert',
   },
+  bulk: {
+    selectAll: 'Alle angezeigten Tickets auswählen',
+    select: '{{key}} auswählen',
+    selected_one: '{{count}} ausgewählt',
+    selected_other: '{{count}} ausgewählt',
+    setStatus: 'Status setzen',
+    add: 'Hinzufügen',
+    remove: 'Entfernen',
+    clear: 'Auswahl aufheben',
+    failed_one: '{{count}} Ticket konnte nicht geändert werden:',
+    failed_other: '{{count}} Tickets konnten nicht geändert werden:',
+  },
   filters: {
     search: 'Titel und Beschreibung durchsuchen',
     statuses: 'Status',

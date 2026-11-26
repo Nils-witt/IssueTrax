@@ -201,7 +201,47 @@ export function useUpdateIssue(key: string, number: number) {
   });
 }
 
-const commentsPath = (key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/comments`;
+export interface BulkIssueUpdate {
+  number: number;
+  input: UpdateIssueInput;
+}
+
+/** Outcome of a bulk update: issues that failed, with their errors. */
+export interface BulkResult {
+  failed: { number: number; error: unknown }[];
+}
+
+/**
+ * Updates several issues, one PATCH each. Individual failures (such as
+ * an archived issue rejecting a tag change) do not stop the others; they
+ * are reported in the result.
+ */
+export function useBulkUpdateIssues(key: string) {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: BulkIssueUpdate[]): Promise<BulkResult> => {
+      const failed: BulkResult['failed'] = [];
+
+      await Promise.all(
+        updates.map(async (u) => {
+          try {
+            const issue = await request<Issue>('PATCH', `/api/projects/${pk(key)}/issues/${u.number}`, u.input);
+            qc.setQueryData(keys.issue(key, issue.number), issue);
+          } catch (error) {
+            failed.push({ number: u.number, error });
+          }
+        }),
+      );
+
+      return { failed };
+    },
+    onSettled: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.issues(key) }), qc.invalidateQueries({ queryKey: keys.tags(key) })]),
+  });
+}
+
+const commentsPath =(key: string, number: number) => `/api/projects/${pk(key)}/issues/${number}/comments`;
 
 export function useComments(key: string, number: number) {
   return useQuery({ queryKey: keys.comments(key, number), queryFn: () => request<Comment[]>('GET', commentsPath(key, number)) });

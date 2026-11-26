@@ -20,7 +20,7 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { useIssues, useTags, useUsers } from '../api/hooks';
@@ -35,6 +35,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TagPicker } from '../components/TagPicker';
 import { UserPicker } from '../components/UserPicker';
 import { tagChipSx } from '../lib/tagColor';
+import { IssueBulkBar } from './IssueBulkBar';
 
 // The page's URL query uses the API's parameter names, so a filtered view
 // is a bookmarkable URL and maps 1:1 onto GET /api/projects/{key}/issues.
@@ -53,6 +54,11 @@ export function IssuesPage() {
   const items = issues.data?.pages.flatMap((p) => p.items) ?? [];
   const total = issues.data?.pages[0]?.total ?? 0;
 
+  // Selected issue IDs. Only listed issues count as selected, so changing
+  // the filters drops whatever is no longer shown.
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const selected = items.filter((i) => selectedIds.has(i.id));
+
   return (
     <>
       <ProjectNav projectKey={key} />
@@ -68,8 +74,18 @@ export function IssuesPage() {
       {issues.isPending && <Loading />}
       {issues.isSuccess && (
         <Stack spacing={2}>
-          <Typography color="text.secondary">{t('issues.count', { count: total })}</Typography>
-          {items.length === 0 ? <Typography>{t('issues.empty')}</Typography> : <IssueTable issues={items} />}
+          <IssueBulkBar
+            projectKey={key}
+            issues={items}
+            selected={selected}
+            total={total}
+            onSelectAll={(all) => setSelectedIds(new Set(all ? items.map((i) => i.id) : []))}
+          />
+          {items.length === 0 ? (
+            <Typography>{t('issues.empty')}</Typography>
+          ) : (
+            <IssueTable issues={items} selectedIds={selectedIds} onSelectedChange={setSelectedIds} />
+          )}
           {issues.hasNextPage && (
             <Box>
               <Button variant="outlined" onClick={() => void issues.fetchNextPage()} loading={issues.isFetchingNextPage}>
@@ -86,15 +102,42 @@ export function IssuesPage() {
 // Columns beyond key, title and status are hidden on narrow screens.
 const wide = { display: { xs: 'none', md: 'flex' } } as const;
 
-function IssueTable({ issues }: { issues: Issue[] }) {
+interface IssueTableProps {
+  issues: Issue[];
+  selectedIds: ReadonlySet<string>;
+  onSelectedChange: (ids: ReadonlySet<string>) => void;
+}
+
+function IssueTable({ issues, selectedIds, onSelectedChange }: IssueTableProps) {
   const { t } = useTranslation();
+  // Row last toggled without Shift, the anchor of Shift+click ranges.
+  const anchor = useRef<number | null>(null);
+
+  function toggle(index: number, checked: boolean, range: boolean) {
+    const next = new Set(selectedIds);
+    const from = range && anchor.current !== null ? Math.min(anchor.current, index) : index;
+    const to = range && anchor.current !== null ? Math.max(anchor.current, index) : index;
+    for (const issue of issues.slice(from, to + 1)) {
+      if (checked) next.add(issue.id);
+      else next.delete(issue.id);
+    }
+    if (!range) anchor.current = index;
+    onSelectedChange(next);
+  }
 
   return (
     <Paper variant="outlined">
       <List disablePadding>
         {issues.map((i, index) => (
           <ListItem key={i.id} disablePadding divider={index < issues.length - 1}>
+            <Checkbox
+              checked={selectedIds.has(i.id)}
+              onClick={(e) => toggle(index, (e.target as HTMLInputElement).checked, e.shiftKey)}
+              sx={{ ml: 1 }}
+              slotProps={{ input: { 'aria-label': t('bulk.select', { key: i.key }) } }}
+            />
             <ListItemButton
+              selected={selectedIds.has(i.id)}
               href={`/p/${i.projectKey}/issues/${i.number}`}
               sx={{
                 display: 'grid',
