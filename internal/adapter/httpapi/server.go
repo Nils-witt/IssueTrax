@@ -31,6 +31,8 @@ type Config struct {
 	ServiceAccounts port.ServiceAccountService
 	// Audit reads the audit log (admins only).
 	Audit port.AuditService
+	// Changes feeds /api/events, the WebSocket that tells clients what to reload.
+	Changes port.ChangeFeed
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
 	// OpenAPISpec is the OpenAPI document (YAML) served at
@@ -57,9 +59,13 @@ type Handler struct {
 	users    port.UserService
 	accounts port.ServiceAccountService
 	audit    port.AuditService
+	changes  port.ChangeFeed
 	logger   *slog.Logger
 	cookies  cookies
 	openAPI  []byte
+	// wsOrigins are the origins (besides the request host) allowed to
+	// open WebSockets: the public URL's.
+	wsOrigins []string
 }
 
 // NewHandler builds the root http.Handler.
@@ -81,9 +87,20 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		users:    cfg.Users,
 		accounts: cfg.ServiceAccounts,
 		audit:    cfg.Audit,
+		changes:  cfg.Changes,
 		logger:   cfg.Logger,
 		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
 		openAPI:  cfg.OpenAPISpec,
+	}
+
+	csrf, err := crossOriginProtection(cfg.PublicURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// crossOriginProtection has validated the URL.
+	if u, err := url.Parse(cfg.PublicURL); err == nil {
+		h.wsOrigins = []string{u.Scheme + "://" + u.Host}
 	}
 
 	spa, err := newSPAHandler(cfg.Frontend)
@@ -116,6 +133,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/service-accounts/{id}/keys", h.sessionOnly(h.createAPIKey))
 	mux.Handle("DELETE /api/service-accounts/{id}/keys/{keyId}", h.sessionOnly(h.revokeAPIKey))
 	mux.Handle("GET /api/audit-log", h.sessionOnly(h.listAuditLog))
+	mux.Handle("GET /api/events", h.authed(h.events))
 	mux.Handle("GET /api/projects", h.authed(h.listProjects))
 	mux.Handle("POST /api/projects", h.authed(h.createProject))
 	mux.Handle("GET /api/projects/{key}", h.authed(h.getProject))
@@ -135,18 +153,13 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("/api/", notFound)
 	mux.Handle("/", spa)
 
-	csrf, err := crossOriginProtection(cfg.PublicURL)
-	if err != nil {
-		return nil, err
-	}
-
 	return securityHeaders(csrf.Handler(withRequestInfo(mux)), !cfg.InsecureCookies), nil
 }
 
 // missingDependency reports whether a required service or the logger is nil.
 func (c Config) missingDependency() bool {
 	return c.Auth == nil || c.Projects == nil || c.Issues == nil || c.Tags == nil || c.Comments == nil || c.Users == nil ||
-		c.ServiceAccounts == nil || c.Audit == nil || c.Logger == nil
+		c.ServiceAccounts == nil || c.Audit == nil || c.Changes == nil || c.Logger == nil
 }
 
 // crossOriginProtection rejects cross-origin state-changing requests

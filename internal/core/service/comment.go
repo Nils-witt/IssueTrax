@@ -67,6 +67,8 @@ func (s *CommentService) Create(
 		return port.CommentView{}, err
 	}
 
+	s.notifyComments(ctx, key, number)
+
 	return s.view(ctx, comment)
 }
 
@@ -110,12 +112,14 @@ func (s *CommentService) Update(
 		return port.CommentView{}, err
 	}
 
+	s.notifyComments(ctx, key, number)
+
 	return s.view(ctx, comment)
 }
 
 // Delete removes actor's own comment.
 func (s *CommentService) Delete(ctx context.Context, actor domain.UserID, key domain.ProjectKey, number int64, id domain.CommentID) error {
-	return s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
+	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
 		issue, err := s.editableIssue(ctx, key, number)
 		if err != nil {
 			return err
@@ -136,6 +140,18 @@ func (s *CommentService) Delete(ctx context.Context, actor domain.UserID, key do
 
 		return s.record(ctx, actor, domain.AuditCommentDelete, key, issue, id, nil)
 	})
+	if err != nil {
+		return err
+	}
+
+	s.notifyComments(ctx, key, number)
+
+	return nil
+}
+
+// notifyComments announces that the comments on an issue changed.
+func (s *CommentService) notifyComments(ctx context.Context, key domain.ProjectKey, number int64) {
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeComments, Project: domain.NormalizeProjectKey(string(key)), Issue: number})
 }
 
 // record writes the audit entry for a change to comment id on issue.

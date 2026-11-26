@@ -9,7 +9,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': { target: backendTarget, changeOrigin: true },
+      // ws: /api/events is a WebSocket.
+      '/api': { target: backendTarget, changeOrigin: true, ws: true },
       '/auth': { target: backendTarget, changeOrigin: true },
       '/healthz': { target: backendTarget, changeOrigin: true },
     },

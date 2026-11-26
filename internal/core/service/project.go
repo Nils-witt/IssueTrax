@@ -51,6 +51,8 @@ func (s *ProjectService) Create(ctx context.Context, actor domain.UserID, in por
 		return domain.Project{}, err
 	}
 
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeProject, Project: project.Key})
+
 	return project, nil
 }
 
@@ -107,6 +109,8 @@ func (s *ProjectService) Update(
 	if err != nil {
 		return domain.Project{}, err
 	}
+
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeProject, Project: project.Key})
 
 	return project, nil
 }

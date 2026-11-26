@@ -81,5 +81,7 @@ func (s *TagService) Update(
 		return domain.Tag{}, err
 	}
 
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeTags, Project: domain.NormalizeProjectKey(string(key))})
+
 	return tag, nil
 }

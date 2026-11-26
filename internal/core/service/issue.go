@@ -93,6 +93,8 @@ func (s *IssueService) Create(
 		return port.IssueView{}, err
 	}
 
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeIssue, Project: view.ProjectKey, Issue: view.Issue.Number})
+
 	return view, nil
 }
 
@@ -187,6 +189,8 @@ func (s *IssueService) Update(
 	if err != nil {
 		return port.IssueView{}, err
 	}
+
+	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeIssue, Project: view.ProjectKey, Issue: view.Issue.Number})
 
 	return view, nil
 }

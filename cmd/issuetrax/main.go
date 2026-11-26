@@ -17,6 +17,7 @@ import (
 
 	"nilswitt.dev/issuetrax/docs"
 	"nilswitt.dev/issuetrax/frontend"
+	"nilswitt.dev/issuetrax/internal/adapter/changefeed"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
 	"nilswitt.dev/issuetrax/internal/adapter/oidc"
 	"nilswitt.dev/issuetrax/internal/adapter/storage/postgres"
@@ -78,6 +79,11 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		logger.WarnContext(ctx, "ISSUETRAX_OIDC_ADMIN_GROUP is not set; nobody can read the audit log")
 	}
 
+	// Services announce committed changes on the hub; /api/events streams
+	// them to browsers.
+	changes := changefeed.New()
+	notify := service.WithChangeNotifier(changes)
+
 	auth := service.NewAuthService(repos, idp, service.WithAdminGroup(cfg.OIDCAdminGroup))
 	audit := service.NewAuditService(repos, cfg.AuditRetention)
 
@@ -88,13 +94,14 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 
 	handler, err := httpapi.NewHandler(httpapi.Config{
 		Auth:            auth,
-		Projects:        service.NewProjectService(repos),
-		Issues:          service.NewIssueService(repos),
-		Tags:            service.NewTagService(repos),
-		Comments:        service.NewCommentService(repos),
+		Projects:        service.NewProjectService(repos, notify),
+		Issues:          service.NewIssueService(repos, notify),
+		Tags:            service.NewTagService(repos, notify),
+		Comments:        service.NewCommentService(repos, notify),
 		Users:           service.NewUserService(repos),
 		ServiceAccounts: service.NewBotService(repos),
 		Audit:           audit,
+		Changes:         changes,
 		Frontend:        dist,
 		OpenAPISpec:     docs.OpenAPI,
 		Logger:          logger,

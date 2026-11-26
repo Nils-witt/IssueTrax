@@ -9,6 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"nilswitt.dev/issuetrax/internal/adapter/changefeed"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
 	"nilswitt.dev/issuetrax/internal/adapter/storage/memory"
 	"nilswitt.dev/issuetrax/internal/core/service"
@@ -166,6 +167,7 @@ func TestAuth_SecureCookies(t *testing.T) {
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
 		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),
+		Changes:         changefeed.New(),
 		Frontend:        fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Logger:          slog.New(slog.DiscardHandler),
 		PublicURL:       "https://trax.example",

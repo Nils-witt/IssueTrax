@@ -55,6 +55,7 @@ tags:
   - name: users
   - name: service-accounts
   - name: audit
+  - name: events
 
 paths:
   /auth/login:
@@ -183,6 +184,36 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
+
+  /api/events:
+    get:
+      tags: [events]
+      summary: Live change notifications (WebSocket)
+      description: |
+        Upgrades to a WebSocket that the server sends one JSON text message
+        per committed change on (`ChangeEvent`). Messages name what changed,
+        not the new data: reload it through the regular endpoints. The
+        stream is server-to-client only; a data message from the client
+        closes it.
+
+        Browsers authenticate with the session cookie and must connect from
+        the app's own origin (other origins get `403`); service accounts send
+        `Authorization: Bearer itx_…`. Credentials are checked again every
+        minute: once they are no longer valid the server closes with code
+        `4401`. It closes with `1013` (try again later) when the client falls
+        behind and `1001` when shutting down. A client that reconnects has
+        missed changes and should reload everything it shows.
+      responses:
+        "101":
+          description: Switching to the WebSocket protocol; then `ChangeEvent` messages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChangeEvent" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: The `Origin` is neither the server's host nor the public URL.
+        "426":
+          description: Not a WebSocket handshake.
 
   /api/users:
     get:
@@ -803,6 +834,26 @@ components:
         - service_account.create
         - api_key.create
         - api_key.revoke
+
+    ChangeEvent:
+      type: object
+      required: [type, project]
+      description: |
+        A committed change. `project`: a project was created or updated
+        (reload the project list and that project). `tags`: a project's tags
+        were renamed or recolored (reload its tags and issues). `issue`: an
+        issue was created or updated, possibly creating tags (reload it, the
+        project's issue list and tags). `comments`: an issue's comments
+        changed.
+      properties:
+        type: { type: string, enum: [project, tags, issue, comments] }
+        project: { type: string, example: TRAX }
+        issue:
+          type: integer
+          format: int64
+          description: The issue number, for `issue` and `comments` only.
+          example: 42
+      example: { type: issue, project: TRAX, issue: 42 }
 
     AuditTargetType:
       type: string

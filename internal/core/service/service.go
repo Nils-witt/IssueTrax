@@ -33,6 +33,7 @@ type options struct {
 	now        func() time.Time
 	newID      func() uuid.UUID
 	adminGroup string
+	changes    port.ChangeNotifier
 }
 
 // WithClock overrides the time source (useful in tests).
@@ -49,6 +50,20 @@ func WithIDGenerator(newID func() uuid.UUID) Option {
 // (AuthService). Without it, nobody is an admin.
 func WithAdminGroup(name string) Option {
 	return func(o *options) { o.adminGroup = name }
+}
+
+// WithChangeNotifier announces every committed change to n, so connected
+// clients can refresh. Without it, changes are not announced.
+func WithChangeNotifier(n port.ChangeNotifier) Option {
+	return func(o *options) { o.changes = n }
+}
+
+// notify announces a committed change. Call it only after the use case's
+// transaction succeeded, so listeners never reload uncommitted data.
+func (o options) notify(ctx context.Context, change domain.Change) {
+	if o.changes != nil {
+		o.changes.Notify(ctx, change)
+	}
 }
 
 func newOptions(opts []Option) options {

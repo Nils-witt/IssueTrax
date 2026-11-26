@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router';
 import { signOut } from '../api/client';
 import { useMe } from '../api/hooks';
+import { useLiveUpdates } from '../api/live';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
 import { languages, type Language } from '../i18n';
@@ -20,6 +21,7 @@ import { languages, type Language } from '../i18n';
 export function Layout() {
   const { t, i18n } = useTranslation();
   const me = useMe();
+  useLiveUpdates(me.isSuccess);
 
   return (
     <>

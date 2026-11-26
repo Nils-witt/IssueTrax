@@ -1,7 +1,9 @@
 package service_test
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +28,32 @@ type fixture struct {
 	tags     *service.TagService
 	comments *service.CommentService
 	users    *service.UserService
+	// changes records every change the services announced.
+	changes *changeRecorder
+}
+
+// changeRecorder is a port.ChangeNotifier that remembers what it was told.
+type changeRecorder struct {
+	mu   sync.Mutex
+	seen []domain.Change
+}
+
+func (r *changeRecorder) Notify(_ context.Context, c domain.Change) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.seen = append(r.seen, c)
+}
+
+// take returns the recorded changes and forgets them.
+func (r *changeRecorder) take() []domain.Change {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	seen := r.seen
+	r.seen = nil
+
+	return seen
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -44,14 +72,17 @@ func newFixture(t *testing.T) *fixture {
 		Audit:    memory.NewAuditRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
+	changes := &changeRecorder{}
+	notify := service.WithChangeNotifier(changes)
 
 	return &fixture{
 		repos:    repos,
-		projects: service.NewProjectService(repos, clock),
-		issues:   service.NewIssueService(repos, clock),
-		tags:     service.NewTagService(repos, clock),
-		comments: service.NewCommentService(repos, clock),
+		projects: service.NewProjectService(repos, clock, notify),
+		issues:   service.NewIssueService(repos, clock, notify),
+		tags:     service.NewTagService(repos, clock, notify),
+		comments: service.NewCommentService(repos, clock, notify),
 		users:    service.NewUserService(repos),
+		changes:  changes,
 	}
 }
 

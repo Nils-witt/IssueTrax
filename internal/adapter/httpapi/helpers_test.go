@@ -14,6 +14,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"nilswitt.dev/issuetrax/internal/adapter/changefeed"
 	"nilswitt.dev/issuetrax/internal/adapter/httpapi"
 	"nilswitt.dev/issuetrax/internal/adapter/storage/memory"
 	"nilswitt.dev/issuetrax/internal/core/domain"
@@ -75,17 +76,20 @@ func newTestEnv(t *testing.T) *testEnv {
 	srv := httptest.NewUnstartedServer(nil)
 	publicURL := "http://" + srv.Listener.Addr().String()
 	idp := &fakeIDP{callback: publicURL + "/auth/callback"}
+	changes := changefeed.New()
+	notify := service.WithChangeNotifier(changes)
 
 	h, err := httpapi.NewHandler(httpapi.Config{
 		Auth:     service.NewAuthService(repos, idp, service.WithAdminGroup(testAdminGroup)),
-		Projects: service.NewProjectService(repos),
-		Issues:   service.NewIssueService(repos),
-		Tags:     service.NewTagService(repos),
-		Comments: service.NewCommentService(repos),
+		Projects: service.NewProjectService(repos, notify),
+		Issues:   service.NewIssueService(repos, notify),
+		Tags:     service.NewTagService(repos, notify),
+		Comments: service.NewCommentService(repos, notify),
 		Users:    service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),
 		Audit:           service.NewAuditService(repos, 0),
+		Changes:         changes,
 		Frontend: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>spa</html>")},
 			"assets/app.js": {Data: []byte("console.log(1)")},
