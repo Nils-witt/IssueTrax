@@ -20,12 +20,14 @@ import type {
   UpdateTagInput,
   UpdateProjectInput,
   User,
+  VersionInfo,
 } from './types';
 
 const pk = (key: string) => encodeURIComponent(key);
 
 export const keys = {
   me: ['me'] as const,
+  version: ['version'] as const,
   users: ['users'] as const,
   projects: ['projects'] as const,
   project: (key: string) => ['project', key.toUpperCase()] as const,
@@ -74,6 +76,10 @@ export function useRevokeApiKey(accountId: string) {
     mutationFn: (keyId: string) => request<null>('DELETE', `${accountPath(accountId)}/${encodeURIComponent(keyId)}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.apiKeys(accountId) }),
   });
+}
+
+export function useVersion() {
+  return useQuery({ queryKey: keys.version, queryFn: () => request<VersionInfo>('GET', '/api/version'), staleTime: Infinity });
 }
 
 export function useMe() {

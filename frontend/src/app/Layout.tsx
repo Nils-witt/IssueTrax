@@ -1,4 +1,5 @@
 import AppBar from '@mui/material/AppBar';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import MenuItem from '@mui/material/MenuItem';
@@ -8,7 +9,7 @@ import Typography from '@mui/material/Typography';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router';
 import { signOut } from '../api/client';
-import { useMe } from '../api/hooks';
+import { useMe, useVersion } from '../api/hooks';
 import { useLiveUpdates } from '../api/live';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { Loading } from '../components/Loading';
@@ -24,7 +25,7 @@ export function Layout() {
   useLiveUpdates(me.isSuccess);
 
   return (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar variant="dense" sx={{ gap: 2 }}>
           <Typography component={Link} to="/" variant="h6" sx={{ fontWeight: 700, color: 'inherit', textDecoration: 'none', flexGrow: 1 }}>
@@ -67,11 +68,31 @@ export function Layout() {
           )}
         </Toolbar>
       </AppBar>
-      <Container component="main" maxWidth="lg" sx={{ pt: 3, pb: 8 }}>
+      <Container component="main" maxWidth="lg" sx={{ pt: 3, pb: 8, flexGrow: 1 }}>
         {me.isPending && <Loading />}
         {me.isError && <ErrorMessage error={me.error} />}
         {me.isSuccess && <Outlet />}
       </Container>
-    </>
+      <Footer />
+    </Box>
+  );
+}
+
+/**
+ * Shows the build the server runs: the git tag (or `git describe` output
+ * such as v1.2.0-3-gabc1234), falling back to the commit for untagged builds.
+ */
+function Footer() {
+  const { data } = useVersion();
+  if (!data) return null;
+
+  const label = data.version !== 'dev' ? data.version : data.commit !== 'unknown' ? data.commit : 'dev';
+
+  return (
+    <Box component="footer" sx={{ borderTop: 1, borderColor: 'divider', py: 1.5, textAlign: 'center' }}>
+      <Typography variant="caption" color="text.secondary" title={`commit ${data.commit}`} sx={{ fontFamily: 'monospace' }}>
+        {label}
+      </Typography>
+    </Box>
   );
 }

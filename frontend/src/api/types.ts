@@ -15,6 +15,14 @@ export interface User {
 }
 
 /** The signed-in user (GET /api/me). */
+/** Build metadata from /api/version. */
+export interface VersionInfo {
+  /** `git describe --tags` output, e.g. `v1.2.0`, or `dev` for local builds. */
+  version: string;
+  /** Short commit hash, or `unknown`. */
+  commit: string;
+}
+
 export interface Me extends User {
   /** Member of the admin group at the latest sign-in; may read the audit log. */
   admin: boolean;
