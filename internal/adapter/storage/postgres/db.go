@@ -178,6 +178,9 @@ func isUniqueViolation(err error, constraint string) bool {
 
 // pageLimit returns the query limit for a page: one extra row tells whether
 // another page follows. Page sizes are bounded by domain.MaxPageSize.
+// cursorField names the page cursor in validation errors.
+const cursorField = "cursor"
+
 func pageLimit(limit int) int32 {
 	return int32(min(limit, 1<<20) + 1) //nolint:gosec // bounded above, cannot overflow
 }

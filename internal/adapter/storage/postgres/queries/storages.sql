@@ -9,13 +9,15 @@ WHERE id = @id;
 
 -- name: GetStorage :one
 SELECT s.id, s.parent_id, s.name, s.created_at, s.updated_at,
-       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count
+       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count,
+       (SELECT count(*) FROM storage_items i WHERE i.storage_id = s.id AND i.deleted_at IS NULL)::bigint AS item_count
 FROM storages s
 WHERE s.id = @id;
 
 -- name: ListStorageChildren :many
 SELECT s.id, s.parent_id, s.name, s.created_at, s.updated_at,
-       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count
+       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count,
+       (SELECT count(*) FROM storage_items i WHERE i.storage_id = s.id AND i.deleted_at IS NULL)::bigint AS item_count
 FROM storages s
 WHERE s.parent_id IS NOT DISTINCT FROM sqlc.narg('parent_id')::uuid
   AND (NOT @has_cursor::boolean OR (lower(s.name), s.id) > (@cursor_name::text, @cursor_id::uuid))

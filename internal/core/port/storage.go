@@ -36,7 +36,8 @@ type StorageService interface {
 // Create and Update return domain.ErrStorageNameTaken when a sibling (a
 // storage with the same parent, roots included) already has the name,
 // compared case-insensitively. Get returns domain.ErrStorageNotFound.
-// ListChildren orders by lower(name), then ID, and fills ChildCount.
+// ListChildren orders by lower(name), then ID. Get and ListChildren fill
+// ChildCount and ItemCount (live items of any kind kept directly in it).
 // IsDescendant reports whether candidate lies in ancestor's subtree,
 // excluding ancestor itself. LockTree serializes tree moves until the
 // surrounding transaction ends, so concurrent moves cannot form a cycle.

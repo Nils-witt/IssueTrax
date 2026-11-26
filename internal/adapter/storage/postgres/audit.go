@@ -92,7 +92,7 @@ func (r *AuditRepository) List(
 
 	if hasCursor {
 		if params.CursorID, err = uuid.Parse(cursor.ID); err != nil {
-			return domain.Page[domain.AuditEntry]{}, domain.NewValidationError(map[string]string{"cursor": domain.FieldInvalid})
+			return domain.Page[domain.AuditEntry]{}, domain.NewValidationError(map[string]string{cursorField: domain.FieldInvalid})
 		}
 	}
 

@@ -11,17 +11,21 @@ import type {
   CreatedApiKey,
   CreateIssueInput,
   CreateProjectInput,
+  CreateGenericStorageItemInput,
   CreateStorageInput,
+  GenericStorageItem,
   Issue,
   Me,
   Page,
   Project,
   ServiceAccount,
   Storage,
+  StorageItemFilter,
   Tag,
   UpdateIssueInput,
   UpdateTagInput,
   UpdateProjectInput,
+  UpdateGenericStorageItemInput,
   UpdateStorageInput,
   User,
   VersionInfo,
@@ -47,6 +51,11 @@ export const keys = {
   storages: ['storages'] as const,
   /** Children of parent; null lists the roots. */
   storageChildren: (parent: string | null) => ['storages', 'children', parent ?? ''] as const,
+  storage: (id: string) => ['storages', 'one', id] as const,
+  /** Prefix of every storage item query. */
+  storageItems: ['storageItems'] as const,
+  storageItemsIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'in', storage, filter] as const,
+  storageItemSearch: (filter: StorageItemFilter) => ['storageItems', 'search', filter] as const,
 };
 
 export function useServiceAccounts() {
@@ -377,4 +386,83 @@ export function useUpdateStorage() {
       request<Storage>('PATCH', `/api/storages/${encodeURIComponent(id)}`, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.storages }),
   });
+}
+
+export function useStorage(id: string) {
+  return useQuery({ queryKey: keys.storage(id), queryFn: () => request<Storage>('GET', `/api/storages/${encodeURIComponent(id)}`) });
+}
+
+const flag = (on: boolean | undefined) => (on ? 'true' : undefined);
+
+/** The generic items in one storage (or its subtree), paginated by name. */
+export function useStorageItems(storage: string, filter: StorageItemFilter) {
+  return useInfiniteQuery({
+    queryKey: keys.storageItemsIn(storage, filter),
+    queryFn: ({ pageParam }) =>
+      request<Page<GenericStorageItem>>(
+        'GET',
+        `/api/storages/${encodeURIComponent(storage)}/generic-storage-items${query({
+          recursive: flag(filter.recursive),
+          deleted: flag(filter.deleted),
+          cursor: pageParam,
+        })}`,
+      ),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+}
+
+/** Generic items across all storages whose name or description contains filter.q. */
+export function useStorageItemSearch(filter: StorageItemFilter, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.storageItemSearch(filter),
+    queryFn: ({ pageParam }) =>
+      request<Page<GenericStorageItem>>(
+        'GET',
+        `/api/generic-storage-items${query({ q: filter.q, deleted: flag(filter.deleted), cursor: pageParam })}`,
+      ),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+/** Item changes also change the storages' item counts. */
+function useInvalidateStorageItems() {
+  const qc = useQueryClient();
+
+  return () => Promise.all([qc.invalidateQueries({ queryKey: keys.storageItems }), qc.invalidateQueries({ queryKey: keys.storages })]);
+}
+
+export function useCreateStorageItem() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({
+    mutationFn: (input: CreateGenericStorageItemInput) => request<GenericStorageItem>('POST', '/api/generic-storage-items', input),
+    onSuccess,
+  });
+}
+
+const itemPath = (id: string) => `/api/generic-storage-items/${encodeURIComponent(id)}`;
+
+export function useUpdateStorageItem() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateGenericStorageItemInput }) =>
+      request<GenericStorageItem>('PATCH', itemPath(id), input),
+    onSuccess,
+  });
+}
+
+export function useDeleteStorageItem() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', itemPath(id)), onSuccess });
+}
+
+export function useRestoreStorageItem() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({ mutationFn: (id: string) => request<GenericStorageItem>('POST', `${itemPath(id)}/restore`), onSuccess });
 }

@@ -29,6 +29,7 @@ type fixture struct {
 	comments    *service.CommentService
 	attachments *service.AttachmentService
 	storages    *service.StorageService
+	items       *service.GenericStorageItemService
 	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
@@ -63,17 +64,18 @@ func newFixture(t *testing.T) *fixture {
 
 	store := memory.NewStore()
 	repos := service.Repositories{
-		Tx:          store,
-		Projects:    memory.NewProjectRepository(store),
-		Issues:      memory.NewIssueRepository(store),
-		Tags:        memory.NewTagRepository(store),
-		Comments:    memory.NewCommentRepository(store),
-		Attachments: memory.NewAttachmentRepository(store),
-		Storages:    memory.NewStorageRepository(store),
-		Users:       memory.NewUserRepository(store),
-		Sessions:    memory.NewSessionRepository(store),
-		APIKeys:     memory.NewAPIKeyRepository(store),
-		Audit:       memory.NewAuditRepository(store),
+		Tx:                  store,
+		Projects:            memory.NewProjectRepository(store),
+		Issues:              memory.NewIssueRepository(store),
+		Tags:                memory.NewTagRepository(store),
+		Comments:            memory.NewCommentRepository(store),
+		Attachments:         memory.NewAttachmentRepository(store),
+		Storages:            memory.NewStorageRepository(store),
+		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
+		Users:               memory.NewUserRepository(store),
+		Sessions:            memory.NewSessionRepository(store),
+		APIKeys:             memory.NewAPIKeyRepository(store),
+		Audit:               memory.NewAuditRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 	changes := &changeRecorder{}
@@ -87,6 +89,7 @@ func newFixture(t *testing.T) *fixture {
 		comments:    service.NewCommentService(repos, clock, notify),
 		attachments: service.NewAttachmentService(repos, clock, notify),
 		storages:    service.NewStorageService(repos, clock, notify),
+		items:       service.NewGenericStorageItemService(repos, clock, notify),
 		users:       service.NewUserService(repos),
 		changes:     changes,
 	}

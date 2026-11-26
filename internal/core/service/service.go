@@ -24,10 +24,12 @@ type Repositories struct {
 	Attachments port.AttachmentRepository
 	// Storages stores the physical storage location tree.
 	Storages port.StorageRepository
-	Users    port.UserRepository
-	Sessions port.SessionRepository
-	APIKeys  port.APIKeyRepository
-	Audit    port.AuditRepository
+	// GenericStorageItems stores the generic items kept in storages.
+	GenericStorageItems port.GenericStorageItemRepository
+	Users               port.UserRepository
+	Sessions            port.SessionRepository
+	APIKeys             port.APIKeyRepository
+	Audit               port.AuditRepository
 }
 
 // Option customizes a service.

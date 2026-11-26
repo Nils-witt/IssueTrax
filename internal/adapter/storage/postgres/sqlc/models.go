@@ -151,6 +151,17 @@ type Storage struct {
 	UpdatedAt time.Time
 }
 
+type StorageItem struct {
+	ID          uuid.UUID
+	StorageID   uuid.UUID
+	Kind        string
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   *time.Time
+}
+
 type Tag struct {
 	ID        uuid.UUID
 	ProjectID uuid.UUID

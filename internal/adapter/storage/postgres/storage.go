@@ -68,7 +68,7 @@ func (r *StorageRepository) Update(ctx context.Context, s domain.Storage) error 
 	return nil
 }
 
-// Get returns the storage with id and its child count.
+// Get returns the storage with id and its child and item counts.
 func (r *StorageRepository) Get(ctx context.Context, id domain.StorageID) (domain.StorageListItem, error) {
 	row, err := r.db.queries(ctx).GetStorage(ctx, uuid.UUID(id))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -98,7 +98,7 @@ func (r *StorageRepository) ListChildren(
 
 	if hasCursor {
 		if params.CursorID, err = uuid.Parse(cursor.ID); err != nil {
-			return domain.Page[domain.StorageListItem]{}, domain.NewValidationError(map[string]string{"cursor": domain.FieldInvalid})
+			return domain.Page[domain.StorageListItem]{}, domain.NewValidationError(map[string]string{cursorField: domain.FieldInvalid})
 		}
 	}
 
@@ -181,5 +181,5 @@ func toStorageListItem(row sqlc.GetStorageRow) domain.StorageListItem {
 		s.ParentID = &parent
 	}
 
-	return domain.StorageListItem{Storage: s, ChildCount: row.ChildCount}
+	return domain.StorageListItem{Storage: s, ChildCount: row.ChildCount, ItemCount: row.ItemCount}
 }

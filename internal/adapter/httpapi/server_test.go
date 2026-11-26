@@ -18,14 +18,15 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 
 	store := memory.NewStore()
 	valid := httpapi.Config{
-		Auth:        service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
-		Projects:    service.NewProjectService(service.Repositories{Tx: store}),
-		Issues:      service.NewIssueService(service.Repositories{Tx: store}),
-		Tags:        service.NewTagService(service.Repositories{Tx: store}),
-		Comments:    service.NewCommentService(service.Repositories{Tx: store}),
-		Attachments: service.NewAttachmentService(service.Repositories{Tx: store}),
-		Storages:    service.NewStorageService(service.Repositories{Tx: store}),
-		Users:       service.NewUserService(service.Repositories{Tx: store}),
+		Auth:                service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
+		Projects:            service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:              service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:                service.NewTagService(service.Repositories{Tx: store}),
+		Comments:            service.NewCommentService(service.Repositories{Tx: store}),
+		Attachments:         service.NewAttachmentService(service.Repositories{Tx: store}),
+		Storages:            service.NewStorageService(service.Repositories{Tx: store}),
+		GenericStorageItems: service.NewGenericStorageItemService(service.Repositories{Tx: store}),
+		Users:               service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
 		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),
@@ -48,6 +49,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		"no accounts":      func(c *httpapi.Config) { c.ServiceAccounts = nil },
 		"no audit":         func(c *httpapi.Config) { c.Audit = nil },
 		"no storages":      func(c *httpapi.Config) { c.Storages = nil },
+		"no storage items": func(c *httpapi.Config) { c.GenericStorageItems = nil },
 		"no change feed":   func(c *httpapi.Config) { c.Changes = nil },
 	}
 

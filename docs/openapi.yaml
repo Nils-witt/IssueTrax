@@ -54,6 +54,12 @@ tags:
   - name: comments
   - name: attachments
   - name: storages
+  - name: generic-storage-items
+    description: |
+      Plain items kept in a storage, described by name and description.
+      Deleting an item only marks it deleted (`deletedAt`); deleted items are
+      hidden from lists unless `deleted=true`, cannot be changed, and can be
+      restored.
   - name: users
   - name: service-accounts
   - name: audit
@@ -776,6 +782,151 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
 
+  /api/storages/{id}/generic-storage-items:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [generic-storage-items]
+      summary: List the generic items in a storage
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - name: recursive
+          in: query
+          description: Also include items kept anywhere below the storage.
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/StorageItemDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItemPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/generic-storage-items:
+    get:
+      tags: [generic-storage-items]
+      summary: Search generic items across all storages
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - name: q
+          in: query
+          description: Keep items whose name or description contains this text, ignoring case.
+          schema: { type: string }
+        - $ref: "#/components/parameters/StorageItemDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItemPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [generic-storage-items]
+      summary: Create a generic item
+      description: An unknown `storageId` yields `422` with field code `invalid` on `storageId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateGenericStorageItem" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/generic-storage-items/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [generic-storage-items]
+      summary: Get a generic item
+      description: Deleted items are returned too, with `deletedAt` set.
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [generic-storage-items]
+      summary: Edit or move a generic item
+      description: |
+        Partial update; absent fields stay unchanged. `storageId` moves the
+        item; an unknown storage yields `422` on `storageId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateGenericStorageItem" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StorageItemDeleted" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [generic-storage-items]
+      summary: Delete a generic item
+      description: Marks the item deleted; restore it with `POST …/restore`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StorageItemDeleted" }
+
+  /api/generic-storage-items/{id}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [generic-storage-items]
+      summary: Restore a deleted generic item
+      responses:
+        "200":
+          description: Restored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`storage_item_not_deleted`: the item is not deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/service-accounts:
     get:
       tags: [service-accounts]
@@ -896,6 +1047,11 @@ components:
       description: A service account's API key (`itx_…`), created via `POST /api/service-accounts/{id}/keys`.
 
   parameters:
+    StorageItemDeleted:
+      name: deleted
+      in: query
+      description: List only deleted items instead of only live ones.
+      schema: { type: boolean, default: false }
     ProjectKey:
       name: key
       in: path
@@ -920,13 +1076,18 @@ components:
       schema: { type: integer, format: int64, minimum: 1 }
 
   responses:
+    StorageItemDeleted:
+      description: "`storage_item_deleted`: the item is deleted; restore it first."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     Unauthenticated:
       description: "No valid session (`unauthenticated`) or API key (`invalid_api_key`)."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `storage_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `storage_not_found`, `storage_item_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1031,6 +1192,10 @@ components:
         - attachment.delete
         - storage.create
         - storage.update
+        - generic_storage_item.create
+        - generic_storage_item.update
+        - generic_storage_item.delete
+        - generic_storage_item.restore
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -1047,9 +1212,12 @@ components:
         changed. `attachments`: a file was attached to or removed from an
         issue. `storages`: a storage was created, renamed or moved (reload
         storages); `project` is empty because storages are global.
+        `storageItems`: an item kept in a storage was created, changed,
+        moved, deleted or restored (reload item lists and storages, whose
+        `itemCount` may have changed); `project` is empty.
       properties:
-        type: { type: string, enum: [project, tags, issue, comments, attachments, storages] }
-        project: { type: string, example: TRAX, description: Empty for `storages`. }
+        type: { type: string, enum: [project, tags, issue, comments, attachments, storages, storageItems] }
+        project: { type: string, example: TRAX, description: Empty for `storages` and `storageItems`. }
         issue:
           type: integer
           format: int64
@@ -1059,7 +1227,7 @@ components:
 
     AuditTargetType:
       type: string
-      enum: [user, project, issue, tag, comment, attachment, storage, service_account, api_key]
+      enum: [user, project, issue, tag, comment, attachment, storage, generic_storage_item, service_account, api_key]
 
     AuditChange:
       type: object
@@ -1314,12 +1482,13 @@ components:
 
     Storage:
       type: object
-      required: [id, parentId, name, childCount, createdAt, updatedAt]
+      required: [id, parentId, name, childCount, itemCount, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         parentId: { type: [string, "null"], format: uuid, description: Null for a root storage. }
         name: { type: string, maxLength: 100, example: Shelf A }
         childCount: { type: integer, format: int64, description: Number of direct children. }
+        itemCount: { type: integer, format: int64, description: Number of items (any kind, not deleted) kept directly in it. }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -1343,5 +1512,42 @@ components:
       required: [items, total, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Storage" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    GenericStorageItem:
+      type: object
+      required: [id, storageId, name, description, createdAt, updatedAt, deletedAt]
+      properties:
+        id: { type: string, format: uuid }
+        storageId: { type: string, format: uuid, description: The storage the item is kept in. }
+        name: { type: string, maxLength: 100, example: Cordless drill }
+        description: { type: string, description: Plain text; may be empty. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null unless the item is deleted. }
+
+    CreateGenericStorageItem:
+      type: object
+      required: [storageId, name]
+      additionalProperties: false
+      properties:
+        storageId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, description: Plain text, at most 256 KiB. }
+
+    UpdateGenericStorageItem:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, description: Plain text, at most 256 KiB; empty clears it. }
+        storageId: { type: string, format: uuid, description: Moves the item to this storage. }
+
+    GenericStorageItemPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/GenericStorageItem" } }
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }

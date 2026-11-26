@@ -13,11 +13,13 @@ import (
 type storageResponse struct {
 	ID string `json:"id"`
 	// ParentID is null for a root storage.
-	ParentID   *string   `json:"parentId"`
-	Name       string    `json:"name"`
-	ChildCount int64     `json:"childCount"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	ParentID   *string `json:"parentId"`
+	Name       string  `json:"name"`
+	ChildCount int64   `json:"childCount"`
+	// ItemCount counts the live items of every kind kept directly in it.
+	ItemCount int64     `json:"itemCount"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func toStorageResponse(s domain.StorageListItem) storageResponse {
@@ -25,6 +27,7 @@ func toStorageResponse(s domain.StorageListItem) storageResponse {
 		ID:         s.ID.String(),
 		Name:       s.Name,
 		ChildCount: s.ChildCount,
+		ItemCount:  s.ItemCount,
 		CreatedAt:  s.CreatedAt,
 		UpdatedAt:  s.UpdatedAt,
 	}

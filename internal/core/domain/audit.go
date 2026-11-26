@@ -18,21 +18,27 @@ type AuditAction string
 
 // Recorded actions.
 const (
-	AuditLogin                AuditAction = "auth.login"
-	AuditLoginFailed          AuditAction = "auth.login_failed"
-	AuditLogout               AuditAction = "auth.logout"
-	AuditProjectCreate        AuditAction = "project.create"
-	AuditProjectUpdate        AuditAction = "project.update"
-	AuditIssueCreate          AuditAction = "issue.create"
-	AuditIssueUpdate          AuditAction = "issue.update"
-	AuditTagUpdate            AuditAction = "tag.update"
-	AuditCommentCreate        AuditAction = "comment.create"
-	AuditCommentUpdate        AuditAction = "comment.update"
-	AuditCommentDelete        AuditAction = "comment.delete"
-	AuditAttachmentCreate     AuditAction = "attachment.create"
-	AuditAttachmentDelete     AuditAction = "attachment.delete"
-	AuditStorageCreate        AuditAction = "storage.create"
-	AuditStorageUpdate        AuditAction = "storage.update"
+	AuditLogin            AuditAction = "auth.login"
+	AuditLoginFailed      AuditAction = "auth.login_failed"
+	AuditLogout           AuditAction = "auth.logout"
+	AuditProjectCreate    AuditAction = "project.create"
+	AuditProjectUpdate    AuditAction = "project.update"
+	AuditIssueCreate      AuditAction = "issue.create"
+	AuditIssueUpdate      AuditAction = "issue.update"
+	AuditTagUpdate        AuditAction = "tag.update"
+	AuditCommentCreate    AuditAction = "comment.create"
+	AuditCommentUpdate    AuditAction = "comment.update"
+	AuditCommentDelete    AuditAction = "comment.delete"
+	AuditAttachmentCreate AuditAction = "attachment.create"
+	AuditAttachmentDelete AuditAction = "attachment.delete"
+	AuditStorageCreate    AuditAction = "storage.create"
+	AuditStorageUpdate    AuditAction = "storage.update"
+
+	AuditGenericStorageItemCreate  AuditAction = "generic_storage_item.create"
+	AuditGenericStorageItemUpdate  AuditAction = "generic_storage_item.update"
+	AuditGenericStorageItemDelete  AuditAction = "generic_storage_item.delete"
+	AuditGenericStorageItemRestore AuditAction = "generic_storage_item.restore"
+
 	AuditServiceAccountCreate AuditAction = "service_account.create"
 	AuditAPIKeyCreate         AuditAction = "api_key.create"
 	AuditAPIKeyRevoke         AuditAction = "api_key.revoke" //nolint:gosec // an action name, not a credential
@@ -43,6 +49,7 @@ var AuditActions = []AuditAction{
 	AuditLogin, AuditLoginFailed, AuditLogout, AuditProjectCreate, AuditProjectUpdate, AuditIssueCreate,
 	AuditIssueUpdate, AuditTagUpdate, AuditCommentCreate, AuditCommentUpdate, AuditCommentDelete,
 	AuditAttachmentCreate, AuditAttachmentDelete, AuditStorageCreate, AuditStorageUpdate,
+	AuditGenericStorageItemCreate, AuditGenericStorageItemUpdate, AuditGenericStorageItemDelete, AuditGenericStorageItemRestore,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
 }
 
@@ -51,15 +58,17 @@ func (a AuditAction) Valid() bool { return slices.Contains(AuditActions, a) }
 
 // Audit target types: the kind of entity an entry is about.
 const (
-	AuditTargetUser           = "user"
-	AuditTargetProject        = "project"
-	AuditTargetIssue          = "issue"
-	AuditTargetTag            = "tag"
-	AuditTargetComment        = "comment"
-	AuditTargetAttachment     = "attachment"
-	AuditTargetStorage        = "storage"
-	AuditTargetServiceAccount = "service_account"
-	AuditTargetAPIKey         = "api_key"
+	AuditTargetUser       = "user"
+	AuditTargetProject    = "project"
+	AuditTargetIssue      = "issue"
+	AuditTargetTag        = "tag"
+	AuditTargetComment    = "comment"
+	AuditTargetAttachment = "attachment"
+	AuditTargetStorage    = "storage"
+	// AuditTargetGenericStorageItem is a GenericStorageItem.
+	AuditTargetGenericStorageItem = "generic_storage_item"
+	AuditTargetServiceAccount     = "service_account"
+	AuditTargetAPIKey             = "api_key"
 )
 
 // AuditEntry records one security-relevant event or change. Entries are

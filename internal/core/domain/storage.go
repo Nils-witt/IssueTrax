@@ -25,11 +25,13 @@ type Storage struct {
 }
 
 // StorageListItem is a storage together with the number of its direct
-// children, so a tree view knows which nodes can be expanded.
+// children, so a tree view knows which nodes can be expanded, and the number
+// of items (of any kind, not deleted) kept directly in it.
 type StorageListItem struct {
 	Storage
 
 	ChildCount int64
+	ItemCount  int64
 }
 
 // NewStorageParams are the inputs for NewStorage.

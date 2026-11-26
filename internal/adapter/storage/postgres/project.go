@@ -92,7 +92,7 @@ func (r *ProjectRepository) List(ctx context.Context, page domain.PageRequest) (
 
 	if hasCursor {
 		if params.CursorID, err = uuid.Parse(cursor.ID); err != nil {
-			return domain.Page[domain.Project]{}, domain.NewValidationError(map[string]string{"cursor": domain.FieldInvalid})
+			return domain.Page[domain.Project]{}, domain.NewValidationError(map[string]string{cursorField: domain.FieldInvalid})
 		}
 	}
 

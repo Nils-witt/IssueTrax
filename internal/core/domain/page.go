@@ -51,7 +51,8 @@ type ProjectCursor struct {
 	ID   string `json:"i"`
 }
 
-// StorageCursor is the keyset position in a storage list (lower(name), id ascending).
+// StorageCursor is the keyset position in a storage or storage item list
+// (lower(name), id ascending).
 type StorageCursor struct {
 	Name string `json:"n"`
 	ID   string `json:"i"`

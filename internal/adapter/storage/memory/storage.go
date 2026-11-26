@@ -147,7 +147,7 @@ func (r *StorageRepository) siblingNameTaken(storage domain.Storage) bool {
 	return false
 }
 
-// item adds the child count to st. Callers hold r.s.mu.
+// item adds the child and item counts to st. Callers hold r.s.mu.
 func (r *StorageRepository) item(st domain.Storage) domain.StorageListItem {
 	var n int64
 
@@ -157,7 +157,15 @@ func (r *StorageRepository) item(st domain.Storage) domain.StorageListItem {
 		}
 	}
 
-	return domain.StorageListItem{Storage: cloneStorage(st), ChildCount: n}
+	var items int64
+
+	for _, item := range r.s.data.storageItems {
+		if item.StorageID == st.ID && !item.IsDeleted() {
+			items++
+		}
+	}
+
+	return domain.StorageListItem{Storage: cloneStorage(st), ChildCount: n, ItemCount: items}
 }
 
 // cloneStorage copies the parent pointer so stored storages never alias

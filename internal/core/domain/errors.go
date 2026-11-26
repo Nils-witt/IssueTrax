@@ -47,6 +47,10 @@ const (
 	CodeStorageNameTaken = "storage_name_taken"
 	CodeStorageCycle     = "storage_cycle"
 
+	CodeStorageItemNotFound   = "storage_item_not_found"
+	CodeStorageItemDeleted    = "storage_item_deleted"
+	CodeStorageItemNotDeleted = "storage_item_not_deleted"
+
 	CodeServiceAccountNotFound  = "service_account_not_found"
 	CodeServiceAccountNameTaken = "service_account_name_taken"
 	CodeUserIdentityTaken       = "user_identity_taken"
@@ -120,6 +124,18 @@ var (
 	ErrStorageParentNotFound = &Error{
 		kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed",
 		Fields: map[string]string{"parentId": FieldInvalid},
+	}
+
+	ErrStorageItemNotFound = &Error{kind: ErrNotFound, Code: CodeStorageItemNotFound, Message: "storage item not found"}
+	ErrStorageItemDeleted  = &Error{
+		kind: ErrConflict, Code: CodeStorageItemDeleted, Message: "the storage item is deleted; restore it first",
+	}
+	ErrStorageItemNotDeleted = &Error{kind: ErrConflict, Code: CodeStorageItemNotDeleted, Message: "the storage item is not deleted"}
+	// ErrStorageItemStorageNotFound is a validation error: the storage an
+	// item should be kept in does not exist.
+	ErrStorageItemStorageNotFound = &Error{
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed",
+		Fields: map[string]string{"storageId": FieldInvalid},
 	}
 
 	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}

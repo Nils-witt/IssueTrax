@@ -53,17 +53,18 @@ func main() {
 // driving adapters.
 func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.Logger) (http.Handler, cleaner, error) {
 	repos := service.Repositories{
-		Tx:          db,
-		Projects:    postgres.NewProjectRepository(db),
-		Issues:      postgres.NewIssueRepository(db),
-		Tags:        postgres.NewTagRepository(db),
-		Comments:    postgres.NewCommentRepository(db),
-		Attachments: postgres.NewAttachmentRepository(db),
-		Storages:    postgres.NewStorageRepository(db),
-		Users:       postgres.NewUserRepository(db),
-		Sessions:    postgres.NewSessionRepository(db),
-		APIKeys:     postgres.NewAPIKeyRepository(db),
-		Audit:       postgres.NewAuditRepository(db),
+		Tx:                  db,
+		Projects:            postgres.NewProjectRepository(db),
+		Issues:              postgres.NewIssueRepository(db),
+		Tags:                postgres.NewTagRepository(db),
+		Comments:            postgres.NewCommentRepository(db),
+		Attachments:         postgres.NewAttachmentRepository(db),
+		Storages:            postgres.NewStorageRepository(db),
+		GenericStorageItems: postgres.NewGenericStorageItemRepository(db),
+		Users:               postgres.NewUserRepository(db),
+		Sessions:            postgres.NewSessionRepository(db),
+		APIKeys:             postgres.NewAPIKeyRepository(db),
+		Audit:               postgres.NewAuditRepository(db),
 	}
 
 	idp, err := oidc.New(ctx, oidc.Config{
@@ -95,23 +96,24 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 	}
 
 	handler, err := httpapi.NewHandler(httpapi.Config{
-		Auth:            auth,
-		Projects:        service.NewProjectService(repos, notify),
-		Issues:          service.NewIssueService(repos, notify),
-		Tags:            service.NewTagService(repos, notify),
-		Comments:        service.NewCommentService(repos, notify),
-		Attachments:     service.NewAttachmentService(repos, notify),
-		Storages:        service.NewStorageService(repos, notify),
-		Users:           service.NewUserService(repos),
-		ServiceAccounts: service.NewBotService(repos),
-		Audit:           audit,
-		Changes:         changes,
-		Frontend:        dist,
-		OpenAPISpec:     docs.OpenAPI,
-		Logger:          logger,
-		PublicURL:       cfg.PublicURL,
-		CookieKey:       cfg.CookieKey,
-		InsecureCookies: cfg.Dev,
+		Auth:                auth,
+		Projects:            service.NewProjectService(repos, notify),
+		Issues:              service.NewIssueService(repos, notify),
+		Tags:                service.NewTagService(repos, notify),
+		Comments:            service.NewCommentService(repos, notify),
+		Attachments:         service.NewAttachmentService(repos, notify),
+		Storages:            service.NewStorageService(repos, notify),
+		GenericStorageItems: service.NewGenericStorageItemService(repos, notify),
+		Users:               service.NewUserService(repos),
+		ServiceAccounts:     service.NewBotService(repos),
+		Audit:               audit,
+		Changes:             changes,
+		Frontend:            dist,
+		OpenAPISpec:         docs.OpenAPI,
+		Logger:              logger,
+		PublicURL:           cfg.PublicURL,
+		CookieKey:           cfg.CookieKey,
+		InsecureCookies:     cfg.Dev,
 	})
 	if err != nil {
 		return nil, cleaner{}, fmt.Errorf("build http handler: %w", err)

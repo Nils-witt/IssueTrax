@@ -44,6 +44,10 @@ export const auditActions = [
   'attachment.delete',
   'storage.create',
   'storage.update',
+  'generic_storage_item.create',
+  'generic_storage_item.update',
+  'generic_storage_item.delete',
+  'generic_storage_item.restore',
   'service_account.create',
   'api_key.create',
   'api_key.revoke',
@@ -176,6 +180,8 @@ export interface Storage {
   name: string;
   /** Number of direct children. */
   childCount: number;
+  /** Number of items (any kind, not deleted) kept directly in it. */
+  itemCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -189,6 +195,42 @@ export interface UpdateStorageInput {
   name?: string;
   /** Moves the storage; null makes it a root. */
   parentId?: string | null;
+}
+
+/** A plain item kept in a storage. Deleting only sets deletedAt. */
+export interface GenericStorageItem {
+  id: string;
+  storageId: string;
+  name: string;
+  /** Plain text; may be empty. */
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Null unless the item is deleted. */
+  deletedAt: string | null;
+}
+
+export interface CreateGenericStorageItemInput {
+  storageId: string;
+  name: string;
+  description?: string;
+}
+
+export interface UpdateGenericStorageItemInput {
+  name?: string;
+  description?: string;
+  /** Moves the item to this storage. */
+  storageId?: string;
+}
+
+/** Narrows an item list. */
+export interface StorageItemFilter {
+  /** Only when listing a storage: include items anywhere below it. */
+  recursive?: boolean;
+  /** Only deleted items instead of only live ones. */
+  deleted?: boolean;
+  /** Only when searching: name or description contains this, ignoring case. */
+  q?: string;
 }
 
 export interface Page<T> {

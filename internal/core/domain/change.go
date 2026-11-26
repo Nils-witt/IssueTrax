@@ -19,6 +19,10 @@ const (
 	// ChangeStorages: a storage was created, renamed or moved. Storages are
 	// global, so Project is empty.
 	ChangeStorages ChangeKind = "storages"
+	// ChangeStorageItems: an item kept in a storage was created, changed,
+	// moved, deleted or restored, which also changes storage item counts.
+	// Items are global, so Project is empty.
+	ChangeStorageItems ChangeKind = "storageItems"
 )
 
 // Change announces that data was committed. It carries only what changed,

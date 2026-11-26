@@ -51,7 +51,8 @@ func (q *Queries) CreateStorage(ctx context.Context, arg CreateStorageParams) er
 
 const getStorage = `-- name: GetStorage :one
 SELECT s.id, s.parent_id, s.name, s.created_at, s.updated_at,
-       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count
+       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count,
+       (SELECT count(*) FROM storage_items i WHERE i.storage_id = s.id AND i.deleted_at IS NULL)::bigint AS item_count
 FROM storages s
 WHERE s.id = $1
 `
@@ -63,6 +64,7 @@ type GetStorageRow struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	ChildCount int64
+	ItemCount  int64
 }
 
 func (q *Queries) GetStorage(ctx context.Context, id uuid.UUID) (GetStorageRow, error) {
@@ -75,13 +77,15 @@ func (q *Queries) GetStorage(ctx context.Context, id uuid.UUID) (GetStorageRow, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ChildCount,
+		&i.ItemCount,
 	)
 	return i, err
 }
 
 const listStorageChildren = `-- name: ListStorageChildren :many
 SELECT s.id, s.parent_id, s.name, s.created_at, s.updated_at,
-       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count
+       (SELECT count(*) FROM storages c WHERE c.parent_id = s.id)::bigint AS child_count,
+       (SELECT count(*) FROM storage_items i WHERE i.storage_id = s.id AND i.deleted_at IS NULL)::bigint AS item_count
 FROM storages s
 WHERE s.parent_id IS NOT DISTINCT FROM $1::uuid
   AND (NOT $2::boolean OR (lower(s.name), s.id) > ($3::text, $4::uuid))
@@ -104,6 +108,7 @@ type ListStorageChildrenRow struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	ChildCount int64
+	ItemCount  int64
 }
 
 func (q *Queries) ListStorageChildren(ctx context.Context, arg ListStorageChildrenParams) ([]ListStorageChildrenRow, error) {
@@ -128,6 +133,7 @@ func (q *Queries) ListStorageChildren(ctx context.Context, arg ListStorageChildr
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ChildCount,
+			&i.ItemCount,
 		); err != nil {
 			return nil, err
 		}
