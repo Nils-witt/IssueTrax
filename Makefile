@@ -9,7 +9,7 @@ LDFLAGS := -ldflags "-s -w -X $(MODULE)/internal/version.Version=$(VERSION) -X $
 
 FRONTEND_DIR := frontend
 
-.PHONY: all build frontend frontend-deps run dev-backend dev-frontend dev-db generate test test-unit lint lint-fix fmt audit clean help
+.PHONY: all build frontend frontend-stub frontend-deps run dev-backend dev-frontend dev-db generate test test-unit lint lint-fix fmt audit clean help
 
 all: lint test build
 
@@ -24,6 +24,11 @@ frontend-deps:
 ## frontend: Build the Vite app into frontend/dist (embedded by go:embed)
 frontend:
 	cd $(FRONTEND_DIR) && $(NPM) run build
+
+## frontend-stub: Create a placeholder frontend/dist so Go builds and lint work without Node (used in CI)
+frontend-stub:
+	mkdir -p $(FRONTEND_DIR)/dist
+	test -f $(FRONTEND_DIR)/dist/index.html || echo '<!doctype html><title>IssueTrax</title>' > $(FRONTEND_DIR)/dist/index.html
 
 ## run: Build and run the server
 run: build

@@ -21,7 +21,7 @@ Dependencies point inward: adapters → port/service → domain.
 
 ## Commands
 
-- `make build` — builds `frontend/dist` then `bin/issuetrax`. `frontend/dist` must exist before any Go build, vet, test or lint (`make frontend`).
+- `make build` — builds `frontend/dist` then `bin/issuetrax`. `frontend/dist` must exist before any Go build, vet, test or lint (`make frontend`, or `make frontend-stub` for a placeholder when the real SPA isn't needed, as in CI).
 - `make test` runs everything incl. Postgres integration tests (`-tags integration`, testcontainers, needs Docker); `make test-unit` skips them. `make lint` (golangci-lint + oxlint) / `make audit` (govulncheck).
 - `make generate` regenerates sqlc code after changing `queries/*.sql` or migrations.
 - Dev: `make dev-db` (Postgres on localhost:55432 and Authentik on localhost:9000 via `deploy/compose.yaml`; the Authentik app/test user `ada`/`ada` come from `deploy/authentik/blueprints/`), `make dev-backend` (port 8080, settings from the git-ignored `.env`, created from `.env.example` on first run) and `make dev-frontend` (Vite HMR on :5173, proxies `/api` and `/auth` to the backend; open the app there).

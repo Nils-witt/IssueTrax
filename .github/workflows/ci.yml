@@ -13,8 +13,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The Go code embeds frontend/dist via go:embed, so every Go job needs the
-  # built SPA. Build it once and share it as an artifact.
+  # The Go code embeds frontend/dist via go:embed. The Go jobs only need it to
+  # exist (no Go test reads the real build), so they use `make frontend-stub`
+  # instead of waiting for this job; the Docker workflow embeds the real SPA.
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -38,23 +39,13 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
-      - uses: actions/upload-artifact@v5
-        with:
-          name: frontend-dist
-          path: frontend/dist
-          retention-days: 1
-
   lint:
     name: Go lint
     runs-on: ubuntu-latest
-    needs: frontend
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v6
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      - run: make frontend-stub
 
       - uses: actions/setup-go@v6
         with:
@@ -68,14 +59,10 @@ jobs:
   test:
     name: Go test
     runs-on: ubuntu-latest
-    needs: frontend
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v6
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      - run: make frontend-stub
 
       - uses: actions/setup-go@v6
         with:
@@ -97,14 +84,7 @@ jobs:
       # Includes the Postgres integration tests; testcontainers uses the
       # runner's Docker daemon.
       - name: Test (unit + integration)
-        run: go test -race -shuffle=on -count=1 -tags integration -coverprofile=coverage.out ./...
-
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: coverage
-          path: coverage.out
-          retention-days: 7
+        run: go test -race -shuffle=on -count=1 -tags integration ./...
 
       - name: Build binary
         run: go build -o bin/issuetrax ./cmd/issuetrax
@@ -112,14 +92,10 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    needs: frontend
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v6
-        with:
-          name: frontend-dist
-          path: frontend/dist
+      - run: make frontend-stub
 
       - uses: golang/govulncheck-action@v1
         with:
