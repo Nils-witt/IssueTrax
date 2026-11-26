@@ -24,7 +24,12 @@ import (
 // with code=good, as if the user had approved at the provider.
 type fakeIDP struct {
 	callback string
+	// groups are asserted for the signed-in person; testAdminGroup makes them an admin.
+	groups []string
 }
+
+// testAdminGroup is the identity provider group of admins in tests.
+const testAdminGroup = "issuetrax-admins"
 
 func (f *fakeIDP) AuthCodeURL(state, _, _ string) string {
 	return f.callback + "?" + url.Values{"state": {state}, "code": {"good"}}.Encode()
@@ -35,7 +40,9 @@ func (f *fakeIDP) Exchange(_ context.Context, code, _, _ string) (domain.Identit
 		return domain.Identity{}, "", errors.New("invalid grant")
 	}
 
-	return domain.Identity{Issuer: "https://idp.example", Subject: "ada", Email: "ada@example.com", DisplayName: "Ada"}, "id-token", nil
+	return domain.Identity{
+		Issuer: "https://idp.example", Subject: "ada", Email: "ada@example.com", DisplayName: "Ada", Groups: f.groups,
+	}, "id-token", nil
 }
 
 func (f *fakeIDP) EndSessionURL(idToken string) string {
@@ -45,6 +52,7 @@ func (f *fakeIDP) EndSessionURL(idToken string) string {
 type testEnv struct {
 	srv    *httptest.Server
 	repos  service.Repositories
+	idp    *fakeIDP
 	client *http.Client
 }
 
@@ -61,6 +69,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
 		APIKeys:  memory.NewAPIKeyRepository(store),
+		Audit:    memory.NewAuditRepository(store),
 	}
 
 	srv := httptest.NewUnstartedServer(nil)
@@ -68,7 +77,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	idp := &fakeIDP{callback: publicURL + "/auth/callback"}
 
 	h, err := httpapi.NewHandler(httpapi.Config{
-		Auth:     service.NewAuthService(repos, idp),
+		Auth:     service.NewAuthService(repos, idp, service.WithAdminGroup(testAdminGroup)),
 		Projects: service.NewProjectService(repos),
 		Issues:   service.NewIssueService(repos),
 		Tags:     service.NewTagService(repos),
@@ -76,6 +85,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Users:    service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),
+		Audit:           service.NewAuditService(repos, 0),
 		Frontend: fstest.MapFS{
 			"index.html":    {Data: []byte("<html>spa</html>")},
 			"assets/app.js": {Data: []byte("console.log(1)")},
@@ -94,7 +104,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	srv.Start()
 	t.Cleanup(srv.Close)
 
-	return &testEnv{srv: srv, repos: repos, client: newClient(t)}
+	return &testEnv{srv: srv, repos: repos, idp: idp, client: newClient(t)}
 }
 
 // newClient returns a cookie-keeping client that does not follow redirects.

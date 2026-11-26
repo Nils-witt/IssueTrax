@@ -23,7 +23,7 @@ func NewProjectService(repos Repositories, opts ...Option) *ProjectService {
 }
 
 // Create validates and stores a new project.
-func (s *ProjectService) Create(ctx context.Context, in port.CreateProjectInput) (domain.Project, error) {
+func (s *ProjectService) Create(ctx context.Context, actor domain.UserID, in port.CreateProjectInput) (domain.Project, error) {
 	project, err := domain.NewProject(domain.NewProjectParams{
 		ID:          domain.ProjectID(s.opts.newID()),
 		Key:         in.Key,
@@ -35,8 +35,20 @@ func (s *ProjectService) Create(ctx context.Context, in port.CreateProjectInput)
 		return domain.Project{}, err
 	}
 
-	if err := s.repos.Projects.Create(ctx, project); err != nil {
-		return domain.Project{}, fmt.Errorf("create project %q: %w", project.Key, err)
+	err = s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
+		if err := s.repos.Projects.Create(ctx, project); err != nil {
+			return fmt.Errorf("create project %q: %w", project.Key, err)
+		}
+
+		changes := domain.AuditChanges{}
+		changes.Initial("key", string(project.Key))
+		changes.Initial("name", project.Name)
+		changes.InitialText("description", project.Description)
+
+		return record(ctx, s.repos, s.opts, projectEvent(actor, domain.AuditProjectCreate, project, changes))
+	})
+	if err != nil {
+		return domain.Project{}, err
 	}
 
 	return project, nil
@@ -58,7 +70,9 @@ func (s *ProjectService) List(ctx context.Context, page domain.PageRequest) (dom
 }
 
 // Update changes a project's name and/or description.
-func (s *ProjectService) Update(ctx context.Context, key domain.ProjectKey, in port.UpdateProjectInput) (domain.Project, error) {
+func (s *ProjectService) Update(
+	ctx context.Context, actor domain.UserID, key domain.ProjectKey, in port.UpdateProjectInput,
+) (domain.Project, error) {
 	var project domain.Project
 
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
@@ -69,6 +83,8 @@ func (s *ProjectService) Update(ctx context.Context, key domain.ProjectKey, in p
 			return err
 		}
 
+		before := project
+
 		changes := domain.ProjectChanges{Name: in.Name, Description: in.Description}
 		if err := project.Apply(changes, s.opts.now()); err != nil {
 			return err
@@ -78,11 +94,26 @@ func (s *ProjectService) Update(ctx context.Context, key domain.ProjectKey, in p
 			return fmt.Errorf("update project %q: %w", project.Key, err)
 		}
 
-		return nil
+		audit := domain.AuditChanges{}
+		audit.Set("name", before.Name, project.Name)
+		audit.Text("description", before.Description, project.Description)
+
+		if len(audit) == 0 {
+			return nil
+		}
+
+		return record(ctx, s.repos, s.opts, projectEvent(actor, domain.AuditProjectUpdate, project, audit))
 	})
 	if err != nil {
 		return domain.Project{}, err
 	}
 
 	return project, nil
+}
+
+func projectEvent(actor domain.UserID, action domain.AuditAction, p domain.Project, changes domain.AuditChanges) auditEvent {
+	return auditEvent{
+		actor: &actor, action: action, changes: changes,
+		targetType: domain.AuditTargetProject, targetID: p.ID.String(), targetLabel: string(p.Key),
+	}
 }

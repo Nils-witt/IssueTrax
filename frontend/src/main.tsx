@@ -15,6 +15,7 @@ import { NewIssuePage } from './pages/NewIssuePage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { ServiceAccountsPage } from './pages/ServiceAccountsPage';
 import { theme } from './theme';
 
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: 'p/:key/issues/:number', element: <IssuePage /> },
       { path: 'p/:key/settings', element: <ProjectSettingsPage /> },
       { path: 'service-accounts', element: <ServiceAccountsPage /> },
+      { path: 'audit-log', element: <AuditLogPage /> },
       { path: 'api-docs', lazy: () => import('./pages/ApiDocsPage').then((m) => ({ Component: m.ApiDocsPage })) },
       { path: '*', element: <NotFoundPage /> },
     ],

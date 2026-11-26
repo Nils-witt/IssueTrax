@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -117,7 +118,7 @@ func (f *fakeIDP) token(w http.ResponseWriter, r *http.Request) {
 	claims := map[string]any{
 		"iss": f.srv.URL, "sub": "user-1", "aud": clientID, "nonce": g.nonce,
 		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
-		"email": "ada@example.com", "preferred_username": "ada",
+		"email": "ada@example.com", "preferred_username": "ada", "groups": []string{"staff", "issuetrax-admins"},
 	}
 	if f.tamper != nil {
 		f.tamper(claims)
@@ -180,6 +181,10 @@ func TestProvider_Exchange(t *testing.T) {
 
 	if ident.Issuer != f.srv.URL || ident.Subject != "user-1" || ident.Email != "ada@example.com" || ident.DisplayName != "ada" {
 		t.Fatalf("Exchange() identity = %+v", ident)
+	}
+
+	if !slices.Equal(ident.Groups, []string{"staff", "issuetrax-admins"}) {
+		t.Fatalf("Exchange() groups = %v", ident.Groups)
 	}
 
 	if strings.Count(idToken, ".") != 2 {

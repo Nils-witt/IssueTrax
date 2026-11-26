@@ -48,6 +48,11 @@ var contract = []struct {
 	{name: "Sessions/lifecycle", run: testSessionsLifecycle},
 	{name: "APIKeys/lifecycle", run: testAPIKeysLifecycle},
 	{name: "APIKeys/list by user", run: testAPIKeysListByUser},
+	{name: "Audit/append and list", run: testAuditAppendAndList},
+	{name: "Audit/list filters", run: testAuditListFilters},
+	{name: "Audit/list pagination", run: testAuditPagination},
+	{name: "Audit/delete before", run: testAuditDeleteBefore},
+	{name: "Audit/rolled back with the transaction", run: testAuditRollback},
 	{name: "Tx/commit and rollback", run: testTx},
 }
 

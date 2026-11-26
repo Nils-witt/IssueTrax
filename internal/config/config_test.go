@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"nilswitt.dev/issuetrax/internal/config"
 )
@@ -40,6 +41,33 @@ func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // setValidEnv uses
 
 	if cfg.PublicURL != "https://trax.example" || cfg.OIDCClientSecret != "secret" || len(cfg.CookieKey) != 32 {
 		t.Fatalf("Load() auth settings = %+v", cfg)
+	}
+
+	if cfg.OIDCAdminGroup != "" || cfg.AuditRetention != 0 {
+		t.Fatalf("Load() audit settings = %+v", cfg)
+	}
+}
+
+func TestLoad_AuditSettings(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("ISSUETRAX_OIDC_ADMIN_GROUP", " issuetrax-admins ")
+	t.Setenv("ISSUETRAX_AUDIT_RETENTION_DAYS", "30")
+
+	cfg, err := config.Load(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.OIDCAdminGroup != "issuetrax-admins" || cfg.AuditRetention != 30*24*time.Hour {
+		t.Fatalf("Load() = %+v", cfg)
+	}
+
+	for _, bad := range []string{"-1", "1.5", "30d", "36501"} {
+		t.Setenv("ISSUETRAX_AUDIT_RETENTION_DAYS", bad)
+
+		if _, err := config.Load(nil); err == nil || !strings.Contains(err.Error(), "audit-retention-days") {
+			t.Errorf("Load(retention %q) = %v, want error", bad, err)
+		}
 	}
 }
 

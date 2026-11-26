@@ -29,6 +29,8 @@ type Config struct {
 	Users    port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
+	// Audit reads the audit log (admins only).
+	Audit port.AuditService
 	// Frontend contains the built SPA with index.html at its root.
 	Frontend fs.FS
 	// OpenAPISpec is the OpenAPI document (YAML) served at
@@ -54,6 +56,7 @@ type Handler struct {
 	comments port.CommentService
 	users    port.UserService
 	accounts port.ServiceAccountService
+	audit    port.AuditService
 	logger   *slog.Logger
 	cookies  cookies
 	openAPI  []byte
@@ -65,8 +68,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		return nil, fmt.Errorf("cookie key must be at least %d bytes", minCookieKeyBytes)
 	}
 
-	if cfg.Auth == nil || cfg.Projects == nil || cfg.Issues == nil || cfg.Tags == nil || cfg.Comments == nil || cfg.Users == nil ||
-		cfg.ServiceAccounts == nil || cfg.Logger == nil {
+	if cfg.missingDependency() {
 		return nil, errors.New("all services and the logger are required")
 	}
 
@@ -78,6 +80,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		comments: cfg.Comments,
 		users:    cfg.Users,
 		accounts: cfg.ServiceAccounts,
+		audit:    cfg.Audit,
 		logger:   cfg.Logger,
 		cookies:  cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
 		openAPI:  cfg.OpenAPISpec,
@@ -103,7 +106,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.HandleFunc("/auth/", notFound)
 
 	// Everything else under /api requires a session or an API key;
-	// service accounts are managed by people only.
+	// service accounts are managed by people only, and the audit log is
+	// read by admins (checked by the audit service).
 	mux.Handle("GET /api/me", h.authed(h.me))
 	mux.Handle("GET /api/users", h.authed(h.listUsers))
 	mux.Handle("GET /api/service-accounts", h.sessionOnly(h.listServiceAccounts))
@@ -111,6 +115,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("GET /api/service-accounts/{id}/keys", h.sessionOnly(h.listAPIKeys))
 	mux.Handle("POST /api/service-accounts/{id}/keys", h.sessionOnly(h.createAPIKey))
 	mux.Handle("DELETE /api/service-accounts/{id}/keys/{keyId}", h.sessionOnly(h.revokeAPIKey))
+	mux.Handle("GET /api/audit-log", h.sessionOnly(h.listAuditLog))
 	mux.Handle("GET /api/projects", h.authed(h.listProjects))
 	mux.Handle("POST /api/projects", h.authed(h.createProject))
 	mux.Handle("GET /api/projects/{key}", h.authed(h.getProject))
@@ -135,7 +140,13 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	return securityHeaders(csrf.Handler(mux), !cfg.InsecureCookies), nil
+	return securityHeaders(csrf.Handler(withRequestInfo(mux)), !cfg.InsecureCookies), nil
+}
+
+// missingDependency reports whether a required service or the logger is nil.
+func (c Config) missingDependency() bool {
+	return c.Auth == nil || c.Projects == nil || c.Issues == nil || c.Tags == nil || c.Comments == nil || c.Users == nil ||
+		c.ServiceAccounts == nil || c.Audit == nil || c.Logger == nil
 }
 
 // crossOriginProtection rejects cross-origin state-changing requests

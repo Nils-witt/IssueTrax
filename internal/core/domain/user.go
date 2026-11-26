@@ -18,6 +18,8 @@ type Identity struct {
 	Subject     string
 	Email       string
 	DisplayName string
+	// Groups are the identity provider groups the person belongs to.
+	Groups []string
 }
 
 // User is a person known to IssueTrax. Users are created on their first
@@ -28,6 +30,9 @@ type User struct {
 	Subject     string
 	Email       string
 	DisplayName string
+	// Admin is true for people in the configured identity provider admin
+	// group as of their latest sign-in. Admins may read the audit log.
+	Admin       bool
 	CreatedAt   time.Time
 	LastLoginAt time.Time
 }

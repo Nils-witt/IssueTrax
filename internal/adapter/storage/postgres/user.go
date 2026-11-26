@@ -30,6 +30,7 @@ func (r *UserRepository) Create(ctx context.Context, u domain.User) error {
 		Subject:     u.Subject,
 		Email:       u.Email,
 		DisplayName: u.DisplayName,
+		IsAdmin:     u.Admin,
 		CreatedAt:   u.CreatedAt,
 		LastLoginAt: u.LastLoginAt,
 	})
@@ -44,12 +45,13 @@ func (r *UserRepository) Create(ctx context.Context, u domain.User) error {
 	return nil
 }
 
-// Update stores the profile fields and login time of user.
+// Update stores the profile fields, admin flag and login time of user.
 func (r *UserRepository) Update(ctx context.Context, u domain.User) error {
 	n, err := r.db.queries(ctx).UpdateUser(ctx, sqlc.UpdateUserParams{
 		ID:          uuid.UUID(u.ID),
 		Email:       u.Email,
 		DisplayName: u.DisplayName,
+		IsAdmin:     u.Admin,
 		LastLoginAt: u.LastLoginAt,
 	})
 	if err != nil {
@@ -130,6 +132,7 @@ func toUser(row sqlc.User) domain.User {
 		Subject:     row.Subject,
 		Email:       row.Email,
 		DisplayName: row.DisplayName,
+		Admin:       row.IsAdmin,
 		CreatedAt:   row.CreatedAt.UTC(),
 		LastLoginAt: row.LastLoginAt.UTC(),
 	}

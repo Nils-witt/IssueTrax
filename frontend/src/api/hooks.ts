@@ -3,12 +3,15 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { query, request } from './client';
 import type {
   ApiKey,
+  AuditEntry,
+  AuditFilter,
   Comment,
   CreateApiKeyInput,
   CreatedApiKey,
   CreateIssueInput,
   CreateProjectInput,
   Issue,
+  Me,
   Page,
   Project,
   ServiceAccount,
@@ -32,6 +35,7 @@ export const keys = {
   comments: (key: string, number: number) => ['comments', key.toUpperCase(), number] as const,
   serviceAccounts: ['serviceAccounts'] as const,
   apiKeys: (accountId: string) => ['apiKeys', accountId] as const,
+  auditLog: (filter: AuditFilter) => ['auditLog', filter] as const,
 };
 
 export function useServiceAccounts() {
@@ -73,7 +77,7 @@ export function useRevokeApiKey(accountId: string) {
 }
 
 export function useMe() {
-  return useQuery({ queryKey: keys.me, queryFn: () => request<User>('GET', '/api/me'), staleTime: Infinity });
+  return useQuery({ queryKey: keys.me, queryFn: () => request<Me>('GET', '/api/me'), staleTime: Infinity });
 }
 
 export function useUsers() {
@@ -228,5 +232,23 @@ export function useDeleteComment(key: string, number: number) {
   return useMutation({
     mutationFn: (id: string) => request<null>('DELETE', `${commentsPath(key, number)}/${encodeURIComponent(id)}`),
     onSuccess,
+  });
+}
+
+/** The audit log, newest first (admins only). Always refetched on open. */
+export function useAuditLog(filter: AuditFilter) {
+  return useInfiniteQuery({
+    queryKey: keys.auditLog(filter),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      for (const a of filter.actions) params.append('action', a);
+      if (filter.actor) params.set('actor', filter.actor);
+      if (pageParam) params.set('cursor', pageParam);
+
+      return request<Page<AuditEntry>>('GET', `/api/audit-log?${params.toString()}`);
+    },
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    staleTime: 0,
   });
 }

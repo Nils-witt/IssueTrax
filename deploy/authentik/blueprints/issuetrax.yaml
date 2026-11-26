@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
 # Development-only Authentik setup for IssueTrax: an OAuth2/OpenID provider,
-# the "issuetrax" application and a test user. Secrets here are dev values.
+# the "issuetrax" application, an admin group and test users (ada is an
+# admin, bob is not). Secrets here are dev values.
 version: 1
 metadata:
   name: IssueTrax development
@@ -28,6 +29,8 @@ entries:
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        # The profile scope also sends the "groups" claim IssueTrax uses
+        # to find admins (ISSUETRAX_OIDC_ADMIN_GROUP).
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
 
   - model: authentik_core.application
@@ -38,6 +41,11 @@ entries:
       provider: !KeyOf issuetrax-provider
       meta_launch_url: http://localhost:5173/
 
+  - model: authentik_core.group
+    id: issuetrax-admins
+    identifiers:
+      name: issuetrax-admins
+
   - model: authentik_core.user
     identifiers:
       username: ada
@@ -45,3 +53,13 @@ entries:
       name: Ada Lovelace
       email: ada@localhost.test
       password: ada
+      groups:
+        - !KeyOf issuetrax-admins
+
+  - model: authentik_core.user
+    identifiers:
+      username: bob
+    attrs:
+      name: Bob Builder
+      email: bob@localhost.test
+      password: bob

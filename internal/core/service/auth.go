@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
@@ -51,13 +52,15 @@ func (s *AuthService) CompleteLogin(
 		return "", domain.User{}, fmt.Errorf("%w: state mismatch", domain.ErrLoginFailed)
 	}
 
+	// From here on the browser completed a login we started, so failures
+	// are worth auditing; earlier ones may be anyone poking the callback.
 	if code == "" {
-		return "", domain.User{}, fmt.Errorf("%w: missing authorization code", domain.ErrLoginFailed)
+		return "", domain.User{}, s.loginFailed(ctx, "missing_code", fmt.Errorf("%w: missing authorization code", domain.ErrLoginFailed))
 	}
 
 	ident, idToken, err := s.idp.Exchange(ctx, code, saved.Verifier, saved.Nonce)
 	if err != nil {
-		return "", domain.User{}, fmt.Errorf("%w: %w", domain.ErrLoginFailed, err)
+		return "", domain.User{}, s.loginFailed(ctx, "exchange_failed", fmt.Errorf("%w: %w", domain.ErrLoginFailed, err))
 	}
 
 	token := randomToken()
@@ -76,13 +79,47 @@ func (s *AuthService) CompleteLogin(
 			return fmt.Errorf("create session: %w", err)
 		}
 
-		return nil
+		changes := domain.AuditChanges{}
+		if user.Admin {
+			changes.Initial("admin", "true")
+		}
+
+		return record(ctx, s.repos, s.opts, userEvent(user, domain.AuditLogin, changes))
 	})
+	if errors.Is(err, domain.ErrLoginFailed) {
+		return "", domain.User{}, s.loginFailed(ctx, "invalid_identity", err)
+	}
+
 	if err != nil {
 		return "", domain.User{}, err
 	}
 
 	return token, user, nil
+}
+
+// loginFailed records a failed sign-in without an actor and returns
+// cause, joined with the recording error if that fails too.
+func (s *AuthService) loginFailed(ctx context.Context, reason string, cause error) error {
+	changes := domain.AuditChanges{}
+	changes.Initial("reason", reason)
+
+	if err := record(ctx, s.repos, s.opts, auditEvent{action: domain.AuditLoginFailed, changes: changes}); err != nil {
+		return errors.Join(cause, err)
+	}
+
+	return cause
+}
+
+func userEvent(user domain.User, action domain.AuditAction, changes domain.AuditChanges) auditEvent {
+	return auditEvent{
+		actor: &user.ID, action: action, changes: changes,
+		targetType: domain.AuditTargetUser, targetID: user.ID.String(), targetLabel: user.DisplayName,
+	}
+}
+
+// isAdmin reports whether ident is in the configured admin group.
+func (s *AuthService) isAdmin(ident domain.Identity) bool {
+	return s.opts.adminGroup != "" && slices.Contains(ident.Groups, s.opts.adminGroup)
 }
 
 // upsertUser creates the user on first login and refreshes the profile on
@@ -98,6 +135,8 @@ func (s *AuthService) upsertUser(ctx context.Context, ident domain.Identity) (do
 			return domain.User{}, fmt.Errorf("%w: %w", domain.ErrLoginFailed, err)
 		}
 
+		user.Admin = s.isAdmin(ident)
+
 		if err := s.repos.Users.Create(ctx, user); err != nil {
 			return domain.User{}, fmt.Errorf("create user: %w", err)
 		}
@@ -105,6 +144,7 @@ func (s *AuthService) upsertUser(ctx context.Context, ident domain.Identity) (do
 		return domain.User{}, fmt.Errorf("get user: %w", err)
 	default:
 		user.RecordLogin(ident, now)
+		user.Admin = s.isAdmin(ident)
 
 		if err := s.repos.Users.Update(ctx, user); err != nil {
 			return domain.User{}, fmt.Errorf("update user: %w", err)
@@ -190,24 +230,51 @@ func (s *AuthService) Logout(ctx context.Context, token string) (string, error) 
 	var idToken string
 
 	if token != "" {
-		hash := hashToken(token)
+		err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
+			var err error
 
-		session, err := s.repos.Sessions.Get(ctx, hash)
+			idToken, err = s.endSession(ctx, hashToken(token))
 
-		switch {
-		case errors.Is(err, domain.ErrNoSession):
-		case err != nil:
-			return "", fmt.Errorf("get session: %w", err)
-		default:
-			idToken = session.IDToken
-		}
-
-		if err := s.repos.Sessions.Delete(ctx, hash); err != nil {
-			return "", fmt.Errorf("delete session: %w", err)
+			return err
+		})
+		if err != nil {
+			return "", err
 		}
 	}
 
 	return s.idp.EndSessionURL(idToken), nil
+}
+
+// endSession deletes the session with hash, records the logout if it
+// existed and returns its ID token.
+func (s *AuthService) endSession(ctx context.Context, hash []byte) (string, error) {
+	session, err := s.repos.Sessions.Get(ctx, hash)
+
+	switch {
+	case errors.Is(err, domain.ErrNoSession):
+		return "", s.repos.Sessions.Delete(ctx, hash)
+	case err != nil:
+		return "", fmt.Errorf("get session: %w", err)
+	}
+
+	if err := s.repos.Sessions.Delete(ctx, hash); err != nil {
+		return "", fmt.Errorf("delete session: %w", err)
+	}
+
+	user, err := s.repos.Users.Get(ctx, session.UserID)
+
+	switch {
+	case errors.Is(err, domain.ErrUserNotFound):
+		user = domain.User{ID: session.UserID}
+	case err != nil:
+		return "", fmt.Errorf("get session user: %w", err)
+	}
+
+	if err := record(ctx, s.repos, s.opts, userEvent(user, domain.AuditLogout, nil)); err != nil {
+		return "", err
+	}
+
+	return session.IDToken, nil
 }
 
 // DeleteExpiredSessions removes sessions past their lifetime.

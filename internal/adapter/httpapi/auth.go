@@ -140,7 +140,15 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"redirectUrl": redirect})
 }
 
+// meResponse is the caller's own user, plus what only they need to know.
+type meResponse struct {
+	userResponse
+	// Admin is true for members of the identity provider admin group; the
+	// SPA shows admin pages (audit log) only to them.
+	Admin bool `json:"admin"`
+}
+
 // me returns the signed-in user: GET /api/me.
 func (h *Handler) me(w http.ResponseWriter, _ *http.Request, user domain.User) {
-	writeJSON(w, http.StatusOK, toUserResponse(user))
+	writeJSON(w, http.StatusOK, meResponse{userResponse: toUserResponse(user), Admin: user.Admin})
 }

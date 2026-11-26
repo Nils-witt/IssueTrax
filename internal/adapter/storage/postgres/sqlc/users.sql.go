@@ -13,8 +13,8 @@ import (
 )
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, issuer, subject, email, display_name, created_at, last_login_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO users (id, issuer, subject, email, display_name, is_admin, created_at, last_login_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateUserParams struct {
@@ -23,6 +23,7 @@ type CreateUserParams struct {
 	Subject     string
 	Email       string
 	DisplayName string
+	IsAdmin     bool
 	CreatedAt   time.Time
 	LastLoginAt time.Time
 }
@@ -34,6 +35,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 		arg.Subject,
 		arg.Email,
 		arg.DisplayName,
+		arg.IsAdmin,
 		arg.CreatedAt,
 		arg.LastLoginAt,
 	)
@@ -41,7 +43,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, issuer, subject, email, display_name, created_at, last_login_at FROM users WHERE id = $1
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at, is_admin FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
@@ -55,12 +57,13 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByIdentity = `-- name: GetUserByIdentity :one
-SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at, is_admin
 FROM users
 WHERE issuer = $1 AND subject = $2
 `
@@ -81,12 +84,13 @@ func (q *Queries) GetUserByIdentity(ctx context.Context, arg GetUserByIdentityPa
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, issuer, subject, email, display_name, created_at, last_login_at FROM users WHERE id = ANY ($1::uuid[])
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at, is_admin FROM users WHERE id = ANY ($1::uuid[])
 `
 
 func (q *Queries) GetUsers(ctx context.Context, ids []uuid.UUID) ([]User, error) {
@@ -106,6 +110,7 @@ func (q *Queries) GetUsers(ctx context.Context, ids []uuid.UUID) ([]User, error)
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.IsAdmin,
 		); err != nil {
 			return nil, err
 		}
@@ -118,7 +123,7 @@ func (q *Queries) GetUsers(ctx context.Context, ids []uuid.UUID) ([]User, error)
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at, is_admin
 FROM users
 ORDER BY lower(display_name), id
 `
@@ -140,6 +145,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.IsAdmin,
 		); err != nil {
 			return nil, err
 		}
@@ -152,7 +158,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersByIssuer = `-- name: ListUsersByIssuer :many
-SELECT id, issuer, subject, email, display_name, created_at, last_login_at
+SELECT id, issuer, subject, email, display_name, created_at, last_login_at, is_admin
 FROM users
 WHERE issuer = $1
 ORDER BY lower(display_name), id
@@ -175,6 +181,7 @@ func (q *Queries) ListUsersByIssuer(ctx context.Context, issuer string) ([]User,
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.IsAdmin,
 		); err != nil {
 			return nil, err
 		}
@@ -188,13 +195,14 @@ func (q *Queries) ListUsersByIssuer(ctx context.Context, issuer string) ([]User,
 
 const updateUser = `-- name: UpdateUser :execrows
 UPDATE users
-SET email = $1, display_name = $2, last_login_at = $3
-WHERE id = $4
+SET email = $1, display_name = $2, is_admin = $3, last_login_at = $4
+WHERE id = $5
 `
 
 type UpdateUserParams struct {
 	Email       string
 	DisplayName string
+	IsAdmin     bool
 	LastLoginAt time.Time
 	ID          uuid.UUID
 }
@@ -203,6 +211,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (int64, 
 	result, err := q.db.Exec(ctx, updateUser,
 		arg.Email,
 		arg.DisplayName,
+		arg.IsAdmin,
 		arg.LastLoginAt,
 		arg.ID,
 	)

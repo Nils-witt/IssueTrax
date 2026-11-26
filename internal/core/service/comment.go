@@ -58,7 +58,10 @@ func (s *CommentService) Create(
 			return fmt.Errorf("create comment on issue %s: %w", issue.ID, err)
 		}
 
-		return nil
+		changes := domain.AuditChanges{}
+		changes.InitialText("body", comment.Body)
+
+		return s.record(ctx, actor, domain.AuditCommentCreate, key, issue, comment.ID, changes)
 	})
 	if err != nil {
 		return port.CommentView{}, err
@@ -84,6 +87,8 @@ func (s *CommentService) Update(
 			return fmt.Errorf("get comment %s: %w", id, err)
 		}
 
+		before := comment.Body
+
 		if err := comment.Edit(actor, body, s.opts.now()); err != nil {
 			return err
 		}
@@ -92,7 +97,14 @@ func (s *CommentService) Update(
 			return fmt.Errorf("update comment %s: %w", id, err)
 		}
 
-		return nil
+		changes := domain.AuditChanges{}
+		changes.Text("body", before, comment.Body)
+
+		if len(changes) == 0 {
+			return nil
+		}
+
+		return s.record(ctx, actor, domain.AuditCommentUpdate, key, issue, comment.ID, changes)
 	})
 	if err != nil {
 		return port.CommentView{}, err
@@ -122,7 +134,19 @@ func (s *CommentService) Delete(ctx context.Context, actor domain.UserID, key do
 			return fmt.Errorf("delete comment %s: %w", id, err)
 		}
 
-		return nil
+		return s.record(ctx, actor, domain.AuditCommentDelete, key, issue, id, nil)
+	})
+}
+
+// record writes the audit entry for a change to comment id on issue.
+func (s *CommentService) record(
+	ctx context.Context, actor domain.UserID, action domain.AuditAction, key domain.ProjectKey, issue domain.Issue,
+	id domain.CommentID, changes domain.AuditChanges,
+) error {
+	return record(ctx, s.repos, s.opts, auditEvent{
+		actor: &actor, action: action, changes: changes,
+		targetType: domain.AuditTargetComment, targetID: id.String(),
+		targetLabel: issue.Key(domain.NormalizeProjectKey(string(key))),
 	})
 }
 

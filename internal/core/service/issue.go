@@ -76,9 +76,18 @@ func (s *IssueService) Create(
 			return fmt.Errorf("create issue %s: %w", issue.Key(project.Key), err)
 		}
 
-		view, err = s.view(ctx, project, issue)
+		if view, err = s.view(ctx, project, issue); err != nil {
+			return err
+		}
 
-		return err
+		changes := domain.AuditChanges{}
+		changes.Initial("title", issue.Title)
+		changes.Initial("status", string(issue.Status))
+		changes.InitialText("description", issue.Description)
+		changes.InitialList("tags", tagNames(view.Tags))
+		changes.InitialList("assignees", userNames(view.Assignees))
+
+		return record(ctx, s.repos, s.opts, issueEvent(actor, domain.AuditIssueCreate, project, issue, changes))
 	})
 	if err != nil {
 		return port.IssueView{}, err
@@ -131,7 +140,7 @@ func (s *IssueService) List(
 
 // Update applies a partial update. Archived issues only accept a status change.
 func (s *IssueService) Update(
-	ctx context.Context, key domain.ProjectKey, number int64, in port.UpdateIssueInput,
+	ctx context.Context, actor domain.UserID, key domain.ProjectKey, number int64, in port.UpdateIssueInput,
 ) (port.IssueView, error) {
 	var view port.IssueView
 
@@ -151,6 +160,11 @@ func (s *IssueService) Update(
 			return err
 		}
 
+		before, err := s.view(ctx, project, issue)
+		if err != nil {
+			return err
+		}
+
 		if err := issue.Apply(changes, s.opts.now()); err != nil {
 			return err
 		}
@@ -159,9 +173,16 @@ func (s *IssueService) Update(
 			return fmt.Errorf("update issue %s: %w", issue.Key(project.Key), err)
 		}
 
-		view, err = s.view(ctx, project, issue)
+		if view, err = s.view(ctx, project, issue); err != nil {
+			return err
+		}
 
-		return err
+		audit := issueDiff(before, view)
+		if len(audit) == 0 {
+			return nil
+		}
+
+		return record(ctx, s.repos, s.opts, issueEvent(actor, domain.AuditIssueUpdate, project, issue, audit))
 	})
 	if err != nil {
 		return port.IssueView{}, err
@@ -401,4 +422,43 @@ func normalizeMode(m port.MatchMode) (port.MatchMode, bool) {
 	default:
 		return m, false
 	}
+}
+
+// issueDiff lists the audited fields that differ between two views of an issue.
+func issueDiff(before, after port.IssueView) domain.AuditChanges {
+	changes := domain.AuditChanges{}
+	changes.Set("title", before.Issue.Title, after.Issue.Title)
+	changes.Set("status", string(before.Issue.Status), string(after.Issue.Status))
+	changes.Text("description", before.Issue.Description, after.Issue.Description)
+	changes.List("tags", tagNames(before.Tags), tagNames(after.Tags))
+	changes.List("assignees", userNames(before.Assignees), userNames(after.Assignees))
+
+	return changes
+}
+
+func issueEvent(
+	actor domain.UserID, action domain.AuditAction, p domain.Project, i domain.Issue, changes domain.AuditChanges,
+) auditEvent {
+	return auditEvent{
+		actor: &actor, action: action, changes: changes,
+		targetType: domain.AuditTargetIssue, targetID: i.ID.String(), targetLabel: i.Key(p.Key),
+	}
+}
+
+func tagNames(tags []domain.Tag) []string {
+	names := make([]string, 0, len(tags))
+	for _, t := range tags {
+		names = append(names, string(t.Name))
+	}
+
+	return names
+}
+
+func userNames(users []domain.User) []string {
+	names := make([]string, 0, len(users))
+	for _, u := range users {
+		names = append(names, u.DisplayName)
+	}
+
+	return names
 }

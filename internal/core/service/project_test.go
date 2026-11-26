@@ -29,7 +29,7 @@ func TestProjectService_Create(t *testing.T) {
 			f := newFixture(t)
 			f.addProject(t, "TRAX", "IssueTrax")
 
-			got, err := f.projects.Create(t.Context(), tt.in)
+			got, err := f.projects.Create(t.Context(), testActor, tt.in)
 			if tt.wantCode != "" {
 				wantCode(t, err, tt.wantCode)
 				return
@@ -146,7 +146,7 @@ func TestProjectService_Update(t *testing.T) {
 			f.addProject(t, "TRAX", "IssueTrax")
 			f.addProject(t, "OTHER", "Other")
 
-			_, err := f.projects.Update(t.Context(), "trax", tt.in)
+			_, err := f.projects.Update(t.Context(), testActor, "trax", tt.in)
 			if tt.wantCode != "" {
 				wantCode(t, err, tt.wantCode)
 			} else if err != nil {

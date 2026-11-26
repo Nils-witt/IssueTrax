@@ -131,6 +131,7 @@ func repositories(db *postgres.DB) service.Repositories {
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
 		APIKeys:  postgres.NewAPIKeyRepository(db),
+		Audit:    postgres.NewAuditRepository(db),
 	}
 }
 
@@ -173,7 +174,7 @@ func TestConcurrentIssueCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := service.NewProjectService(repos).Create(ctx, port.CreateProjectInput{Key: "TRAX", Name: "IssueTrax"}); err != nil {
+	if _, err := service.NewProjectService(repos).Create(ctx, user.ID, port.CreateProjectInput{Key: "TRAX", Name: "IssueTrax"}); err != nil {
 		t.Fatal(err)
 	}
 

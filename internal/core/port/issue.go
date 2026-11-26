@@ -68,7 +68,7 @@ type IssueService interface {
 	Create(ctx context.Context, actor domain.UserID, project domain.ProjectKey, in CreateIssueInput) (IssueView, error)
 	Get(ctx context.Context, project domain.ProjectKey, number int64) (IssueView, error)
 	List(ctx context.Context, project domain.ProjectKey, filter IssueFilter, page domain.PageRequest) (domain.Page[IssueView], error)
-	Update(ctx context.Context, project domain.ProjectKey, number int64, in UpdateIssueInput) (IssueView, error)
+	Update(ctx context.Context, actor domain.UserID, project domain.ProjectKey, number int64, in UpdateIssueInput) (IssueView, error)
 }
 
 // IssueRepository is the driven port for persisting issues.

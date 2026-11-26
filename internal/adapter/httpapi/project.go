@@ -59,14 +59,14 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request, _ domain.
 }
 
 // POST /api/projects.
-func (h *Handler) createProject(w http.ResponseWriter, r *http.Request, _ domain.User) {
+func (h *Handler) createProject(w http.ResponseWriter, r *http.Request, user domain.User) {
 	var req createProjectRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		h.writeRequestError(w, r, err)
 		return
 	}
 
-	project, err := h.projects.Create(r.Context(), port.CreateProjectInput{Key: req.Key, Name: req.Name, Description: req.Description})
+	project, err := h.projects.Create(r.Context(), user.ID, port.CreateProjectInput{Key: req.Key, Name: req.Name, Description: req.Description})
 	if err != nil {
 		h.writeDomainError(w, r, err)
 		return
@@ -87,7 +87,7 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request, _ domain.Us
 }
 
 // PATCH /api/projects/{key}.
-func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request, _ domain.User) {
+func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request, user domain.User) {
 	var req updateProjectRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		h.writeRequestError(w, r, err)
@@ -99,7 +99,7 @@ func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request, _ domain
 		return
 	}
 
-	project, err := h.projects.Update(r.Context(), projectKey(r), port.UpdateProjectInput{Name: req.Name, Description: req.Description})
+	project, err := h.projects.Update(r.Context(), user.ID, projectKey(r), port.UpdateProjectInput{Name: req.Name, Description: req.Description})
 	if err != nil {
 		h.writeDomainError(w, r, err)
 		return

@@ -29,8 +29,8 @@ import (
 // SIGINT/SIGTERM.
 const shutdownTimeout = 15 * time.Second
 
-// sessionCleanupInterval is how often expired sessions are purged.
-const sessionCleanupInterval = time.Hour
+// cleanupInterval is how often expired sessions and audit entries are purged.
+const cleanupInterval = time.Hour
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
@@ -50,7 +50,7 @@ func main() {
 
 // wire builds the application graph: driven adapters -> core services ->
 // driving adapters.
-func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.Logger) (http.Handler, *service.AuthService, error) {
+func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.Logger) (http.Handler, cleaner, error) {
 	repos := service.Repositories{
 		Tx:       db,
 		Projects: postgres.NewProjectRepository(db),
@@ -60,6 +60,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Users:    postgres.NewUserRepository(db),
 		Sessions: postgres.NewSessionRepository(db),
 		APIKeys:  postgres.NewAPIKeyRepository(db),
+		Audit:    postgres.NewAuditRepository(db),
 	}
 
 	idp, err := oidc.New(ctx, oidc.Config{
@@ -70,14 +71,19 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		PostLogoutRedirectURL: cfg.PublicURL + "/",
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, cleaner{}, err
 	}
 
-	auth := service.NewAuthService(repos, idp)
+	if cfg.OIDCAdminGroup == "" {
+		logger.WarnContext(ctx, "ISSUETRAX_OIDC_ADMIN_GROUP is not set; nobody can read the audit log")
+	}
+
+	auth := service.NewAuthService(repos, idp, service.WithAdminGroup(cfg.OIDCAdminGroup))
+	audit := service.NewAuditService(repos, cfg.AuditRetention)
 
 	dist, err := fs.Sub(frontend.DistFS, "dist")
 	if err != nil {
-		return nil, nil, fmt.Errorf("open embedded frontend: %w", err)
+		return nil, cleaner{}, fmt.Errorf("open embedded frontend: %w", err)
 	}
 
 	handler, err := httpapi.NewHandler(httpapi.Config{
@@ -88,6 +94,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Comments:        service.NewCommentService(repos),
 		Users:           service.NewUserService(repos),
 		ServiceAccounts: service.NewBotService(repos),
+		Audit:           audit,
 		Frontend:        dist,
 		OpenAPISpec:     docs.OpenAPI,
 		Logger:          logger,
@@ -96,33 +103,45 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		InsecureCookies: cfg.Dev,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("build http handler: %w", err)
+		return nil, cleaner{}, fmt.Errorf("build http handler: %w", err)
 	}
 
-	return handler, auth, nil
+	return handler, cleaner{auth: auth, audit: audit}, nil
 }
 
-// cleanupSessions deletes expired sessions now and then every hour until
-// ctx is done.
-func cleanupSessions(ctx context.Context, auth *service.AuthService, logger *slog.Logger) {
-	ticker := time.NewTicker(sessionCleanupInterval)
+// cleaner holds the services with periodic cleanup work.
+type cleaner struct {
+	auth  *service.AuthService
+	audit *service.AuditService
+}
+
+// run deletes expired sessions and audit entries now and then every hour
+// until ctx is done.
+func (c cleaner) run(ctx context.Context, logger *slog.Logger) {
+	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
-		n, err := auth.DeleteExpiredSessions(ctx)
-
-		switch {
-		case err != nil && ctx.Err() == nil:
-			logger.ErrorContext(ctx, "session cleanup failed", slog.Any("error", err))
-		case n > 0:
-			logger.InfoContext(ctx, "expired sessions deleted", slog.Int64("count", n))
-		}
+		logCleanup(ctx, logger, "sessions", c.auth.DeleteExpiredSessions)
+		logCleanup(ctx, logger, "audit entries", c.audit.DeleteExpired)
 
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
+	}
+}
+
+// logCleanup runs one cleanup step and logs its outcome.
+func logCleanup(ctx context.Context, logger *slog.Logger, what string, deleteExpired func(context.Context) (int64, error)) {
+	n, err := deleteExpired(ctx)
+
+	switch {
+	case err != nil && ctx.Err() == nil:
+		logger.ErrorContext(ctx, "cleanup failed", slog.String("what", what), slog.Any("error", err))
+	case n > 0:
+		logger.InfoContext(ctx, "expired "+what+" deleted", slog.Int64("count", n))
 	}
 }
 
@@ -152,12 +171,12 @@ func run(args []string) error {
 	}
 	defer db.Close()
 
-	handler, auth, err := wire(ctx, cfg, db, logger)
+	handler, cleanup, err := wire(ctx, cfg, db, logger)
 	if err != nil {
 		return err
 	}
 
-	go cleanupSessions(ctx, auth, logger)
+	go cleanup.run(ctx, logger)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

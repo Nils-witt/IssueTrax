@@ -165,6 +165,7 @@ func TestAuth_SecureCookies(t *testing.T) {
 		Users:    service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
+		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),
 		Frontend:        fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Logger:          slog.New(slog.DiscardHandler),
 		PublicURL:       "https://trax.example",

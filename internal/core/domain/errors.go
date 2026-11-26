@@ -46,6 +46,7 @@ const (
 	CodeAPIKeyNotFound          = "api_key_not_found" //nolint:gosec // an error code, not a credential
 	CodeInvalidAPIKey           = "invalid_api_key"
 	CodeSessionRequired         = "session_required"
+	CodeAdminRequired           = "admin_required"
 )
 
 // Stable per-field validation codes, used in Error.Fields.
@@ -109,6 +110,7 @@ var (
 	ErrAPIKeyNotFound    = &Error{kind: ErrNotFound, Code: CodeAPIKeyNotFound, Message: "api key not found"}
 	ErrInvalidAPIKey     = &Error{kind: ErrUnauthenticated, Code: CodeInvalidAPIKey, Message: "invalid, expired or revoked api key"}
 	ErrSessionRequired   = &Error{kind: ErrForbidden, Code: CodeSessionRequired, Message: "this action requires a signed-in person, not an api key"}
+	ErrAdminRequired     = &Error{kind: ErrForbidden, Code: CodeAdminRequired, Message: "this action requires an administrator"}
 )
 
 // NewValidationError returns an ErrInvalid error for the given field codes.

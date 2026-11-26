@@ -22,10 +22,10 @@ type UpdateProjectInput struct {
 
 // ProjectService is the driving port for project use cases.
 type ProjectService interface {
-	Create(ctx context.Context, in CreateProjectInput) (domain.Project, error)
+	Create(ctx context.Context, actor domain.UserID, in CreateProjectInput) (domain.Project, error)
 	Get(ctx context.Context, key domain.ProjectKey) (domain.Project, error)
 	List(ctx context.Context, page domain.PageRequest) (domain.Page[domain.Project], error)
-	Update(ctx context.Context, key domain.ProjectKey, in UpdateProjectInput) (domain.Project, error)
+	Update(ctx context.Context, actor domain.UserID, key domain.ProjectKey, in UpdateProjectInput) (domain.Project, error)
 }
 
 // ProjectRepository is the driven port for persisting projects.

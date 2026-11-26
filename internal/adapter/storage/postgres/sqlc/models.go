@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type IssueStatus string
@@ -67,6 +68,19 @@ type ApiKey struct {
 	ExpiresAt  *time.Time
 	LastUsedAt *time.Time
 	RevokedAt  *time.Time
+}
+
+type AuditLog struct {
+	ID          uuid.UUID
+	At          time.Time
+	ActorID     pgtype.UUID
+	Action      string
+	TargetType  string
+	TargetID    string
+	TargetLabel string
+	Changes     []byte
+	Ip          string
+	UserAgent   string
 }
 
 type Comment struct {
@@ -134,4 +148,5 @@ type User struct {
 	DisplayName string
 	CreatedAt   time.Time
 	LastLoginAt time.Time
+	IsAdmin     bool
 }

@@ -14,11 +14,12 @@ var _ port.TagService = (*TagService)(nil)
 // TagService implements port.TagService.
 type TagService struct {
 	repos Repositories
+	opts  options
 }
 
 // NewTagService returns a TagService backed by repos.
-func NewTagService(repos Repositories) *TagService {
-	return &TagService{repos: repos}
+func NewTagService(repos Repositories, opts ...Option) *TagService {
+	return &TagService{repos: repos, opts: newOptions(opts)}
 }
 
 // List returns the project's tags ordered by name.
@@ -37,7 +38,9 @@ func (s *TagService) List(ctx context.Context, key domain.ProjectKey) ([]domain.
 }
 
 // Update renames and/or recolors a tag. Issues keep the tag.
-func (s *TagService) Update(ctx context.Context, key domain.ProjectKey, id domain.TagID, in port.UpdateTagInput) (domain.Tag, error) {
+func (s *TagService) Update(
+	ctx context.Context, actor domain.UserID, key domain.ProjectKey, id domain.TagID, in port.UpdateTagInput,
+) (domain.Tag, error) {
 	var tag domain.Tag
 
 	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
@@ -51,6 +54,8 @@ func (s *TagService) Update(ctx context.Context, key domain.ProjectKey, id domai
 			return fmt.Errorf("get tag %s: %w", id, err)
 		}
 
+		before := tag
+
 		if err := tag.Apply(domain.TagChanges{Name: in.Name, Color: in.Color}); err != nil {
 			return err
 		}
@@ -59,7 +64,18 @@ func (s *TagService) Update(ctx context.Context, key domain.ProjectKey, id domai
 			return fmt.Errorf("update tag %s: %w", id, err)
 		}
 
-		return nil
+		changes := domain.AuditChanges{}
+		changes.Set("name", string(before.Name), string(tag.Name))
+		changes.Set("color", string(before.Color), string(tag.Color))
+
+		if len(changes) == 0 {
+			return nil
+		}
+
+		return record(ctx, s.repos, s.opts, auditEvent{
+			actor: &actor, action: domain.AuditTagUpdate, changes: changes,
+			targetType: domain.AuditTargetTag, targetID: tag.ID.String(), targetLabel: string(project.Key) + ": " + string(tag.Name),
+		})
 	})
 	if err != nil {
 		return domain.Tag{}, err

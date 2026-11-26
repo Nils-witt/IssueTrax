@@ -24,6 +24,11 @@ info:
     accounts can do everything a person can, except manage service
     accounts and keys (`403`, code `session_required`).
 
+    **Admins and the audit log.** People whose identity provider `groups`
+    claim contained the group configured as `ISSUETRAX_OIDC_ADMIN_GROUP` at
+    their latest sign-in are admins (`admin` in `/api/me`). Only they may
+    read `/api/audit-log`; others get `403` with code `admin_required`.
+
     **CSRF.** State-changing requests (`POST`, `PATCH`, `DELETE`) must be same-origin
     (checked via `Sec-Fetch-Site` / `Origin`); cross-origin ones get `403`
     with code `cross_origin_rejected`.
@@ -49,6 +54,7 @@ tags:
   - name: comments
   - name: users
   - name: service-accounts
+  - name: audit
 
 paths:
   /auth/login:
@@ -135,8 +141,48 @@ paths:
           description: Current user.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/Me" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /api/audit-log:
+    get:
+      tags: [audit]
+      summary: Read the audit log (admins only)
+      description: |
+        Sign-ins, failed sign-ins, sign-outs and every change to projects,
+        issues, tags, comments, service accounts and API keys, newest
+        first. Filters combine with AND.
+      security: [{ session: [] }]
+      parameters:
+        - name: actor
+          in: query
+          description: Only entries by this user.
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          description: Only these actions (repeatable).
+          schema: { type: array, items: { $ref: "#/components/schemas/AuditAction" } }
+          style: form
+          explode: true
+        - name: targetType
+          in: query
+          description: Only entries about this kind of entity.
+          schema: { $ref: "#/components/schemas/AuditTargetType" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEntryPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: "`admin_required` (not an admin) or `session_required` (API keys cannot read the audit log)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
 
   /api/users:
     get:
@@ -731,6 +777,85 @@ components:
         email: { type: string, description: Empty for service accounts. }
         displayName: { type: string }
         serviceAccount: { type: boolean, description: "True for `bot-<name>` users that use API keys." }
+
+    Me:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required: [admin]
+          properties:
+            admin: { type: boolean, description: "Member of the admin group at the latest sign-in; may read the audit log." }
+
+    AuditAction:
+      type: string
+      enum:
+        - auth.login
+        - auth.login_failed
+        - auth.logout
+        - project.create
+        - project.update
+        - issue.create
+        - issue.update
+        - tag.update
+        - comment.create
+        - comment.update
+        - comment.delete
+        - service_account.create
+        - api_key.create
+        - api_key.revoke
+
+    AuditTargetType:
+      type: string
+      enum: [user, project, issue, tag, comment, service_account, api_key]
+
+    AuditChange:
+      type: object
+      description: |
+        One changed field. `old` is absent for fields set on creation.
+        Long text (descriptions, comment bodies) is `redacted`: only the
+        fact that it changed is recorded. Lists (tags, assignees) are
+        comma-separated and sorted.
+      properties:
+        old: { type: string }
+        new: { type: string }
+        redacted: { type: boolean }
+
+    AuditEntry:
+      type: object
+      required: [id, at, actor, action, targetType, targetId, targetLabel, changes, ip, userAgent]
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        actor:
+          description: Who acted; null for failed sign-ins.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [id, displayName, serviceAccount]
+              properties:
+                id: { type: string, format: uuid }
+                displayName: { type: string }
+                serviceAccount: { type: boolean }
+        action: { $ref: "#/components/schemas/AuditAction" }
+        targetType: { type: string, description: "An AuditTargetType; empty for failed sign-ins." }
+        targetId: { type: string }
+        targetLabel: { type: string, description: "Display snapshot, e.g. `TRAX-12` or `bot-ci: deploy`." }
+        changes:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/AuditChange" }
+          example:
+            title: { old: Crash, new: Crash on start }
+            description: { redacted: true }
+        ip: { type: string, description: "Client address as seen by the server (a reverse proxy's address when behind one)." }
+        userAgent: { type: string }
+
+    AuditEntryPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
 
     ServiceAccount:
       allOf:

@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/base64"
 	"encoding/json"
+	"time"
 )
 
 // Page sizes for paginated lists.
@@ -50,11 +51,17 @@ type ProjectCursor struct {
 	ID   string `json:"i"`
 }
 
+// AuditCursor is the keyset position in the audit log (at, id descending).
+type AuditCursor struct {
+	At time.Time `json:"t"`
+	ID string    `json:"i"`
+}
+
 // EncodeCursor serializes a keyset position into an opaque cursor.
-func EncodeCursor[T IssueCursor | ProjectCursor](c T) string {
+func EncodeCursor[T IssueCursor | ProjectCursor | AuditCursor](c T) string {
 	b, err := json.Marshal(c)
 	if err != nil {
-		// Both cursor types are plain structs of strings and ints.
+		// All cursor types are plain structs of strings, ints and times.
 		panic("encode cursor: " + err.Error())
 	}
 
@@ -63,7 +70,7 @@ func EncodeCursor[T IssueCursor | ProjectCursor](c T) string {
 
 // DecodeCursor parses an opaque cursor; ok is false for an empty cursor.
 // Malformed cursors yield a validation error on field "cursor".
-func DecodeCursor[T IssueCursor | ProjectCursor](s string) (c T, ok bool, err error) {
+func DecodeCursor[T IssueCursor | ProjectCursor | AuditCursor](s string) (c T, ok bool, err error) {
 	if s == "" {
 		return c, false, nil
 	}

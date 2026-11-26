@@ -54,7 +54,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 		fixture:  f,
 		idp:      idp,
 		clock:    &now,
-		auth:     service.NewAuthService(f.repos, idp, clock),
+		auth:     service.NewAuthService(f.repos, idp, clock, service.WithAdminGroup("admins")),
 		accounts: service.NewBotService(f.repos, clock),
 	}
 }
@@ -151,7 +151,7 @@ func TestAuthService_CompleteLoginFailures(t *testing.T) {
 			t.Parallel()
 
 			f := newAuthFixture(t)
-			if tt.identity != (domain.Identity{}) {
+			if tt.identity.Issuer != "" {
 				f.idp.ident = tt.identity
 			}
 

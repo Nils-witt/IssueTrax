@@ -295,7 +295,7 @@ func TestIssueService_Update(t *testing.T) {
 	f.addProject(t, "TRAX", "IssueTrax")
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "Old", Tags: []string{"bug"}})
 
-	got, err := f.issues.Update(t.Context(), "TRAX", 1, port.UpdateIssueInput{
+	got, err := f.issues.Update(t.Context(), testActor, "TRAX", 1, port.UpdateIssueInput{
 		Title:     new("New"),
 		Tags:      &[]string{"ui", "Bug"},
 		Assignees: &[]domain.UserID{ada.ID},
@@ -308,10 +308,10 @@ func TestIssueService_Update(t *testing.T) {
 		t.Fatalf("Update() = %+v", got)
 	}
 
-	_, err = f.issues.Update(t.Context(), "TRAX", 1, port.UpdateIssueInput{Assignees: &[]domain.UserID{domain.UserID(uuid.New())}})
+	_, err = f.issues.Update(t.Context(), testActor, "TRAX", 1, port.UpdateIssueInput{Assignees: &[]domain.UserID{domain.UserID(uuid.New())}})
 	wantField(t, err, "assignees", domain.FieldUnknown)
 
-	_, err = f.issues.Update(t.Context(), "TRAX", 2, port.UpdateIssueInput{Title: new("x")})
+	_, err = f.issues.Update(t.Context(), testActor, "TRAX", 2, port.UpdateIssueInput{Title: new("x")})
 	wantCode(t, err, domain.CodeIssueNotFound)
 }
 
@@ -324,7 +324,7 @@ func TestIssueService_UpdateArchived(t *testing.T) {
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "Old"})
 
 	update := func(in port.UpdateIssueInput) error {
-		_, err := f.issues.Update(t.Context(), "TRAX", 1, in)
+		_, err := f.issues.Update(t.Context(), testActor, "TRAX", 1, in)
 		return err
 	}
 

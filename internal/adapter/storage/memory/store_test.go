@@ -25,6 +25,7 @@ func TestContract(t *testing.T) {
 			Users:    memory.NewUserRepository(s),
 			Sessions: memory.NewSessionRepository(s),
 			APIKeys:  memory.NewAPIKeyRepository(s),
+			Audit:    memory.NewAuditRepository(s),
 		}
 	})
 }

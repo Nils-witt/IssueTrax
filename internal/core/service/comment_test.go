@@ -35,7 +35,7 @@ func (f *fixture) addComment(t *testing.T, actor domain.UserID, body string) por
 func (f *fixture) archive(t *testing.T) {
 	t.Helper()
 
-	if _, err := f.issues.Update(t.Context(), "TRAX", 1, port.UpdateIssueInput{Status: new(domain.StatusArchived)}); err != nil {
+	if _, err := f.issues.Update(t.Context(), testActor, "TRAX", 1, port.UpdateIssueInput{Status: new(domain.StatusArchived)}); err != nil {
 		t.Fatal(err)
 	}
 }

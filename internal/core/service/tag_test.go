@@ -52,7 +52,7 @@ func TestTagService_Update(t *testing.T) {
 			f.addProject(t, "OTHER", "Other")
 			issue := f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "x", Tags: []string{"bug", "ui"}})
 
-			_, err := f.tags.Update(t.Context(), tt.project, issue.Tags[0].ID, tt.in)
+			_, err := f.tags.Update(t.Context(), testActor, tt.project, issue.Tags[0].ID, tt.in)
 
 			switch {
 			case tt.wantField != "":
@@ -82,7 +82,7 @@ func TestTagService_Update(t *testing.T) {
 		f := newFixture(t)
 		f.addProject(t, "TRAX", "IssueTrax")
 
-		_, err := f.tags.Update(t.Context(), "TRAX", domain.TagID(uuid.New()), port.UpdateTagInput{Name: new("x")})
+		_, err := f.tags.Update(t.Context(), testActor, "TRAX", domain.TagID(uuid.New()), port.UpdateTagInput{Name: new("x")})
 		wantCode(t, err, domain.CodeTagNotFound)
 	})
 }

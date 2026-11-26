@@ -99,6 +99,8 @@ func (p *Provider) Exchange(ctx context.Context, code, verifier, nonce string) (
 		Email             string `json:"email"`
 		Name              string `json:"name"`
 		PreferredUsername string `json:"preferred_username"`
+		// Groups is sent by Authentik with the profile scope.
+		Groups []string `json:"groups"`
 	}
 
 	if err := idToken.Claims(&claims); err != nil {
@@ -115,6 +117,7 @@ func (p *Provider) Exchange(ctx context.Context, code, verifier, nonce string) (
 		Subject:     idToken.Subject,
 		Email:       claims.Email,
 		DisplayName: name,
+		Groups:      claims.Groups,
 	}, raw, nil
 }
 

@@ -31,6 +31,11 @@ export function Layout() {
           <Button component={Link} to="/service-accounts" size="small" color="inherit">
             {t('serviceAccounts.nav')}
           </Button>
+          {me.data?.admin && (
+            <Button component={Link} to="/audit-log" size="small" color="inherit">
+              {t('auditLog.nav')}
+            </Button>
+          )}
           <Button component={Link} to="/api-docs" size="small" color="inherit">
             {t('app.apiDocs')}
           </Button>

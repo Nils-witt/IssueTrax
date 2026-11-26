@@ -14,6 +14,57 @@ export interface User {
   serviceAccount: boolean;
 }
 
+/** The signed-in user (GET /api/me). */
+export interface Me extends User {
+  /** Member of the admin group at the latest sign-in; may read the audit log. */
+  admin: boolean;
+}
+
+export const auditActions = [
+  'auth.login',
+  'auth.login_failed',
+  'auth.logout',
+  'project.create',
+  'project.update',
+  'issue.create',
+  'issue.update',
+  'tag.update',
+  'comment.create',
+  'comment.update',
+  'comment.delete',
+  'service_account.create',
+  'api_key.create',
+  'api_key.revoke',
+] as const;
+export type AuditAction = (typeof auditActions)[number];
+
+/** One changed field; `old` is absent on creation, long text is only `redacted`. */
+export interface AuditChange {
+  old?: string;
+  new?: string;
+  redacted?: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  /** Null for failed sign-ins. */
+  actor: { id: string; displayName: string; serviceAccount: boolean } | null;
+  action: AuditAction;
+  targetType: string;
+  targetId: string;
+  /** Display snapshot such as "TRAX-12". */
+  targetLabel: string;
+  changes: Record<string, AuditChange>;
+  ip: string;
+  userAgent: string;
+}
+
+export interface AuditFilter {
+  actions: AuditAction[];
+  actor: string | null;
+}
+
 /** A service account: the user "bot-<name>". */
 export interface ServiceAccount extends User {
   /** The name without "bot-". */

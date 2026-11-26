@@ -50,13 +50,26 @@ func (s *BotService) Create(ctx context.Context, actor domain.User, name string)
 		return domain.User{}, err
 	}
 
-	err = s.repos.Users.Create(ctx, user)
-	if errors.Is(err, domain.ErrUserIdentityTaken) {
-		return domain.User{}, domain.ErrServiceAccountNameTaken
-	}
+	err = s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
+		err := s.repos.Users.Create(ctx, user)
+		if errors.Is(err, domain.ErrUserIdentityTaken) {
+			return domain.ErrServiceAccountNameTaken
+		}
 
+		if err != nil {
+			return fmt.Errorf("create service account: %w", err)
+		}
+
+		changes := domain.AuditChanges{}
+		changes.Initial("name", user.DisplayName)
+
+		return record(ctx, s.repos, s.opts, auditEvent{
+			actor: &actor.ID, action: domain.AuditServiceAccountCreate, changes: changes,
+			targetType: domain.AuditTargetServiceAccount, targetID: user.ID.String(), targetLabel: user.DisplayName,
+		})
+	})
 	if err != nil {
-		return domain.User{}, fmt.Errorf("create service account: %w", err)
+		return domain.User{}, err
 	}
 
 	return user, nil
@@ -84,7 +97,8 @@ func (s *BotService) CreateKey(
 		return domain.APIKey{}, "", domain.ErrSessionRequired
 	}
 
-	if _, err := s.account(ctx, account); err != nil {
+	owner, err := s.account(ctx, account)
+	if err != nil {
 		return domain.APIKey{}, "", err
 	}
 
@@ -98,8 +112,23 @@ func (s *BotService) CreateKey(
 		return domain.APIKey{}, "", err
 	}
 
-	if err := s.repos.APIKeys.Create(ctx, key); err != nil {
-		return domain.APIKey{}, "", fmt.Errorf("create api key: %w", err)
+	err = s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
+		if err := s.repos.APIKeys.Create(ctx, key); err != nil {
+			return fmt.Errorf("create api key: %w", err)
+		}
+
+		changes := domain.AuditChanges{}
+		changes.Initial("name", key.Name)
+		changes.Initial("prefix", key.Prefix)
+
+		if key.ExpiresAt != nil {
+			changes.Initial("expiresAt", key.ExpiresAt.UTC().Format(time.RFC3339))
+		}
+
+		return record(ctx, s.repos, s.opts, apiKeyEvent(actor, domain.AuditAPIKeyCreate, owner, key, changes))
+	})
+	if err != nil {
+		return domain.APIKey{}, "", err
 	}
 
 	return key, token, nil
@@ -131,13 +160,18 @@ func (s *BotService) RevokeKey(
 			return nil
 		}
 
+		owner, err := s.account(ctx, account)
+		if err != nil {
+			return err
+		}
+
 		key.Revoke(s.opts.now())
 
 		if err := s.repos.APIKeys.Update(ctx, key); err != nil {
 			return fmt.Errorf("revoke api key: %w", err)
 		}
 
-		return nil
+		return record(ctx, s.repos, s.opts, apiKeyEvent(actor, domain.AuditAPIKeyRevoke, owner, key, nil))
 	})
 	if err != nil {
 		return domain.APIKey{}, err
@@ -158,4 +192,11 @@ func (s *BotService) account(ctx context.Context, id domain.UserID) (domain.User
 	}
 
 	return user, nil
+}
+
+func apiKeyEvent(actor domain.User, action domain.AuditAction, owner domain.User, key domain.APIKey, changes domain.AuditChanges) auditEvent {
+	return auditEvent{
+		actor: &actor.ID, action: action, changes: changes,
+		targetType: domain.AuditTargetAPIKey, targetID: key.ID.String(), targetLabel: owner.DisplayName + ": " + key.Name,
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is the application configuration.
@@ -37,9 +38,18 @@ type Config struct {
 	OIDCClientSecret string
 	// CookieKey signs the login-state cookie (secret, >= 32 bytes).
 	CookieKey []byte
+	// OIDCAdminGroup names the identity provider group whose members are
+	// admins (may read the audit log). Empty means nobody is an admin.
+	OIDCAdminGroup string
+	// AuditRetention is how long audit entries are kept; 0 keeps them forever.
+	AuditRetention time.Duration
 	// Dev relaxes cookie security for http://localhost development.
 	Dev bool
 }
+
+// maxRetentionDays bounds the audit retention (100 years) so the duration
+// cannot overflow.
+const maxRetentionDays = 36500
 
 // minCookieKeyBytes matches the requirement of the HTTP adapter.
 const minCookieKeyBytes = 32
@@ -58,6 +68,10 @@ func Load(args []string) (Config, error) {
 	publicURL := fs.String("public-url", os.Getenv("ISSUETRAX_PUBLIC_URL"), "public origin users open (env ISSUETRAX_PUBLIC_URL)")
 	issuer := fs.String("oidc-issuer", os.Getenv("ISSUETRAX_OIDC_ISSUER"), "OIDC issuer URL (env ISSUETRAX_OIDC_ISSUER)")
 	clientID := fs.String("oidc-client-id", os.Getenv("ISSUETRAX_OIDC_CLIENT_ID"), "OIDC client ID (env ISSUETRAX_OIDC_CLIENT_ID)")
+	adminGroup := fs.String("oidc-admin-group", os.Getenv("ISSUETRAX_OIDC_ADMIN_GROUP"),
+		"identity provider group whose members are admins (env ISSUETRAX_OIDC_ADMIN_GROUP)")
+	retention := fs.String("audit-retention-days", envOrDefault("ISSUETRAX_AUDIT_RETENTION_DAYS", "0"),
+		"days to keep audit log entries, 0 keeps them forever (env ISSUETRAX_AUDIT_RETENTION_DAYS)")
 	dev := fs.String("dev", envOrDefault("ISSUETRAX_DEV", "false"), "development mode: cookies without Secure for http://localhost (env ISSUETRAX_DEV)")
 
 	if err := fs.Parse(args); err != nil {
@@ -65,10 +79,11 @@ func Load(args []string) (Config, error) {
 	}
 
 	cfg := Config{
-		Addr:         *addr,
-		PublicURL:    strings.TrimSuffix(*publicURL, "/"),
-		OIDCIssuer:   *issuer,
-		OIDCClientID: *clientID,
+		Addr:           *addr,
+		PublicURL:      strings.TrimSuffix(*publicURL, "/"),
+		OIDCIssuer:     *issuer,
+		OIDCClientID:   *clientID,
+		OIDCAdminGroup: strings.TrimSpace(*adminGroup),
 	}
 
 	var errs []error
@@ -81,6 +96,10 @@ func Load(args []string) (Config, error) {
 
 	if cfg.MigrateOnStart, err = strconv.ParseBool(*migrate); err != nil {
 		errs = append(errs, fmt.Errorf("invalid migrate-on-start %q: %w", *migrate, err))
+	}
+
+	if cfg.AuditRetention, err = parseRetentionDays(*retention); err != nil {
+		errs = append(errs, err)
 	}
 
 	if cfg.Dev, err = strconv.ParseBool(*dev); err != nil {
@@ -163,6 +182,16 @@ func (c Config) validatePublicURL() error {
 	}
 
 	return nil
+}
+
+// parseRetentionDays parses a whole number of days (0 keeps entries forever).
+func parseRetentionDays(raw string) (time.Duration, error) {
+	days, err := strconv.Atoi(raw)
+	if err != nil || days < 0 || days > maxRetentionDays {
+		return 0, fmt.Errorf("invalid audit-retention-days %q: want a whole number from 0 to %d", raw, maxRetentionDays)
+	}
+
+	return time.Duration(days) * 24 * time.Hour, nil
 }
 
 func envOrDefault(key, fallback string) string {

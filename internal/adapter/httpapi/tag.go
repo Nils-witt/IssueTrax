@@ -42,7 +42,7 @@ func (h *Handler) listTags(w http.ResponseWriter, r *http.Request, _ domain.User
 }
 
 // PATCH /api/projects/{key}/tags/{tagId}.
-func (h *Handler) updateTag(w http.ResponseWriter, r *http.Request, _ domain.User) {
+func (h *Handler) updateTag(w http.ResponseWriter, r *http.Request, user domain.User) {
 	id, err := uuid.Parse(r.PathValue("tagId"))
 	if err != nil {
 		h.writeDomainError(w, r, domain.ErrTagNotFound)
@@ -55,7 +55,7 @@ func (h *Handler) updateTag(w http.ResponseWriter, r *http.Request, _ domain.Use
 		return
 	}
 
-	tag, err := h.tags.Update(r.Context(), projectKey(r), domain.TagID(id), port.UpdateTagInput{Name: req.Name, Color: req.Color})
+	tag, err := h.tags.Update(r.Context(), user.ID, projectKey(r), domain.TagID(id), port.UpdateTagInput{Name: req.Name, Color: req.Color})
 	if err != nil {
 		h.writeDomainError(w, r, err)
 		return

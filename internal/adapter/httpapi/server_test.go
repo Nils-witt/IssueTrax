@@ -25,6 +25,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		Users:    service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
+		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),
 		Frontend:        fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Logger:          slog.New(slog.DiscardHandler),
 		PublicURL:       "https://trax.example",
@@ -41,6 +42,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		"no index.html":    func(c *httpapi.Config) { c.Frontend = fstest.MapFS{} },
 		"no auth service":  func(c *httpapi.Config) { c.Auth = nil },
 		"no accounts":      func(c *httpapi.Config) { c.ServiceAccounts = nil },
+		"no audit":         func(c *httpapi.Config) { c.Audit = nil },
 	}
 
 	for name, mutate := range tests {

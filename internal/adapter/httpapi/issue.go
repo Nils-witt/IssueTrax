@@ -175,7 +175,7 @@ func (h *Handler) getIssue(w http.ResponseWriter, r *http.Request, _ domain.User
 }
 
 // PATCH /api/projects/{key}/issues/{number}.
-func (h *Handler) updateIssue(w http.ResponseWriter, r *http.Request, _ domain.User) {
+func (h *Handler) updateIssue(w http.ResponseWriter, r *http.Request, user domain.User) {
 	number, ok := issueNumber(r)
 	if !ok {
 		h.writeDomainError(w, r, domain.ErrIssueNotFound)
@@ -204,7 +204,7 @@ func (h *Handler) updateIssue(w http.ResponseWriter, r *http.Request, _ domain.U
 		in.Assignees = &assignees
 	}
 
-	view, err := h.issues.Update(r.Context(), projectKey(r), number, in)
+	view, err := h.issues.Update(r.Context(), user.ID, projectKey(r), number, in)
 	if err != nil {
 		h.writeDomainError(w, r, err)
 		return

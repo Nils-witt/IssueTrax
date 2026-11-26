@@ -23,14 +23,16 @@ type Repositories struct {
 	Users    port.UserRepository
 	Sessions port.SessionRepository
 	APIKeys  port.APIKeyRepository
+	Audit    port.AuditRepository
 }
 
 // Option customizes a service.
 type Option func(*options)
 
 type options struct {
-	now   func() time.Time
-	newID func() uuid.UUID
+	now        func() time.Time
+	newID      func() uuid.UUID
+	adminGroup string
 }
 
 // WithClock overrides the time source (useful in tests).
@@ -41,6 +43,12 @@ func WithClock(now func() time.Time) Option {
 // WithIDGenerator overrides how new entity IDs are generated.
 func WithIDGenerator(newID func() uuid.UUID) Option {
 	return func(o *options) { o.newID = newID }
+}
+
+// WithAdminGroup makes members of the identity provider group name admins
+// (AuthService). Without it, nobody is an admin.
+func WithAdminGroup(name string) Option {
+	return func(o *options) { o.adminGroup = name }
 }
 
 func newOptions(opts []Option) options {
@@ -87,4 +95,44 @@ func unique[T comparable](s []T) []T {
 	}
 
 	return out
+}
+
+// auditEvent is what a use case knows about an audit entry; record adds
+// the ID, time and request details.
+type auditEvent struct {
+	actor       *domain.UserID
+	action      domain.AuditAction
+	targetType  string
+	targetID    string
+	targetLabel string
+	changes     domain.AuditChanges
+}
+
+// record appends an audit entry. Call it with the ctx of the use case's
+// transaction so the entry is written if and only if the change is.
+func record(ctx context.Context, repos Repositories, opts options, ev auditEvent) error {
+	info := port.RequestInfoFrom(ctx)
+
+	changes := ev.changes
+	if changes == nil {
+		changes = domain.AuditChanges{}
+	}
+
+	err := repos.Audit.Append(ctx, domain.AuditEntry{
+		ID:          domain.AuditEntryID(opts.newID()),
+		At:          opts.now(),
+		ActorID:     ev.actor,
+		Action:      ev.action,
+		TargetType:  ev.targetType,
+		TargetID:    ev.targetID,
+		TargetLabel: ev.targetLabel,
+		Changes:     changes,
+		IP:          info.IP,
+		UserAgent:   info.UserAgent,
+	})
+	if err != nil {
+		return fmt.Errorf("record audit entry %s: %w", ev.action, err)
+	}
+
+	return nil
 }

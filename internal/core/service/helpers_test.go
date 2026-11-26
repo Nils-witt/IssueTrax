@@ -15,6 +15,9 @@ import (
 
 var testNow = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
+// testActor acts in tests that do not care who made a change.
+var testActor = domain.UserID(uuid.MustParse("00000000-0000-0000-0000-0000000000ac"))
+
 // fixture wires all services to one fresh in-memory store.
 type fixture struct {
 	repos    service.Repositories
@@ -38,6 +41,7 @@ func newFixture(t *testing.T) *fixture {
 		Users:    memory.NewUserRepository(store),
 		Sessions: memory.NewSessionRepository(store),
 		APIKeys:  memory.NewAPIKeyRepository(store),
+		Audit:    memory.NewAuditRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 
@@ -45,7 +49,7 @@ func newFixture(t *testing.T) *fixture {
 		repos:    repos,
 		projects: service.NewProjectService(repos, clock),
 		issues:   service.NewIssueService(repos, clock),
-		tags:     service.NewTagService(repos),
+		tags:     service.NewTagService(repos, clock),
 		comments: service.NewCommentService(repos, clock),
 		users:    service.NewUserService(repos),
 	}
@@ -69,7 +73,7 @@ func (f *fixture) addUser(t *testing.T, name string) domain.User {
 func (f *fixture) addProject(t *testing.T, key, name string) domain.Project {
 	t.Helper()
 
-	p, err := f.projects.Create(t.Context(), port.CreateProjectInput{Key: key, Name: name})
+	p, err := f.projects.Create(t.Context(), testActor, port.CreateProjectInput{Key: key, Name: name})
 	if err != nil {
 		t.Fatalf("create project %s: %v", key, err)
 	}

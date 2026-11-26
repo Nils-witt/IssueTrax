@@ -26,7 +26,7 @@ func testUsersCreateGetAndUpdate(t *testing.T, newRepos NewRepositories) {
 	_, err = r.Users.GetByIdentity(t.Context(), "https://other-idp", ada.Subject)
 	wantErr(t, err, domain.ErrUserNotFound)
 
-	ada.Email, ada.DisplayName, ada.LastLoginAt = "new@example.com", "Ada L.", now.Add(time.Hour)
+	ada.Email, ada.DisplayName, ada.Admin, ada.LastLoginAt = "new@example.com", "Ada L.", true, now.Add(time.Hour)
 	must(t, r.Users.Update(t.Context(), ada))
 
 	got, err = r.Users.Get(t.Context(), ada.ID)

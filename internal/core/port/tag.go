@@ -16,7 +16,7 @@ type UpdateTagInput struct {
 // implicitly when assigned to an issue, so there is no Create.
 type TagService interface {
 	List(ctx context.Context, project domain.ProjectKey) ([]domain.Tag, error)
-	Update(ctx context.Context, project domain.ProjectKey, id domain.TagID, in UpdateTagInput) (domain.Tag, error)
+	Update(ctx context.Context, actor domain.UserID, project domain.ProjectKey, id domain.TagID, in UpdateTagInput) (domain.Tag, error)
 }
 
 // TagRepository is the driven port for persisting tags.

@@ -37,6 +37,7 @@ type data struct {
 	users      map[domain.UserID]domain.User
 	sessions   map[string]domain.Session
 	apiKeys    map[domain.APIKeyID]domain.APIKey
+	audit      []domain.AuditEntry
 }
 
 // NewStore returns an empty Store.
@@ -95,6 +96,7 @@ func (d data) clone() data {
 		users:      maps.Clone(d.users),
 		sessions:   maps.Clone(d.sessions),
 		apiKeys:    maps.Clone(d.apiKeys),
+		audit:      slices.Clone(d.audit),
 	}
 }
 
