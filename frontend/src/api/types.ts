@@ -42,6 +42,8 @@ export const auditActions = [
   'comment.delete',
   'attachment.create',
   'attachment.delete',
+  'storage.create',
+  'storage.update',
   'service_account.create',
   'api_key.create',
   'api_key.revoke',
@@ -164,6 +166,29 @@ export interface Attachment {
   size: number;
   uploader: User;
   createdAt: string;
+}
+
+/** A physical storage location; storages form a tree through parentId. */
+export interface Storage {
+  id: string;
+  /** Null for a root storage. */
+  parentId: string | null;
+  name: string;
+  /** Number of direct children. */
+  childCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStorageInput {
+  name: string;
+  parentId?: string | null;
+}
+
+export interface UpdateStorageInput {
+  name?: string;
+  /** Moves the storage; null makes it a root. */
+  parentId?: string | null;
 }
 
 export interface Page<T> {

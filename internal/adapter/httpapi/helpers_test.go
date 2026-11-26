@@ -68,6 +68,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Tags:        memory.NewTagRepository(store),
 		Comments:    memory.NewCommentRepository(store),
 		Attachments: memory.NewAttachmentRepository(store),
+		Storages:    memory.NewStorageRepository(store),
 		Users:       memory.NewUserRepository(store),
 		Sessions:    memory.NewSessionRepository(store),
 		APIKeys:     memory.NewAPIKeyRepository(store),
@@ -87,6 +88,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Tags:        service.NewTagService(repos, notify),
 		Comments:    service.NewCommentService(repos, notify),
 		Attachments: service.NewAttachmentService(repos, notify),
+		Storages:    service.NewStorageService(repos, notify),
 		Users:       service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),

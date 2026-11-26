@@ -28,7 +28,9 @@ type Config struct {
 	Comments port.CommentService
 	// Attachments stores and serves files attached to issues.
 	Attachments port.AttachmentService
-	Users       port.UserService
+	// Storages manages the physical storage location tree.
+	Storages port.StorageService
+	Users    port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
 	// Audit reads the audit log (admins only).
@@ -59,6 +61,7 @@ type Handler struct {
 	tags        port.TagService
 	comments    port.CommentService
 	attachments port.AttachmentService
+	storages    port.StorageService
 	users       port.UserService
 	accounts    port.ServiceAccountService
 	audit       port.AuditService
@@ -88,6 +91,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		tags:        cfg.Tags,
 		comments:    cfg.Comments,
 		attachments: cfg.Attachments,
+		storages:    cfg.Storages,
 		users:       cfg.Users,
 		accounts:    cfg.ServiceAccounts,
 		audit:       cfg.Audit,
@@ -156,6 +160,10 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/projects/{key}/issues/{number}/attachments", h.authed(h.uploadAttachment))
 	mux.Handle("GET /api/projects/{key}/issues/{number}/attachments/{attachmentId}", h.authed(h.downloadAttachment))
 	mux.Handle("DELETE /api/projects/{key}/issues/{number}/attachments/{attachmentId}", h.authed(h.deleteAttachment))
+	mux.Handle("GET /api/storages", h.authed(h.listStorages))
+	mux.Handle("POST /api/storages", h.authed(h.createStorage))
+	mux.Handle("GET /api/storages/{id}", h.authed(h.getStorage))
+	mux.Handle("PATCH /api/storages/{id}", h.authed(h.updateStorage))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", notFound)
@@ -167,7 +175,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 // missingDependency reports whether a required service or the logger is nil.
 func (c Config) missingDependency() bool {
 	return c.Auth == nil || c.Projects == nil || c.Issues == nil || c.Tags == nil || c.Comments == nil || c.Attachments == nil ||
-		c.Users == nil || c.ServiceAccounts == nil || c.Audit == nil || c.Changes == nil || c.Logger == nil
+		c.Storages == nil || c.Users == nil || c.ServiceAccounts == nil || c.Audit == nil || c.Changes == nil || c.Logger == nil
 }
 
 // crossOriginProtection rejects cross-origin state-changing requests

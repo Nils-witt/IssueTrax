@@ -51,6 +51,12 @@ type ProjectCursor struct {
 	ID   string `json:"i"`
 }
 
+// StorageCursor is the keyset position in a storage list (lower(name), id ascending).
+type StorageCursor struct {
+	Name string `json:"n"`
+	ID   string `json:"i"`
+}
+
 // AuditCursor is the keyset position in the audit log (at, id descending).
 type AuditCursor struct {
 	At time.Time `json:"t"`
@@ -58,7 +64,7 @@ type AuditCursor struct {
 }
 
 // EncodeCursor serializes a keyset position into an opaque cursor.
-func EncodeCursor[T IssueCursor | ProjectCursor | AuditCursor](c T) string {
+func EncodeCursor[T IssueCursor | ProjectCursor | StorageCursor | AuditCursor](c T) string {
 	b, err := json.Marshal(c)
 	if err != nil {
 		// All cursor types are plain structs of strings, ints and times.
@@ -70,7 +76,7 @@ func EncodeCursor[T IssueCursor | ProjectCursor | AuditCursor](c T) string {
 
 // DecodeCursor parses an opaque cursor; ok is false for an empty cursor.
 // Malformed cursors yield a validation error on field "cursor".
-func DecodeCursor[T IssueCursor | ProjectCursor | AuditCursor](s string) (c T, ok bool, err error) {
+func DecodeCursor[T IssueCursor | ProjectCursor | StorageCursor | AuditCursor](s string) (c T, ok bool, err error) {
 	if s == "" {
 		return c, false, nil
 	}

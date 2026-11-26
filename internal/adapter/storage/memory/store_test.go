@@ -23,6 +23,7 @@ func TestContract(t *testing.T) {
 			Tags:        memory.NewTagRepository(s),
 			Comments:    memory.NewCommentRepository(s),
 			Attachments: memory.NewAttachmentRepository(s),
+			Storages:    memory.NewStorageRepository(s),
 			Users:       memory.NewUserRepository(s),
 			Sessions:    memory.NewSessionRepository(s),
 			APIKeys:     memory.NewAPIKeyRepository(s),

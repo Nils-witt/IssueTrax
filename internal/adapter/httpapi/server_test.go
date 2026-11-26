@@ -24,6 +24,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		Tags:        service.NewTagService(service.Repositories{Tx: store}),
 		Comments:    service.NewCommentService(service.Repositories{Tx: store}),
 		Attachments: service.NewAttachmentService(service.Repositories{Tx: store}),
+		Storages:    service.NewStorageService(service.Repositories{Tx: store}),
 		Users:       service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
@@ -46,6 +47,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		"no auth service":  func(c *httpapi.Config) { c.Auth = nil },
 		"no accounts":      func(c *httpapi.Config) { c.ServiceAccounts = nil },
 		"no audit":         func(c *httpapi.Config) { c.Audit = nil },
+		"no storages":      func(c *httpapi.Config) { c.Storages = nil },
 		"no change feed":   func(c *httpapi.Config) { c.Changes = nil },
 	}
 

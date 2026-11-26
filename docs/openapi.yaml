@@ -53,6 +53,7 @@ tags:
   - name: tags
   - name: comments
   - name: attachments
+  - name: storages
   - name: users
   - name: service-accounts
   - name: audit
@@ -681,6 +682,100 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/IssueArchived" }
 
+  /api/storages:
+    get:
+      tags: [storages]
+      summary: List storages under one parent
+      description: |
+        The direct children of `parent`, or the root storages when `parent`
+        is absent, ordered by name (A→Z, ignoring case). Each item carries
+        its `childCount`, so trees can load lazily.
+      parameters:
+        - name: parent
+          in: query
+          description: Parent storage ID; omit for the roots.
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of storages.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoragePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [storages]
+      summary: Create a storage
+      description: An unknown `parentId` yields `422` with field code `invalid` on `parentId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateStorage" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Storage" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "409":
+          description: "`storage_name_taken`: a sibling already has the name."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/storages/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [storages]
+      summary: Get a storage
+      responses:
+        "200":
+          description: The storage.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Storage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [storages]
+      summary: Rename or move a storage
+      description: |
+        Partial update; absent fields stay unchanged. `parentId` moves the
+        storage (`null` makes it a root). Storages cannot be deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateStorage" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Storage" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`storage_name_taken` (a sibling has the name) or `storage_cycle` (the new parent lies in the storage's own subtree)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
   /api/service-accounts:
     get:
       tags: [service-accounts]
@@ -831,7 +926,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `storage_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -934,6 +1029,8 @@ components:
         - comment.delete
         - attachment.create
         - attachment.delete
+        - storage.create
+        - storage.update
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -948,10 +1045,11 @@ components:
         issue was created or updated, possibly creating tags (reload it, the
         project's issue list and tags). `comments`: an issue's comments
         changed. `attachments`: a file was attached to or removed from an
-        issue.
+        issue. `storages`: a storage was created, renamed or moved (reload
+        storages); `project` is empty because storages are global.
       properties:
-        type: { type: string, enum: [project, tags, issue, comments, attachments] }
-        project: { type: string, example: TRAX }
+        type: { type: string, enum: [project, tags, issue, comments, attachments, storages] }
+        project: { type: string, example: TRAX, description: Empty for `storages`. }
         issue:
           type: integer
           format: int64
@@ -961,7 +1059,7 @@ components:
 
     AuditTargetType:
       type: string
-      enum: [user, project, issue, tag, comment, attachment, service_account, api_key]
+      enum: [user, project, issue, tag, comment, attachment, storage, service_account, api_key]
 
     AuditChange:
       type: object
@@ -1211,5 +1309,39 @@ components:
       required: [items, total, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Issue" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    Storage:
+      type: object
+      required: [id, parentId, name, childCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        parentId: { type: [string, "null"], format: uuid, description: Null for a root storage. }
+        name: { type: string, maxLength: 100, example: Shelf A }
+        childCount: { type: integer, format: int64, description: Number of direct children. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateStorage:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, description: Unique among siblings ignoring case. }
+        parentId: { type: [string, "null"], format: uuid, description: Parent storage; absent or null for a root. }
+
+    UpdateStorage:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parentId: { type: [string, "null"], format: uuid, description: New parent; null moves the storage to the root. }
+
+    StoragePage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Storage" } }
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }

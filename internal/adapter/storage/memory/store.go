@@ -36,6 +36,7 @@ type data struct {
 	comments   map[domain.CommentID]domain.Comment
 	// attachments are never changed in place, so snapshots share content.
 	attachments map[domain.AttachmentID]storedAttachment
+	storages    map[domain.StorageID]domain.Storage
 	users       map[domain.UserID]domain.User
 	sessions    map[string]domain.Session
 	apiKeys     map[domain.APIKeyID]domain.APIKey
@@ -51,6 +52,7 @@ func NewStore() *Store {
 		tags:        map[domain.TagID]domain.Tag{},
 		comments:    map[domain.CommentID]domain.Comment{},
 		attachments: map[domain.AttachmentID]storedAttachment{},
+		storages:    map[domain.StorageID]domain.Storage{},
 		users:       map[domain.UserID]domain.User{},
 		sessions:    map[string]domain.Session{},
 		apiKeys:     map[domain.APIKeyID]domain.APIKey{},
@@ -97,6 +99,7 @@ func (d data) clone() data {
 		tags:        maps.Clone(d.tags),
 		comments:    maps.Clone(d.comments),
 		attachments: maps.Clone(d.attachments),
+		storages:    maps.Clone(d.storages),
 		users:       maps.Clone(d.users),
 		sessions:    maps.Clone(d.sessions),
 		apiKeys:     maps.Clone(d.apiKeys),

@@ -128,3 +128,19 @@ func toPageResponse[S, T any](p domain.Page[S], convert func(S) T) pageResponse[
 
 	return resp
 }
+
+// optional is a JSON field that tells an absent value apart from null:
+// Set is true whenever the field appears, and Value is nil for null. Use it
+// as a non-pointer struct field; json leaves it zero when the key is absent.
+type optional[T any] struct {
+	Set   bool
+	Value *T
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (o *optional[T]) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	o.Value = nil
+
+	return json.Unmarshal(b, &o.Value)
+}

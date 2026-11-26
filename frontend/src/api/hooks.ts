@@ -11,15 +11,18 @@ import type {
   CreatedApiKey,
   CreateIssueInput,
   CreateProjectInput,
+  CreateStorageInput,
   Issue,
   Me,
   Page,
   Project,
   ServiceAccount,
+  Storage,
   Tag,
   UpdateIssueInput,
   UpdateTagInput,
   UpdateProjectInput,
+  UpdateStorageInput,
   User,
   VersionInfo,
 } from './types';
@@ -40,6 +43,10 @@ export const keys = {
   serviceAccounts: ['serviceAccounts'] as const,
   apiKeys: (accountId: string) => ['apiKeys', accountId] as const,
   auditLog: (filter: AuditFilter) => ['auditLog', filter] as const,
+  /** Prefix of every storage query. */
+  storages: ['storages'] as const,
+  /** Children of parent; null lists the roots. */
+  storageChildren: (parent: string | null) => ['storages', 'children', parent ?? ''] as const,
 };
 
 export function useServiceAccounts() {
@@ -337,5 +344,37 @@ export function useAuditLog(filter: AuditFilter) {
     initialPageParam: '',
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     staleTime: 0,
+  });
+}
+
+/** One parent's direct children (the roots for null), paginated by name. */
+export function useStorageChildren(parent: string | null, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.storageChildren(parent),
+    queryFn: ({ pageParam }) =>
+      request<Page<Storage>>('GET', `/api/storages${query({ parent: parent ?? undefined, cursor: pageParam })}`),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+export function useCreateStorage() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateStorageInput) => request<Storage>('POST', '/api/storages', input),
+    // The parent's child count changes too, so reload every storage list.
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.storages }),
+  });
+}
+
+export function useUpdateStorage() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateStorageInput }) =>
+      request<Storage>('PATCH', `/api/storages/${encodeURIComponent(id)}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.storages }),
   });
 }

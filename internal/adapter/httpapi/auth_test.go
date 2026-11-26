@@ -164,6 +164,7 @@ func TestAuth_SecureCookies(t *testing.T) {
 		Tags:        service.NewTagService(service.Repositories{Tx: store}),
 		Comments:    service.NewCommentService(service.Repositories{Tx: store}),
 		Attachments: service.NewAttachmentService(service.Repositories{Tx: store}),
+		Storages:    service.NewStorageService(service.Repositories{Tx: store}),
 		Users:       service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),

@@ -28,6 +28,7 @@ type fixture struct {
 	tags        *service.TagService
 	comments    *service.CommentService
 	attachments *service.AttachmentService
+	storages    *service.StorageService
 	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
@@ -68,6 +69,7 @@ func newFixture(t *testing.T) *fixture {
 		Tags:        memory.NewTagRepository(store),
 		Comments:    memory.NewCommentRepository(store),
 		Attachments: memory.NewAttachmentRepository(store),
+		Storages:    memory.NewStorageRepository(store),
 		Users:       memory.NewUserRepository(store),
 		Sessions:    memory.NewSessionRepository(store),
 		APIKeys:     memory.NewAPIKeyRepository(store),
@@ -84,6 +86,7 @@ func newFixture(t *testing.T) *fixture {
 		tags:        service.NewTagService(repos, clock, notify),
 		comments:    service.NewCommentService(repos, clock, notify),
 		attachments: service.NewAttachmentService(repos, clock, notify),
+		storages:    service.NewStorageService(repos, clock, notify),
 		users:       service.NewUserService(repos),
 		changes:     changes,
 	}

@@ -143,6 +143,14 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+type Storage struct {
+	ID        uuid.UUID
+	ParentID  pgtype.UUID
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Tag struct {
 	ID        uuid.UUID
 	ProjectID uuid.UUID

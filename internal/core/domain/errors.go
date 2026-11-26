@@ -43,6 +43,10 @@ const (
 	CodeAttachmentNotFound    = "attachment_not_found"
 	CodeNotAttachmentUploader = "not_attachment_uploader"
 
+	CodeStorageNotFound  = "storage_not_found"
+	CodeStorageNameTaken = "storage_name_taken"
+	CodeStorageCycle     = "storage_cycle"
+
 	CodeServiceAccountNotFound  = "service_account_not_found"
 	CodeServiceAccountNameTaken = "service_account_name_taken"
 	CodeUserIdentityTaken       = "user_identity_taken"
@@ -107,6 +111,16 @@ var (
 
 	ErrAttachmentNotFound    = &Error{kind: ErrNotFound, Code: CodeAttachmentNotFound, Message: "attachment not found"}
 	ErrNotAttachmentUploader = &Error{kind: ErrForbidden, Code: CodeNotAttachmentUploader, Message: "only the uploader can delete an attachment"}
+
+	ErrStorageNotFound  = &Error{kind: ErrNotFound, Code: CodeStorageNotFound, Message: "storage not found"}
+	ErrStorageNameTaken = &Error{kind: ErrConflict, Code: CodeStorageNameTaken, Message: "a storage with this name already exists here"}
+	ErrStorageCycle     = &Error{kind: ErrConflict, Code: CodeStorageCycle, Message: "a storage cannot be moved into its own subtree"}
+	// ErrStorageParentNotFound is a validation error: the requested parent
+	// storage does not exist.
+	ErrStorageParentNotFound = &Error{
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed",
+		Fields: map[string]string{"parentId": FieldInvalid},
+	}
 
 	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}
 	ErrServiceAccountNameTaken = &Error{kind: ErrConflict, Code: CodeServiceAccountNameTaken, Message: "service account name is already taken"}

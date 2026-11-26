@@ -31,6 +31,9 @@ export function Layout() {
           <Typography component={Link} to="/" variant="h6" sx={{ fontWeight: 700, color: 'inherit', textDecoration: 'none', flexGrow: 1 }}>
             {t('app.name')}
           </Typography>
+          <Button component={Link} to="/storages" size="small" color="inherit">
+            {t('storages.nav')}
+          </Button>
           <Button component={Link} to="/service-accounts" size="small" color="inherit">
             {t('serviceAccounts.nav')}
           </Button>

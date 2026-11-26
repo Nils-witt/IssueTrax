@@ -16,6 +16,9 @@ const (
 	ChangeComments ChangeKind = "comments"
 	// ChangeAttachments: a file was attached to or removed from an issue.
 	ChangeAttachments ChangeKind = "attachments"
+	// ChangeStorages: a storage was created, renamed or moved. Storages are
+	// global, so Project is empty.
+	ChangeStorages ChangeKind = "storages"
 )
 
 // Change announces that data was committed. It carries only what changed,

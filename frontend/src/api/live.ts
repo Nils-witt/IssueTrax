@@ -8,7 +8,8 @@ import { keys } from './hooks';
 
 /** One committed change, as sent by the server (see ChangeEvent in docs/openapi.yaml). */
 interface ChangeEvent {
-  type: 'project' | 'tags' | 'issue' | 'comments' | 'attachments';
+  type: 'project' | 'tags' | 'issue' | 'comments' | 'attachments' | 'storages';
+  /** Empty for 'storages', which are global. */
   project: string;
   issue?: number;
 }
@@ -43,6 +44,9 @@ function applyChange(qc: QueryClient, ev: ChangeEvent): void {
       break;
     case 'attachments':
       if (ev.issue) invalidate(keys.attachments(key, ev.issue));
+      break;
+    case 'storages':
+      invalidate(keys.storages);
       break;
   }
 

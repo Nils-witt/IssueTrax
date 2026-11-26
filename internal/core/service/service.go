@@ -22,10 +22,12 @@ type Repositories struct {
 	Comments port.CommentRepository
 	// Attachments stores files attached to issues.
 	Attachments port.AttachmentRepository
-	Users       port.UserRepository
-	Sessions    port.SessionRepository
-	APIKeys     port.APIKeyRepository
-	Audit       port.AuditRepository
+	// Storages stores the physical storage location tree.
+	Storages port.StorageRepository
+	Users    port.UserRepository
+	Sessions port.SessionRepository
+	APIKeys  port.APIKeyRepository
+	Audit    port.AuditRepository
 }
 
 // Option customizes a service.
