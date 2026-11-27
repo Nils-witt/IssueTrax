@@ -160,6 +160,10 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 			ModuleID: id, Server: c.Server, Port: int32(c.Port), Transport: string(c.Transport), //nolint:gosec // domain bounds Port to 0..65535
 			Username: c.Username, Extension: c.Extension,
 		})
+	case m.Bluetooth != nil:
+		return q.UpsertBluetoothModule(ctx, sqlc.UpsertBluetoothModuleParams{
+			ModuleID: id, Name: m.Bluetooth.Name, Address: m.Bluetooth.Address, Version: m.Bluetooth.Version,
+		})
 	case m.NetworkInterface != nil:
 		return storeInterface(ctx, q, id, *m.NetworkInterface)
 	}
@@ -482,6 +486,13 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 			Server: c.Server, Port: int(c.Port), Transport: domain.SIPTransport(c.Transport), Username: c.Username,
 			Extension: c.Extension,
 		}}
+	}); err != nil {
+		return nil, err
+	}
+
+	bts, err := q.ListBluetoothModules(ctx, ids)
+	if err := collectPayloads(out, "bluetooth", bts, err, func(b sqlc.ModuleBluetooth) (uuid.UUID, domain.Module) {
+		return b.ModuleID, domain.Module{Bluetooth: &domain.Bluetooth{Name: b.Name, Address: b.Address, Version: b.Version}}
 	}); err != nil {
 		return nil, err
 	}

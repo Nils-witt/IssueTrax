@@ -29,13 +29,14 @@ const (
 	ModuleWWAN             ModuleKind = "wwan"
 	ModuleOperatingSystem  ModuleKind = "operating_system"
 	ModuleSIPClient        ModuleKind = "sip_client"
+	ModuleBluetooth        ModuleKind = "bluetooth"
 	ModuleNetworkInterface ModuleKind = "network_interface"
 )
 
 // ModuleKinds lists every module kind in display order.
 var ModuleKinds = []ModuleKind{
 	ModuleHardware, ModuleNetworkHost, ModulePurchase, ModuleSimCard, ModuleWWAN, ModuleOperatingSystem,
-	ModuleSIPClient, ModuleNetworkInterface,
+	ModuleSIPClient, ModuleBluetooth, ModuleNetworkInterface,
 }
 
 // Valid reports whether k is a known module kind.
@@ -64,6 +65,7 @@ type Module struct {
 	WWAN             *WWAN
 	OperatingSystem  *OperatingSystem
 	SIPClient        *SIPClient
+	Bluetooth        *Bluetooth
 	NetworkInterface *NetworkInterface
 }
 
@@ -77,6 +79,7 @@ func (m Module) Equal(o Module) bool {
 		equalPtr(m.WWAN, o.WWAN, WWAN.Equal) &&
 		equalPtr(m.OperatingSystem, o.OperatingSystem, func(a, b OperatingSystem) bool { return a == b }) &&
 		equalPtr(m.SIPClient, o.SIPClient, func(a, b SIPClient) bool { return a == b }) &&
+		equalPtr(m.Bluetooth, o.Bluetooth, func(a, b Bluetooth) bool { return a == b }) &&
 		equalPtr(m.NetworkInterface, o.NetworkInterface, NetworkInterface.Equal)
 }
 
@@ -99,6 +102,8 @@ func (m Module) String() string {
 		payload = m.OperatingSystem.String()
 	case m.SIPClient != nil:
 		payload = m.SIPClient.String()
+	case m.Bluetooth != nil:
+		payload = m.Bluetooth.String()
 	case m.NetworkInterface != nil:
 		payload = m.NetworkInterface.String()
 	}
@@ -135,6 +140,7 @@ type ModuleParams struct {
 	WWAN             *WWANParams
 	OperatingSystem  *OperatingSystemParams
 	SIPClient        *SIPClientParams
+	Bluetooth        *BluetoothParams
 	NetworkInterface *NetworkInterfaceParams
 }
 
@@ -243,6 +249,7 @@ func checkModule(f fieldErrors, field string, p ModuleParams) (Module, bool) {
 		ModuleWWAN:             p.WWAN != nil,
 		ModuleOperatingSystem:  p.OperatingSystem != nil,
 		ModuleSIPClient:        p.SIPClient != nil,
+		ModuleBluetooth:        p.Bluetooth != nil,
 		ModuleNetworkInterface: p.NetworkInterface != nil,
 	}
 
@@ -280,6 +287,8 @@ func checkPayload(f fieldErrors, at string, p ModuleParams, m *Module) {
 		m.OperatingSystem = new(checkOperatingSystem(f, at, *p.OperatingSystem))
 	case ModuleSIPClient:
 		m.SIPClient = new(checkSIPClient(f, at, *p.SIPClient))
+	case ModuleBluetooth:
+		m.Bluetooth = new(checkBluetooth(f, at, *p.Bluetooth))
 	case ModuleNetworkInterface:
 		m.NetworkInterface = new(checkInterface(f, at, *p.NetworkInterface))
 	}
@@ -302,6 +311,8 @@ func (k ModuleKind) payloadField() string {
 		return "operatingSystem"
 	case ModuleSIPClient:
 		return "sipClient"
+	case ModuleBluetooth:
+		return "bluetooth"
 	case ModuleNetworkInterface:
 		return "networkInterface"
 	}

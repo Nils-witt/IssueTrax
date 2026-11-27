@@ -263,7 +263,7 @@ export interface NetworkInterfaceInput {
 }
 
 /** Module kinds in display order; all but network interfaces occur at most once per item. */
-export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'wwan', 'operating_system', 'sip_client', 'network_interface'] as const;
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'wwan', 'operating_system', 'sip_client', 'bluetooth', 'network_interface'] as const;
 export type ModuleKind = (typeof moduleKinds)[number];
 
 /** Only network interfaces may occur several times (and be primary). */
@@ -424,6 +424,13 @@ export interface SIPClient {
   extension: string;
 }
 
+/** A Bluetooth radio; every field may be empty. The address comes back lower case and colon-separated. */
+export interface Bluetooth {
+  name: string;
+  address: string;
+  version: string;
+}
+
 /** One module instance; exactly the payload matching kind is set. */
 export interface Module {
   id: string;
@@ -436,6 +443,7 @@ export interface Module {
   wwan?: WWAN;
   operatingSystem?: OperatingSystem;
   sipClient?: SIPClient;
+  bluetooth?: Bluetooth;
   networkInterface?: NetworkInterface;
 }
 
@@ -451,6 +459,7 @@ export interface ModuleInput {
   wwan?: Omit<WWAN, 'simCardItem'>;
   operatingSystem?: OperatingSystem;
   sipClient?: SIPClient;
+  bluetooth?: Bluetooth;
   networkInterface?: NetworkInterfaceInput;
 }
 

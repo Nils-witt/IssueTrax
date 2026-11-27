@@ -92,6 +92,14 @@ type sipClientJSON struct {
 	Extension string `json:"extension"`
 }
 
+// bluetoothJSON is a Bluetooth radio; address comes back lower case and
+// colon-separated.
+type bluetoothJSON struct {
+	Name    string `json:"name"`
+	Address string `json:"address"`
+	Version string `json:"version"`
+}
+
 // moduleJSON is one module instance. Exactly the payload matching kind is
 // set. On requests, id names an instance to keep; leave it out for a new one.
 type moduleJSON struct {
@@ -105,6 +113,7 @@ type moduleJSON struct {
 	WWAN             *wwanJSON             `json:"wwan,omitempty"`
 	OperatingSystem  *operatingSystemJSON  `json:"operatingSystem,omitempty"`
 	SIPClient        *sipClientJSON        `json:"sipClient,omitempty"`
+	Bluetooth        *bluetoothJSON        `json:"bluetooth,omitempty"`
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
 
@@ -139,6 +148,8 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 		resp.SIPClient = &sipClientJSON{
 			Server: c.Server, Port: c.Port, Transport: string(c.Transport), Username: c.Username, Extension: c.Extension,
 		}
+	case m.Bluetooth != nil:
+		resp.Bluetooth = &bluetoothJSON{Name: m.Bluetooth.Name, Address: m.Bluetooth.Address, Version: m.Bluetooth.Version}
 	case m.NetworkInterface != nil:
 		resp.NetworkInterface = new(toNetworkInterfaceJSON(*m.NetworkInterface))
 	}
@@ -282,6 +293,10 @@ func (m moduleJSON) setPlainParams(p *domain.ModuleParams) {
 			Server: c.Server, Port: c.Port, Transport: domain.SIPTransport(c.Transport), Username: c.Username,
 			Extension: c.Extension,
 		}
+	}
+
+	if b := m.Bluetooth; b != nil {
+		p.Bluetooth = &domain.BluetoothParams{Name: b.Name, Address: b.Address, Version: b.Version}
 	}
 
 	if n := m.NetworkInterface; n != nil {

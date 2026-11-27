@@ -170,6 +170,13 @@ type Manufacturer struct {
 	DeletedAt *time.Time
 }
 
+type ModuleBluetooth struct {
+	ModuleID uuid.UUID
+	Name     string
+	Address  string
+	Version  string
+}
+
 type ModuleHardware struct {
 	ModuleID       uuid.UUID
 	SerialNumber   string

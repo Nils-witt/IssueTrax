@@ -419,6 +419,18 @@ function moduleFields(t: T, m: Module): ReactNode {
     );
   }
 
+  if (m.bluetooth) {
+    const b = m.bluetooth;
+
+    return (
+      <>
+        <Field label={t('modules.bluetoothName')}>{b.name}</Field>
+        <Field label={t('modules.bluetoothAddress')}>{b.address && <code>{b.address}</code>}</Field>
+        <Field label={t('modules.bluetoothVersion')}>{b.version}</Field>
+      </>
+    );
+  }
+
   if (m.networkInterface) {
     const n = m.networkInterface;
 

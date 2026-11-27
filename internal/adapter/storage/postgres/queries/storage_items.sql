@@ -28,7 +28,7 @@ SELECT EXISTS (SELECT 1 FROM storage_items WHERE lower(asset_tag) = lower(@asset
 -- @storage_id searches all storages; @recursive adds its subtree. A NULL
 -- @type_id keeps every type; @include_subtypes adds its descendants.
 -- @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search;
--- @mac matches interface MACs exactly.
+-- @mac matches interface MACs and Bluetooth addresses exactly.
 WITH RECURSIVE subtree (id) AS (
     SELECT sqlc.narg('storage_id')::uuid WHERE sqlc.narg('storage_id')::uuid IS NOT NULL
     UNION
@@ -65,6 +65,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
                   WHERE m.item_id = i.id AND (sip.server ILIKE @pattern::text OR sip.username ILIKE @pattern::text
                                               OR sip.extension ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_bluetooth bt ON bt.module_id = m.id
+                  WHERE m.item_id = i.id AND (bt.name ILIKE @pattern::text OR bt.address ILIKE @pattern::text
+                                              OR bt.address = sqlc.narg('mac')::macaddr::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)))
   AND (NOT @has_cursor::boolean OR (lower(i.name), i.id) > (@cursor_name::text, @cursor_id::uuid))
@@ -109,6 +112,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
                   WHERE m.item_id = i.id AND (sip.server ILIKE @pattern::text OR sip.username ILIKE @pattern::text
                                               OR sip.extension ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_bluetooth bt ON bt.module_id = m.id
+                  WHERE m.item_id = i.id AND (bt.name ILIKE @pattern::text OR bt.address ILIKE @pattern::text
+                                              OR bt.address = sqlc.narg('mac')::macaddr::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)));
 
@@ -193,6 +199,15 @@ SET server = EXCLUDED.server, port = EXCLUDED.port, transport = EXCLUDED.transpo
 
 -- name: ListSipClientModules :many
 SELECT * FROM module_sip_clients WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertBluetoothModule :exec
+INSERT INTO module_bluetooth (module_id, name, address, version)
+VALUES (@module_id, @name, @address, @version)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, address = EXCLUDED.address, version = EXCLUDED.version;
+
+-- name: ListBluetoothModules :many
+SELECT * FROM module_bluetooth WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (

@@ -14,6 +14,7 @@ import {
   type NetworkInterfaceType,
   type NetworkRole,
   type OperatingSystem,
+  type Bluetooth,
   type SIPClient,
   type SimCard,
   type WWAN,
@@ -75,6 +76,7 @@ export interface ModuleForm {
   wwan: WWAN;
   operatingSystem: OperatingSystem;
   sipClient: SIPClientForm;
+  bluetooth: Bluetooth;
   networkInterface: InterfaceForm;
 }
 
@@ -135,6 +137,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
     wwan: stored?.wwan ?? { imei: '', apn: '', technology: '', simCardItemId: null, simCardItem: null },
     operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
     sipClient: sipClientForm(stored?.sipClient),
+    bluetooth: stored?.bluetooth ?? { name: '', address: '', version: '' },
     networkInterface: interfaceForm(stored?.networkInterface),
   };
 }
@@ -215,6 +218,8 @@ export function moduleInput(f: ModuleForm): ModuleInput {
       return { ...base, operatingSystem: f.operatingSystem };
     case 'sip_client':
       return { ...base, sipClient: { ...f.sipClient, port: f.sipClient.port.trim() ? Number(f.sipClient.port) : 0 } };
+    case 'bluetooth':
+      return { ...base, bluetooth: f.bluetooth };
     case 'network_interface':
       return { ...base, networkInterface: interfaceInput(f.networkInterface) };
   }

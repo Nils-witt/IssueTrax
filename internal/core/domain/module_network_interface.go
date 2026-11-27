@@ -226,19 +226,12 @@ func checkTaggedVLANs(f fieldErrors, field string, vlans []int, native int) []in
 // checkMAC parses s as an EUI-48 MAC address in any notation net.ParseMAC
 // knows and returns it lower case and colon-separated.
 func checkMAC(f fieldErrors, field, s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
+	if strings.TrimSpace(s) == "" {
 		f.add(field, FieldRequired)
 		return ""
 	}
 
-	mac, err := net.ParseMAC(s)
-	if err != nil || len(mac) != 6 {
-		f.add(field, FieldInvalid)
-		return s
-	}
-
-	return mac.String()
+	return checkOptionalMAC(f, field, s)
 }
 
 func checkIPConfig(f fieldErrors, field string, p IPConfigParams, v6 bool) IPConfig {

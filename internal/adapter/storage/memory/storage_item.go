@@ -173,6 +173,10 @@ func matchesFields(item domain.StorageItem, filter port.StorageItemFilter) bool 
 // matchesQuery reports whether a searchable field of item contains query
 // (lower case), or one of its MACs is mac. Callers hold s.mu.
 func (s *Store) matchesQuery(item domain.StorageItem, query, mac string, isMAC bool) bool {
+	if isMAC && hasMAC(item, mac) {
+		return true
+	}
+
 	fields := []string{item.Name, item.Description, item.AssetTag}
 
 	for _, m := range item.Modules {
@@ -190,16 +194,22 @@ func (s *Store) matchesQuery(item domain.StorageItem, query, mac string, isMAC b
 			fields = append(fields, m.OperatingSystem.Name, m.OperatingSystem.Version)
 		case m.SIPClient != nil:
 			fields = append(fields, m.SIPClient.Server, m.SIPClient.Username, m.SIPClient.Extension)
+		case m.Bluetooth != nil:
+			fields = append(fields, m.Bluetooth.Name, m.Bluetooth.Address)
 		case m.NetworkInterface != nil:
-			if isMAC && m.NetworkInterface.MAC == mac {
-				return true
-			}
-
 			fields = append(fields, m.NetworkInterface.MAC)
 		}
 	}
 
 	return slices.ContainsFunc(fields, func(f string) bool { return strings.Contains(strings.ToLower(f), query) })
+}
+
+// hasMAC reports whether an interface MAC or the Bluetooth address of item
+// is mac.
+func hasMAC(item domain.StorageItem, mac string) bool {
+	return slices.ContainsFunc(item.Modules, func(m domain.Module) bool {
+		return (m.NetworkInterface != nil && m.NetworkInterface.MAC == mac) || (m.Bluetooth != nil && m.Bluetooth.Address == mac)
+	})
 }
 
 // subtree returns root and all storages below it. Callers hold s.mu.
@@ -293,6 +303,7 @@ func cloneModule(m domain.Module) domain.Module {
 
 	m.OperatingSystem = clonePtr(m.OperatingSystem)
 	m.SIPClient = clonePtr(m.SIPClient)
+	m.Bluetooth = clonePtr(m.Bluetooth)
 
 	if m.Purchase != nil {
 		p := *m.Purchase

@@ -33,6 +33,7 @@ const payloadField: Record<ModuleKind, string> = {
   wwan: 'wwan',
   operating_system: 'operatingSystem',
   sip_client: 'sipClient',
+  bluetooth: 'bluetooth',
   network_interface: 'networkInterface',
 };
 
@@ -85,6 +86,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCa
         {value.kind === 'wwan' && <WWANEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'operating_system' && <OperatingSystemEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'sip_client' && <SIPClientEditor value={value} onChange={onChange} path={path} error={error} />}
+        {value.kind === 'bluetooth' && <BluetoothEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_interface' && (
           <InterfaceEditor
             value={value.networkInterface}
@@ -463,6 +465,47 @@ function SIPClientEditor({ value, onChange, path, error }: PayloadEditorProps) {
           error={error}
           maxLength={32}
           placeholder="1042"
+        />
+      </Grid>
+    </Grid>
+  );
+}
+
+function BluetoothEditor({ value, onChange, path, error }: PayloadEditorProps) {
+  const { t } = useTranslation();
+  const set = (key: keyof ModuleForm['bluetooth']) => (v: string) => onChange({ ...value, bluetooth: { ...value.bluetooth, [key]: v } });
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 5 }}>
+        <PayloadText
+          label={t('modules.bluetoothName')}
+          value={value.bluetooth.name}
+          onChange={set('name')}
+          field={`${path}.name`}
+          error={error}
+        />
+      </Grid>
+      <Grid size={{ xs: 8, sm: 5 }}>
+        <PayloadText
+          label={t('modules.bluetoothAddress')}
+          value={value.bluetooth.address}
+          onChange={set('address')}
+          field={`${path}.address`}
+          error={error}
+          maxLength={17}
+          placeholder="aa:bb:cc:00:11:22"
+        />
+      </Grid>
+      <Grid size={{ xs: 4, sm: 2 }}>
+        <PayloadText
+          label={t('modules.bluetoothVersion')}
+          value={value.bluetooth.version}
+          onChange={set('version')}
+          field={`${path}.version`}
+          error={error}
+          maxLength={4}
+          placeholder="5.3"
         />
       </Grid>
     </Grid>

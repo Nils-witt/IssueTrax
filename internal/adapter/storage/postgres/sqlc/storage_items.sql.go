@@ -61,6 +61,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
                   WHERE m.item_id = i.id AND (sip.server ILIKE $7::text OR sip.username ILIKE $7::text
                                               OR sip.extension ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_bluetooth bt ON bt.module_id = m.id
+                  WHERE m.item_id = i.id AND (bt.name ILIKE $7::text OR bt.address ILIKE $7::text
+                                              OR bt.address = $8::macaddr::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
 `
@@ -191,6 +194,35 @@ func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBluetoothModules = `-- name: ListBluetoothModules :many
+SELECT module_id, name, address, version FROM module_bluetooth WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListBluetoothModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleBluetooth, error) {
+	rows, err := q.db.Query(ctx, listBluetoothModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleBluetooth{}
+	for rows.Next() {
+		var i ModuleBluetooth
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Name,
+			&i.Address,
+			&i.Version,
 		); err != nil {
 			return nil, err
 		}
@@ -477,6 +509,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
                   WHERE m.item_id = i.id AND (sip.server ILIKE $7::text OR sip.username ILIKE $7::text
                                               OR sip.extension ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_bluetooth bt ON bt.module_id = m.id
+                  WHERE m.item_id = i.id AND (bt.name ILIKE $7::text OR bt.address ILIKE $7::text
+                                              OR bt.address = $8::macaddr::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
   AND (NOT $9::boolean OR (lower(i.name), i.id) > ($10::text, $11::uuid))
@@ -505,7 +540,7 @@ type ListStorageItemsParams struct {
 // @storage_id searches all storages; @recursive adds its subtree. A NULL
 // @type_id keeps every type; @include_subtypes adds its descendants.
 // @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search;
-// @mac matches interface MACs exactly.
+// @mac matches interface MACs and Bluetooth addresses exactly.
 func (q *Queries) ListStorageItems(ctx context.Context, arg ListStorageItemsParams) ([]StorageItem, error) {
 	rows, err := q.db.Query(ctx, listStorageItems,
 		arg.StorageID,
@@ -644,6 +679,30 @@ func (q *Queries) UpdateStorageItem(ctx context.Context, arg UpdateStorageItemPa
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertBluetoothModule = `-- name: UpsertBluetoothModule :exec
+INSERT INTO module_bluetooth (module_id, name, address, version)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, address = EXCLUDED.address, version = EXCLUDED.version
+`
+
+type UpsertBluetoothModuleParams struct {
+	ModuleID uuid.UUID
+	Name     string
+	Address  string
+	Version  string
+}
+
+func (q *Queries) UpsertBluetoothModule(ctx context.Context, arg UpsertBluetoothModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertBluetoothModule,
+		arg.ModuleID,
+		arg.Name,
+		arg.Address,
+		arg.Version,
+	)
+	return err
 }
 
 const upsertHardwareModule = `-- name: UpsertHardwareModule :exec
