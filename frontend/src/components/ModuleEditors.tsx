@@ -29,6 +29,7 @@ const payloadField: Record<ModuleKind, string> = {
   network_host: 'networkHost',
   purchase: 'purchase',
   sim_card: 'simCard',
+  operating_system: 'operatingSystem',
   network_interface: 'networkInterface',
 };
 
@@ -78,6 +79,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCa
         {value.kind === 'network_host' && <NetworkHostEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'purchase' && <PurchaseEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'sim_card' && <SimCardEditor value={value} onChange={onChange} path={path} error={error} />}
+        {value.kind === 'operating_system' && <OperatingSystemEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_interface' && (
           <InterfaceEditor
             value={value.networkInterface}
@@ -280,6 +282,37 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
           error={error}
           maxLength={40}
           placeholder="8949 0200 0012 3456 7890"
+        />
+      </Grid>
+    </Grid>
+  );
+}
+
+function OperatingSystemEditor({ value, onChange, path, error }: PayloadEditorProps) {
+  const { t } = useTranslation();
+  const set = (key: keyof ModuleForm['operatingSystem']) => (v: string) =>
+    onChange({ ...value, operatingSystem: { ...value.operatingSystem, [key]: v } });
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 8 }}>
+        <PayloadText
+          label={t('modules.osName')}
+          value={value.operatingSystem.name}
+          onChange={set('name')}
+          field={`${path}.name`}
+          error={error}
+          placeholder="Debian"
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 4 }}>
+        <PayloadText
+          label={t('modules.osVersion')}
+          value={value.operatingSystem.version}
+          onChange={set('version')}
+          field={`${path}.version`}
+          error={error}
+          placeholder="12"
         />
       </Grid>
     </Grid>

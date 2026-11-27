@@ -184,6 +184,8 @@ func (s *Store) matchesQuery(item domain.StorageItem, query, mac string, isMAC b
 			fields = append(fields, m.NetworkHost.Hostname)
 		case m.SimCard != nil:
 			fields = append(fields, m.SimCard.Provider, m.SimCard.PhoneNumber, m.SimCard.ICCID)
+		case m.OperatingSystem != nil:
+			fields = append(fields, m.OperatingSystem.Name, m.OperatingSystem.Version)
 		case m.NetworkInterface != nil:
 			if isMAC && m.NetworkInterface.MAC == mac {
 				return true
@@ -280,6 +282,7 @@ func cloneModule(m domain.Module) domain.Module {
 
 	m.NetworkHost = clonePtr(m.NetworkHost)
 	m.SimCard = clonePtr(m.SimCard)
+	m.OperatingSystem = clonePtr(m.OperatingSystem)
 
 	if m.Purchase != nil {
 		p := *m.Purchase

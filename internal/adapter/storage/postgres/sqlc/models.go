@@ -201,6 +201,12 @@ type ModuleNetworkInterface struct {
 	Ipv6Dns     []netip.Addr
 }
 
+type ModuleOperatingSystem struct {
+	ModuleID uuid.UUID
+	Name     string
+	Version  string
+}
+
 type ModulePurchase struct {
 	ModuleID      uuid.UUID
 	Supplier      string

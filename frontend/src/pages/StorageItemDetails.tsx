@@ -370,6 +370,17 @@ function moduleFields(t: T, m: Module): ReactNode {
     );
   }
 
+  if (m.operatingSystem) {
+    const o = m.operatingSystem;
+
+    return (
+      <>
+        <Field label={t('modules.osName')}>{o.name}</Field>
+        <Field label={t('modules.osVersion')}>{o.version}</Field>
+      </>
+    );
+  }
+
   if (m.networkInterface) {
     const n = m.networkInterface;
 

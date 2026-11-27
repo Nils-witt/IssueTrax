@@ -54,6 +54,8 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
                                               OR sc.iccid ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
+                  WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
 `
@@ -288,6 +290,30 @@ func (q *Queries) ListNetworkInterfaceModules(ctx context.Context, moduleIds []u
 	return items, nil
 }
 
+const listOperatingSystemModules = `-- name: ListOperatingSystemModules :many
+SELECT module_id, name, version FROM module_operating_systems WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListOperatingSystemModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleOperatingSystem, error) {
+	rows, err := q.db.Query(ctx, listOperatingSystemModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleOperatingSystem{}
+	for rows.Next() {
+		var i ModuleOperatingSystem
+		if err := rows.Scan(&i.ModuleID, &i.Name, &i.Version); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPurchaseModules = `-- name: ListPurchaseModules :many
 SELECT module_id, supplier, invoice_number, price_cents, currency, warranty_end FROM module_purchases WHERE module_id = ANY ($1::uuid[])
 `
@@ -407,6 +433,8 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
                                               OR sc.iccid ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
+                  WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
   AND (NOT $9::boolean OR (lower(i.name), i.id) > ($10::text, $11::uuid))
@@ -640,6 +668,24 @@ func (q *Queries) UpsertNetworkInterfaceModule(ctx context.Context, arg UpsertNe
 		arg.Ipv6Gateway,
 		arg.Ipv6Dns,
 	)
+	return err
+}
+
+const upsertOperatingSystemModule = `-- name: UpsertOperatingSystemModule :exec
+INSERT INTO module_operating_systems (module_id, name, version)
+VALUES ($1, $2, $3)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, version = EXCLUDED.version
+`
+
+type UpsertOperatingSystemModuleParams struct {
+	ModuleID uuid.UUID
+	Name     string
+	Version  string
+}
+
+func (q *Queries) UpsertOperatingSystemModule(ctx context.Context, arg UpsertOperatingSystemModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertOperatingSystemModule, arg.ModuleID, arg.Name, arg.Version)
 	return err
 }
 

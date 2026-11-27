@@ -13,6 +13,7 @@ import {
   type NetworkInterfaceInput,
   type NetworkInterfaceType,
   type NetworkRole,
+  type OperatingSystem,
   type SimCard,
 } from '../api/types';
 
@@ -64,6 +65,7 @@ export interface ModuleForm {
   networkHost: { role: NetworkRole; hostname: string };
   purchase: PurchaseForm;
   simCard: SimCard;
+  operatingSystem: OperatingSystem;
   networkInterface: InterfaceForm;
 }
 
@@ -121,6 +123,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
       warrantyEnd: p?.warrantyEnd ? p.warrantyEnd.slice(0, 10) : '',
     },
     simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '' },
+    operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
     networkInterface: interfaceForm(stored?.networkInterface),
   };
 }
@@ -189,6 +192,8 @@ export function moduleInput(f: ModuleForm): ModuleInput {
       };
     case 'sim_card':
       return { ...base, simCard: f.simCard };
+    case 'operating_system':
+      return { ...base, operatingSystem: f.operatingSystem };
     case 'network_interface':
       return { ...base, networkInterface: interfaceInput(f.networkInterface) };
   }

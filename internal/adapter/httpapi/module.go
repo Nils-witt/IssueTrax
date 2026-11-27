@@ -64,6 +64,12 @@ type simCardJSON struct {
 	ICCID       string `json:"iccid"`
 }
 
+// operatingSystemJSON is the operating system installed on a device.
+type operatingSystemJSON struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 // moduleJSON is one module instance. Exactly the payload matching kind is
 // set. On requests, id names an instance to keep; leave it out for a new one.
 type moduleJSON struct {
@@ -74,6 +80,7 @@ type moduleJSON struct {
 	NetworkHost      *networkHostJSON      `json:"networkHost,omitempty"`
 	Purchase         *purchaseJSON         `json:"purchase,omitempty"`
 	SimCard          *simCardJSON          `json:"simCard,omitempty"`
+	OperatingSystem  *operatingSystemJSON  `json:"operatingSystem,omitempty"`
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
 
@@ -99,6 +106,8 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 	case m.SimCard != nil:
 		c := m.SimCard
 		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+	case m.OperatingSystem != nil:
+		resp.OperatingSystem = &operatingSystemJSON{Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version}
 	case m.NetworkInterface != nil:
 		resp.NetworkInterface = new(toNetworkInterfaceJSON(*m.NetworkInterface))
 	}
@@ -211,6 +220,10 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 
 		if c := m.SimCard; c != nil {
 			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+		}
+
+		if o := m.OperatingSystem; o != nil {
+			p.OperatingSystem = &domain.OperatingSystemParams{Name: o.Name, Version: o.Version}
 		}
 
 		if n := m.NetworkInterface; n != nil {

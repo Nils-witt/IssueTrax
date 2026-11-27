@@ -58,6 +58,8 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
                                               OR sc.iccid ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
+                  WHERE m.item_id = i.id AND (os.name ILIKE @pattern::text OR os.version ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)))
   AND (NOT @has_cursor::boolean OR (lower(i.name), i.id) > (@cursor_name::text, @cursor_id::uuid))
@@ -95,6 +97,8 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
                                               OR sc.iccid ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
+                  WHERE m.item_id = i.id AND (os.name ILIKE @pattern::text OR os.version ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)));
 
@@ -149,6 +153,15 @@ SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = 
 
 -- name: ListSimCardModules :many
 SELECT * FROM module_sim_cards WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertOperatingSystemModule :exec
+INSERT INTO module_operating_systems (module_id, name, version)
+VALUES (@module_id, @name, @version)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, version = EXCLUDED.version;
+
+-- name: ListOperatingSystemModules :many
+SELECT * FROM module_operating_systems WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (

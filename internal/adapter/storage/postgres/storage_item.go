@@ -143,6 +143,10 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 		return q.UpsertSimCardModule(ctx, sqlc.UpsertSimCardModuleParams{
 			ModuleID: id, Provider: m.SimCard.Provider, PhoneNumber: m.SimCard.PhoneNumber, Iccid: m.SimCard.ICCID,
 		})
+	case m.OperatingSystem != nil:
+		return q.UpsertOperatingSystemModule(ctx, sqlc.UpsertOperatingSystemModuleParams{
+			ModuleID: id, Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version,
+		})
 	case m.NetworkInterface != nil:
 		return storeInterface(ctx, q, id, *m.NetworkInterface)
 	}
@@ -401,33 +405,25 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 	out := make(map[uuid.UUID]domain.Module, len(ids))
 
 	hardware, err := q.ListHardwareModules(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("select hardware modules: %w", err)
-	}
-
-	for _, h := range hardware {
-		out[h.ModuleID] = domain.Module{Hardware: &domain.Hardware{
+	if err := collectPayloads(out, "hardware", hardware, err, func(h sqlc.ModuleHardware) (uuid.UUID, domain.Module) {
+		return h.ModuleID, domain.Module{Hardware: &domain.Hardware{
 			ManufacturerID: fromPgUUID[domain.ManufacturerID](h.ManufacturerID),
 			ModelID:        fromPgUUID[domain.HardwareModelID](h.ModelID),
 			SerialNumber:   h.SerialNumber,
 		}}
+	}); err != nil {
+		return nil, err
 	}
 
 	hosts, err := q.ListNetworkHostModules(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("select network host modules: %w", err)
-	}
-
-	for _, h := range hosts {
-		out[h.ModuleID] = domain.Module{NetworkHost: &domain.NetworkHost{Role: domain.NetworkRole(h.Role), Hostname: h.Hostname}}
+	if err := collectPayloads(out, "network host", hosts, err, func(h sqlc.ModuleNetworkHost) (uuid.UUID, domain.Module) {
+		return h.ModuleID, domain.Module{NetworkHost: &domain.NetworkHost{Role: domain.NetworkRole(h.Role), Hostname: h.Hostname}}
+	}); err != nil {
+		return nil, err
 	}
 
 	purchases, err := q.ListPurchaseModules(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("select purchase modules: %w", err)
-	}
-
-	for _, p := range purchases {
+	if err := collectPayloads(out, "purchase", purchases, err, func(p sqlc.ModulePurchase) (uuid.UUID, domain.Module) {
 		purchase := domain.Purchase{
 			Supplier: p.Supplier, InvoiceNumber: p.InvoiceNumber, Currency: p.Currency, WarrantyEnd: utcPtr(p.WarrantyEnd),
 		}
@@ -436,30 +432,52 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 			purchase.PriceCents = &p.PriceCents.Int64
 		}
 
-		out[p.ModuleID] = domain.Module{Purchase: &purchase}
+		return p.ModuleID, domain.Module{Purchase: &purchase}
+	}); err != nil {
+		return nil, err
 	}
 
 	sims, err := q.ListSimCardModules(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("select sim card modules: %w", err)
-	}
-
-	for _, c := range sims {
-		out[c.ModuleID] = domain.Module{SimCard: &domain.SimCard{
+	if err := collectPayloads(out, "sim card", sims, err, func(c sqlc.ModuleSimCard) (uuid.UUID, domain.Module) {
+		return c.ModuleID, domain.Module{SimCard: &domain.SimCard{
 			Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.Iccid,
 		}}
+	}); err != nil {
+		return nil, err
+	}
+
+	systems, err := q.ListOperatingSystemModules(ctx, ids)
+	if err := collectPayloads(out, "operating system", systems, err, func(o sqlc.ModuleOperatingSystem) (uuid.UUID, domain.Module) {
+		return o.ModuleID, domain.Module{OperatingSystem: &domain.OperatingSystem{Name: o.Name, Version: o.Version}}
+	}); err != nil {
+		return nil, err
 	}
 
 	ifaces, err := q.ListNetworkInterfaceModules(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("select network interface modules: %w", err)
-	}
-
-	for _, n := range ifaces {
-		out[n.ModuleID] = domain.Module{NetworkInterface: new(toNetworkInterface(n))}
+	if err := collectPayloads(out, "network interface", ifaces, err, func(n sqlc.ModuleNetworkInterface) (uuid.UUID, domain.Module) {
+		return n.ModuleID, domain.Module{NetworkInterface: new(toNetworkInterface(n))}
+	}); err != nil {
+		return nil, err
 	}
 
 	return out, nil
+}
+
+// collectPayloads adds the payload of each row to out, or wraps the error of
+// the query that selected the rows.
+func collectPayloads[R any](
+	out map[uuid.UUID]domain.Module, what string, rows []R, err error, toModule func(R) (uuid.UUID, domain.Module),
+) error {
+	if err != nil {
+		return fmt.Errorf("select %s modules: %w", what, err)
+	}
+
+	for _, row := range rows {
+		id, m := toModule(row)
+		out[id] = m
+	}
+
+	return nil
 }
 
 func toNetworkInterface(row sqlc.ModuleNetworkInterface) domain.NetworkInterface {

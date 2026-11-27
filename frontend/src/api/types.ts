@@ -263,7 +263,7 @@ export interface NetworkInterfaceInput {
 }
 
 /** Module kinds in display order; all but network interfaces occur at most once per item. */
-export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'network_interface'] as const;
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'operating_system', 'network_interface'] as const;
 export type ModuleKind = (typeof moduleKinds)[number];
 
 /** Only network interfaces may occur several times (and be primary). */
@@ -389,6 +389,12 @@ export interface SimCard {
   iccid: string;
 }
 
+/** The operating system installed on a device; both fields may be empty. */
+export interface OperatingSystem {
+  name: string;
+  version: string;
+}
+
 /** One module instance; exactly the payload matching kind is set. */
 export interface Module {
   id: string;
@@ -398,6 +404,7 @@ export interface Module {
   networkHost?: NetworkHost;
   purchase?: Purchase;
   simCard?: SimCard;
+  operatingSystem?: OperatingSystem;
   networkInterface?: NetworkInterface;
 }
 
@@ -410,6 +417,7 @@ export interface ModuleInput {
   networkHost?: NetworkHost;
   purchase?: Omit<Purchase, 'price'> & { price: string | null };
   simCard?: SimCard;
+  operatingSystem?: OperatingSystem;
   networkInterface?: NetworkInterfaceInput;
 }
 
