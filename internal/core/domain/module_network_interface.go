@@ -369,3 +369,14 @@ func checkAddr(f fieldErrors, field, s string, v6, required bool) (netip.Addr, b
 
 	return addr, true
 }
+
+// NormalizeMAC returns s as a lower-case, colon-separated EUI-48 MAC
+// address; ok is false when s is not one in any notation net.ParseMAC knows.
+func NormalizeMAC(s string) (mac string, ok bool) {
+	hw, err := net.ParseMAC(strings.TrimSpace(s))
+	if err != nil || len(hw) != 6 {
+		return "", false
+	}
+
+	return hw.String(), true
+}

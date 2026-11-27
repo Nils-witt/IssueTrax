@@ -26,20 +26,21 @@ func TestIssueService_StorageItemLinks(t *testing.T) {
 	ada := f.addUser(t, "ada")
 	f.addProject(t, "TRAX", "IssueTrax")
 	shelf := f.addStorage(t, nil, "Shelf")
-	drill := f.addItem(t, shelf, "drill", "")
-	sw := f.addDevice(t, shelf, "Switch")
+	tool := f.addType(t, nil, port.CreateItemTypeInput{Name: "Tool"})
+	drill := f.addItem(t, shelf, tool, "drill", nil)
+	sw := f.addItem(t, shelf, tool, "Switch", nil)
 
 	created := f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{
 		Title: "Broken", StorageItems: []domain.StorageItemID{sw.ID, drill.ID, sw.ID},
 	})
 
-	// Sorted by name ignoring case; duplicates dropped; kinds mixed.
+	// Sorted by name ignoring case; duplicates dropped.
 	if got := storageItemNames(created); !slices.Equal(got, []string{"drill", "Switch"}) {
 		t.Fatalf("created storage items = %v", got)
 	}
 
-	if created.StorageItems[1].Kind != domain.StorageItemKindNetworkDevice {
-		t.Fatalf("switch kind = %q", created.StorageItems[1].Kind)
+	if created.StorageItems[1].AssetTag != sw.AssetTag {
+		t.Fatalf("switch asset tag = %q", created.StorageItems[1].AssetTag)
 	}
 
 	wantChange(t, f.auditLog(t)[0], "storageItems", "", "Switch, drill")
@@ -95,7 +96,7 @@ func TestIssueService_StorageItemLinksArchived(t *testing.T) {
 	f := newFixture(t)
 	ada := f.addUser(t, "ada")
 	f.addProject(t, "TRAX", "IssueTrax")
-	drill := f.addItem(t, f.addStorage(t, nil, "Shelf"), "drill", "")
+	drill := f.addItem(t, f.addStorage(t, nil, "Shelf"), f.addType(t, nil, port.CreateItemTypeInput{Name: "Tool"}), "drill", nil)
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "Old", Status: domain.StatusArchived})
 
 	_, err := f.issues.Update(t.Context(), testActor, "TRAX", 1, port.UpdateIssueInput{
@@ -111,8 +112,9 @@ func TestIssueService_ListByStorageItemFilter(t *testing.T) {
 	ada := f.addUser(t, "ada")
 	f.addProject(t, "TRAX", "IssueTrax")
 	shelf := f.addStorage(t, nil, "Shelf")
-	drill := f.addItem(t, shelf, "drill", "")
-	saw := f.addItem(t, shelf, "saw", "")
+	tool := f.addType(t, nil, port.CreateItemTypeInput{Name: "Tool"})
+	drill := f.addItem(t, shelf, tool, "drill", nil)
+	saw := f.addItem(t, shelf, tool, "saw", nil)
 
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "a", StorageItems: []domain.StorageItemID{drill.ID}})
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "b", StorageItems: []domain.StorageItemID{drill.ID, saw.ID}})
@@ -144,7 +146,7 @@ func TestIssueService_ListByStorageItem(t *testing.T) {
 	ada := f.addUser(t, "ada")
 	f.addProject(t, "TRAX", "IssueTrax")
 	f.addProject(t, "OPS", "Operations")
-	drill := f.addItem(t, f.addStorage(t, nil, "Shelf"), "drill", "")
+	drill := f.addItem(t, f.addStorage(t, nil, "Shelf"), f.addType(t, nil, port.CreateItemTypeInput{Name: "Tool"}), "drill", nil)
 	links := []domain.StorageItemID{drill.ID}
 
 	f.addIssue(t, ada.ID, "TRAX", port.CreateIssueInput{Title: "a", StorageItems: links})

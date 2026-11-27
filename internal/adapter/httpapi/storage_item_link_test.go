@@ -3,11 +3,16 @@ package httpapi_test
 import (
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"nilswitt.dev/issuetrax/internal/core/domain"
 )
 
 type storageItemRefJSON struct {
 	ID        string `json:"id"`
-	Kind      string `json:"kind"`
+	AssetTag  string `json:"assetTag"`
 	StorageID string `json:"storageId"`
 	Name      string `json:"name"`
 	Deleted   bool   `json:"deleted"`
@@ -31,13 +36,37 @@ func TestStorageItems_RequireSession(t *testing.T) {
 	}
 }
 
-func TestStorageItems_SearchAcrossKinds(t *testing.T) {
+// storeItem stores an item called name with asset tag name in the storage
+// with storageID, bypassing the API.
+func (e *testEnv) storeItem(t *testing.T, storageID, name string) storageItemRefJSON {
+	t.Helper()
+
+	now := time.Now().UTC()
+	typ := domain.ItemType{ID: domain.ItemTypeID(uuid.New()), Name: "Type " + name, CreatedAt: now, UpdatedAt: now}
+
+	if err := e.repos.ItemTypes.Create(t.Context(), typ); err != nil {
+		t.Fatal(err)
+	}
+
+	item := domain.StorageItem{
+		ID: domain.StorageItemID(uuid.New()), AssetTag: name, StorageID: domain.StorageID(uuid.MustParse(storageID)),
+		TypeID: typ.ID, Name: name, Usable: true, CreatedAt: now, UpdatedAt: now,
+	}
+
+	if err := e.repos.StorageItems.Create(t.Context(), item); err != nil {
+		t.Fatal(err)
+	}
+
+	return storageItemRefJSON{ID: item.ID.String(), AssetTag: name, StorageID: storageID, Name: name}
+}
+
+func TestStorageItems_Search(t *testing.T) {
 	t.Parallel()
 
 	env, c := signedIn(t)
 	_, shelf := storageTree(t, env, c)
-	env.createItem(t, c, shelf.ID, "Drill", "")
-	env.createDevice(t, c, shelf.ID)
+	drill := env.storeItem(t, shelf.ID, "Drill")
+	env.storeItem(t, shelf.ID, "Saw")
 
 	r := env.do(t, c, http.MethodGet, "/api/storage-items", "")
 	wantStatus(t, r, http.StatusOK)
@@ -45,16 +74,7 @@ func TestStorageItems_SearchAcrossKinds(t *testing.T) {
 	var page pageJSON[storageItemRefJSON]
 	r.json(t, &page)
 
-	kinds := map[string]bool{}
-	for _, i := range page.Items {
-		kinds[i.Kind] = true
-
-		if i.StorageID != shelf.ID {
-			t.Fatalf("item %+v not in shelf", i)
-		}
-	}
-
-	if len(page.Items) != 2 || !kinds["generic"] || !kinds["network_device"] {
+	if len(page.Items) != 2 || page.Items[0] != drill {
 		t.Fatalf("search = %+v", page.Items)
 	}
 
@@ -73,8 +93,8 @@ func TestIssues_StorageItemLinks(t *testing.T) {
 
 	env, c := issueEnv(t)
 	_, shelf := storageTree(t, env, c)
-	drill := env.createItem(t, c, shelf.ID, "Drill", "")
-	saw := env.createItem(t, c, shelf.ID, "Saw", "")
+	drill := env.storeItem(t, shelf.ID, "Drill")
+	saw := env.storeItem(t, shelf.ID, "Saw")
 
 	r := env.do(t, c, http.MethodPost, "/api/projects/TRAX/issues", `{"title":"Broken","storageItems":["`+drill.ID+`"]}`)
 	wantStatus(t, r, http.StatusCreated)
@@ -82,9 +102,7 @@ func TestIssues_StorageItemLinks(t *testing.T) {
 	var created linkedIssueJSON
 	r.json(t, &created)
 
-	if len(created.StorageItems) != 1 || created.StorageItems[0] != (storageItemRefJSON{
-		ID: drill.ID, Kind: "generic", StorageID: shelf.ID, Name: "Drill",
-	}) {
+	if len(created.StorageItems) != 1 || created.StorageItems[0] != drill {
 		t.Fatalf("created storage items = %+v", created.StorageItems)
 	}
 

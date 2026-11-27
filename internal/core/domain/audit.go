@@ -34,16 +34,6 @@ const (
 	AuditStorageCreate    AuditAction = "storage.create"
 	AuditStorageUpdate    AuditAction = "storage.update"
 
-	AuditGenericStorageItemCreate  AuditAction = "generic_storage_item.create"
-	AuditGenericStorageItemUpdate  AuditAction = "generic_storage_item.update"
-	AuditGenericStorageItemDelete  AuditAction = "generic_storage_item.delete"
-	AuditGenericStorageItemRestore AuditAction = "generic_storage_item.restore"
-
-	AuditNetworkDeviceCreate  AuditAction = "network_device.create"
-	AuditNetworkDeviceUpdate  AuditAction = "network_device.update"
-	AuditNetworkDeviceDelete  AuditAction = "network_device.delete"
-	AuditNetworkDeviceRestore AuditAction = "network_device.restore"
-
 	AuditStorageItemCreate  AuditAction = "storage_item.create"
 	AuditStorageItemUpdate  AuditAction = "storage_item.update"
 	AuditStorageItemDelete  AuditAction = "storage_item.delete"
@@ -64,8 +54,6 @@ var AuditActions = []AuditAction{
 	AuditLogin, AuditLoginFailed, AuditLogout, AuditProjectCreate, AuditProjectUpdate, AuditIssueCreate,
 	AuditIssueUpdate, AuditTagUpdate, AuditCommentCreate, AuditCommentUpdate, AuditCommentDelete,
 	AuditAttachmentCreate, AuditAttachmentDelete, AuditStorageCreate, AuditStorageUpdate,
-	AuditGenericStorageItemCreate, AuditGenericStorageItemUpdate, AuditGenericStorageItemDelete, AuditGenericStorageItemRestore,
-	AuditNetworkDeviceCreate, AuditNetworkDeviceUpdate, AuditNetworkDeviceDelete, AuditNetworkDeviceRestore,
 	AuditStorageItemCreate, AuditStorageItemUpdate, AuditStorageItemDelete, AuditStorageItemRestore,
 	AuditItemTypeCreate, AuditItemTypeUpdate, AuditItemTypeDelete, AuditItemTypeRestore,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
@@ -76,17 +64,13 @@ func (a AuditAction) Valid() bool { return slices.Contains(AuditActions, a) }
 
 // Audit target types: the kind of entity an entry is about.
 const (
-	AuditTargetUser       = "user"
-	AuditTargetProject    = "project"
-	AuditTargetIssue      = "issue"
-	AuditTargetTag        = "tag"
-	AuditTargetComment    = "comment"
-	AuditTargetAttachment = "attachment"
-	AuditTargetStorage    = "storage"
-	// AuditTargetGenericStorageItem is a GenericStorageItem.
-	AuditTargetGenericStorageItem = "generic_storage_item"
-	// AuditTargetNetworkDevice is a NetworkDevice.
-	AuditTargetNetworkDevice  = "network_device"
+	AuditTargetUser           = "user"
+	AuditTargetProject        = "project"
+	AuditTargetIssue          = "issue"
+	AuditTargetTag            = "tag"
+	AuditTargetComment        = "comment"
+	AuditTargetAttachment     = "attachment"
+	AuditTargetStorage        = "storage"
 	AuditTargetStorageItem    = "storage_item"
 	AuditTargetItemType       = "item_type"
 	AuditTargetServiceAccount = "service_account"

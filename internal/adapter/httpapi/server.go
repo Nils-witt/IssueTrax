@@ -31,12 +31,8 @@ type Config struct {
 	Attachments port.AttachmentService
 	// Storages manages the physical storage location tree.
 	Storages port.StorageService
-	// GenericStorageItems manages the generic items kept in storages.
-	GenericStorageItems port.GenericStorageItemService
-	// NetworkDevices manages the network devices kept in storages.
-	NetworkDevices port.NetworkDeviceService
-	// StorageItems finds storage items of any kind, e.g. to link them to issues.
-	StorageItems port.StorageItemLookupService
+	// StorageItems manages the items kept in storages.
+	StorageItems port.StorageItemService
 	Users        port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
@@ -62,23 +58,21 @@ type Config struct {
 
 // Handler routes HTTP requests to the core services and the SPA.
 type Handler struct {
-	auth           port.AuthService
-	projects       port.ProjectService
-	issues         port.IssueService
-	tags           port.TagService
-	comments       port.CommentService
-	attachments    port.AttachmentService
-	storages       port.StorageService
-	genericItems   port.GenericStorageItemService
-	networkDevices port.NetworkDeviceService
-	storageItems   port.StorageItemLookupService
-	users          port.UserService
-	accounts       port.ServiceAccountService
-	audit          port.AuditService
-	changes        port.ChangeFeed
-	logger         *slog.Logger
-	cookies        cookies
-	openAPI        []byte
+	auth         port.AuthService
+	projects     port.ProjectService
+	issues       port.IssueService
+	tags         port.TagService
+	comments     port.CommentService
+	attachments  port.AttachmentService
+	storages     port.StorageService
+	storageItems port.StorageItemService
+	users        port.UserService
+	accounts     port.ServiceAccountService
+	audit        port.AuditService
+	changes      port.ChangeFeed
+	logger       *slog.Logger
+	cookies      cookies
+	openAPI      []byte
 	// wsOrigins are the origins (besides the request host) allowed to
 	// open WebSockets: the public URL's.
 	wsOrigins []string
@@ -95,23 +89,21 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	h := &Handler{
-		auth:           cfg.Auth,
-		projects:       cfg.Projects,
-		issues:         cfg.Issues,
-		tags:           cfg.Tags,
-		comments:       cfg.Comments,
-		attachments:    cfg.Attachments,
-		storages:       cfg.Storages,
-		genericItems:   cfg.GenericStorageItems,
-		networkDevices: cfg.NetworkDevices,
-		storageItems:   cfg.StorageItems,
-		users:          cfg.Users,
-		accounts:       cfg.ServiceAccounts,
-		audit:          cfg.Audit,
-		changes:        cfg.Changes,
-		logger:         cfg.Logger,
-		cookies:        cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
-		openAPI:        cfg.OpenAPISpec,
+		auth:         cfg.Auth,
+		projects:     cfg.Projects,
+		issues:       cfg.Issues,
+		tags:         cfg.Tags,
+		comments:     cfg.Comments,
+		attachments:  cfg.Attachments,
+		storages:     cfg.Storages,
+		storageItems: cfg.StorageItems,
+		users:        cfg.Users,
+		accounts:     cfg.ServiceAccounts,
+		audit:        cfg.Audit,
+		changes:      cfg.Changes,
+		logger:       cfg.Logger,
+		cookies:      cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
+		openAPI:      cfg.OpenAPISpec,
 	}
 
 	csrf, err := crossOriginProtection(cfg.PublicURL)
@@ -177,20 +169,6 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/storages", h.authed(h.createStorage))
 	mux.Handle("GET /api/storages/{id}", h.authed(h.getStorage))
 	mux.Handle("PATCH /api/storages/{id}", h.authed(h.updateStorage))
-	mux.Handle("GET /api/storages/{id}/generic-storage-items", h.authed(h.listGenericStorageItemsInStorage))
-	mux.Handle("GET /api/generic-storage-items", h.authed(h.searchGenericStorageItems))
-	mux.Handle("POST /api/generic-storage-items", h.authed(h.createGenericStorageItem))
-	mux.Handle("GET /api/generic-storage-items/{id}", h.authed(h.getGenericStorageItem))
-	mux.Handle("PATCH /api/generic-storage-items/{id}", h.authed(h.updateGenericStorageItem))
-	mux.Handle("DELETE /api/generic-storage-items/{id}", h.authed(h.deleteGenericStorageItem))
-	mux.Handle("POST /api/generic-storage-items/{id}/restore", h.authed(h.restoreGenericStorageItem))
-	mux.Handle("GET /api/storages/{id}/network-devices", h.authed(h.listNetworkDevicesInStorage))
-	mux.Handle("GET /api/network-devices", h.authed(h.searchNetworkDevices))
-	mux.Handle("POST /api/network-devices", h.authed(h.createNetworkDevice))
-	mux.Handle("GET /api/network-devices/{id}", h.authed(h.getNetworkDevice))
-	mux.Handle("PATCH /api/network-devices/{id}", h.authed(h.updateNetworkDevice))
-	mux.Handle("DELETE /api/network-devices/{id}", h.authed(h.deleteNetworkDevice))
-	mux.Handle("POST /api/network-devices/{id}/restore", h.authed(h.restoreNetworkDevice))
 	mux.Handle("GET /api/storage-items", h.authed(h.searchStorageItems))
 	mux.Handle("GET /api/storage-items/{id}/issues", h.authed(h.listStorageItemIssues))
 
@@ -205,8 +183,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 func (c Config) missingDependency() bool {
 	// Only interface values: a nil pointer in an any is not == nil.
 	services := []any{
-		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.GenericStorageItems,
-		c.NetworkDevices, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
+		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
 	}
 
 	return c.Logger == nil || slices.Contains(services, nil)
