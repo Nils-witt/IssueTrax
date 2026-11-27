@@ -65,11 +65,14 @@ type simCardJSON struct {
 }
 
 // wwanJSON is a mobile (cellular) connection; imei comes back without
-// separators.
+// separators. Requests set simCardItemId; responses also carry the named
+// item (null when unset).
 type wwanJSON struct {
-	IMEI       string `json:"imei"`
-	APN        string `json:"apn"`
-	Technology string `json:"technology"`
+	IMEI          string                  `json:"imei"`
+	APN           string                  `json:"apn"`
+	Technology    string                  `json:"technology"`
+	SimCardItemID *string                 `json:"simCardItemId"`
+	SimCardItem   *storageItemRefResponse `json:"simCardItem"`
 }
 
 // operatingSystemJSON is the operating system installed on a device.
@@ -116,8 +119,7 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 		c := m.SimCard
 		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
 	case m.WWAN != nil:
-		w := m.WWAN
-		resp.WWAN = &wwanJSON{IMEI: w.IMEI, APN: w.APN, Technology: string(w.Technology)}
+		resp.WWAN = toWWANJSON(*m.WWAN, v)
 	case m.OperatingSystem != nil:
 		resp.OperatingSystem = &operatingSystemJSON{Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version}
 	case m.NetworkInterface != nil:
@@ -235,7 +237,12 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 		}
 
 		if w := m.WWAN; w != nil {
-			p.WWAN = &domain.WWANParams{IMEI: w.IMEI, APN: w.APN, Technology: domain.WWANTechnology(w.Technology)}
+			wwan, err := w.params("modules[" + strconv.Itoa(i) + "].wwan")
+			if err != nil {
+				return nil, err
+			}
+
+			p.WWAN = &wwan
 		}
 
 		if o := m.OperatingSystem; o != nil {
@@ -272,6 +279,34 @@ func (h hardwareJSON) params(field string) (domain.HardwareParams, error) {
 		}
 
 		p.ModelID = new(domain.HardwareModelID(id))
+	}
+
+	return p, nil
+}
+
+func toWWANJSON(w domain.WWAN, v port.StorageItemView) *wwanJSON {
+	resp := &wwanJSON{IMEI: w.IMEI, APN: w.APN, Technology: string(w.Technology)}
+
+	if w.SimCardItemID != nil {
+		resp.SimCardItemID = new(w.SimCardItemID.String())
+		if v.SimCardItem != nil {
+			resp.SimCardItem = new(toStorageItemRefResponse(*v.SimCardItem))
+		}
+	}
+
+	return resp
+}
+
+func (w wwanJSON) params(field string) (domain.WWANParams, error) {
+	p := domain.WWANParams{IMEI: w.IMEI, APN: w.APN, Technology: domain.WWANTechnology(w.Technology)}
+
+	if w.SimCardItemID != nil {
+		id, err := uuid.Parse(*w.SimCardItemID)
+		if err != nil {
+			return p, domain.NewValidationError(map[string]string{field + ".simCardItemId": domain.FieldInvalid})
+		}
+
+		p.SimCardItemID = new(domain.StorageItemID(id))
 	}
 
 	return p, nil

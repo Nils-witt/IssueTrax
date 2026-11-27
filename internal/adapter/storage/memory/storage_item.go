@@ -284,7 +284,11 @@ func cloneModule(m domain.Module) domain.Module {
 
 	m.NetworkHost = clonePtr(m.NetworkHost)
 	m.SimCard = clonePtr(m.SimCard)
-	m.WWAN = clonePtr(m.WWAN)
+
+	if m.WWAN = clonePtr(m.WWAN); m.WWAN != nil {
+		m.WWAN.SimCardItemID = clonePtr(m.WWAN.SimCardItemID)
+	}
+
 	m.OperatingSystem = clonePtr(m.OperatingSystem)
 
 	if m.Purchase != nil {

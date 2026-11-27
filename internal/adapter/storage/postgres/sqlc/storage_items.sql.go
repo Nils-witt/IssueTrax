@@ -520,7 +520,7 @@ func (q *Queries) ListStorageItems(ctx context.Context, arg ListStorageItemsPara
 }
 
 const listWwanModules = `-- name: ListWwanModules :many
-SELECT module_id, imei, apn, technology FROM module_wwans WHERE module_id = ANY ($1::uuid[])
+SELECT module_id, imei, apn, technology, sim_card_item_id FROM module_wwans WHERE module_id = ANY ($1::uuid[])
 `
 
 func (q *Queries) ListWwanModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleWwan, error) {
@@ -537,6 +537,7 @@ func (q *Queries) ListWwanModules(ctx context.Context, moduleIds []uuid.UUID) ([
 			&i.Imei,
 			&i.Apn,
 			&i.Technology,
+			&i.SimCardItemID,
 		); err != nil {
 			return nil, err
 		}
@@ -804,17 +805,19 @@ func (q *Queries) UpsertStorageItemModule(ctx context.Context, arg UpsertStorage
 }
 
 const upsertWwanModule = `-- name: UpsertWwanModule :exec
-INSERT INTO module_wwans (module_id, imei, apn, technology)
-VALUES ($1, $2, $3, $4)
+INSERT INTO module_wwans (module_id, imei, apn, technology, sim_card_item_id)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (module_id) DO UPDATE
-SET imei = EXCLUDED.imei, apn = EXCLUDED.apn, technology = EXCLUDED.technology
+SET imei = EXCLUDED.imei, apn = EXCLUDED.apn, technology = EXCLUDED.technology,
+    sim_card_item_id = EXCLUDED.sim_card_item_id
 `
 
 type UpsertWwanModuleParams struct {
-	ModuleID   uuid.UUID
-	Imei       string
-	Apn        string
-	Technology string
+	ModuleID      uuid.UUID
+	Imei          string
+	Apn           string
+	Technology    string
+	SimCardItemID pgtype.UUID
 }
 
 func (q *Queries) UpsertWwanModule(ctx context.Context, arg UpsertWwanModuleParams) error {
@@ -823,6 +826,7 @@ func (q *Queries) UpsertWwanModule(ctx context.Context, arg UpsertWwanModulePara
 		arg.Imei,
 		arg.Apn,
 		arg.Technology,
+		arg.SimCardItemID,
 	)
 	return err
 }

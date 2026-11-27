@@ -125,7 +125,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
       warrantyEnd: p?.warrantyEnd ? p.warrantyEnd.slice(0, 10) : '',
     },
     simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '' },
-    wwan: stored?.wwan ?? { imei: '', apn: '', technology: '' },
+    wwan: stored?.wwan ?? { imei: '', apn: '', technology: '', simCardItemId: null, simCardItem: null },
     operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
     networkInterface: interfaceForm(stored?.networkInterface),
   };
@@ -196,7 +196,7 @@ export function moduleInput(f: ModuleForm): ModuleInput {
     case 'sim_card':
       return { ...base, simCard: f.simCard };
     case 'wwan':
-      return { ...base, wwan: f.wwan };
+      return { ...base, wwan: { imei: f.wwan.imei, apn: f.wwan.apn, technology: f.wwan.technology, simCardItemId: f.wwan.simCardItemId } };
     case 'operating_system':
       return { ...base, operatingSystem: f.operatingSystem };
     case 'network_interface':

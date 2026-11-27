@@ -224,10 +224,11 @@ type ModuleSimCard struct {
 }
 
 type ModuleWwan struct {
-	ModuleID   uuid.UUID
-	Imei       string
-	Apn        string
-	Technology string
+	ModuleID      uuid.UUID
+	Imei          string
+	Apn           string
+	Technology    string
+	SimCardItemID pgtype.UUID
 }
 
 type Project struct {

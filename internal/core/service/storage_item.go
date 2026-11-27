@@ -242,15 +242,15 @@ func (s *StorageItemService) get(ctx context.Context, id domain.StorageItemID) (
 	return item, nil
 }
 
-// checkRefs checks the storage, type, responsible person and hardware
-// manufacturer and model of item where they differ from before (all of
+// checkRefs checks the storage, type, responsible person, hardware
+// manufacturer and model and WWAN SIM card item of item where they differ from before (all of
 // them for a new item, whose before is nil) and returns the chain of
 // item's type when it was checked. modules are the request's modules, to
 // name the hardware module in errors.
 func (s *StorageItemService) checkRefs(
 	ctx context.Context, item domain.StorageItem, before *domain.StorageItem, modules []domain.ModuleParams,
 ) ([]domain.ItemType, error) {
-	if err := checkHardwareRefs(ctx, s.repos, item, before, hardwareField(modules)); err != nil {
+	if err := checkModuleRefs(ctx, s.repos, item, before, modules); err != nil {
 		return nil, err
 	}
 
@@ -311,8 +311,8 @@ func (s *StorageItemService) pageViews(
 	return domain.Page[port.StorageItemView]{Items: views, Total: items.Total, NextCursor: items.NextCursor}, nil
 }
 
-// views resolves the types, responsible people and hardware manufacturers
-// and models of items with one lookup each. Unknown ones are passed with only the ID set.
+// views resolves the types, responsible people, hardware manufacturers
+// and models and WWAN SIM card items of items with one lookup each. Unknown ones are passed with only the ID set.
 func (s *StorageItemService) views(ctx context.Context, items []domain.StorageItem) ([]port.StorageItemView, error) {
 	typeIDs := make([]domain.ItemTypeID, 0, len(items))
 	userIDs := make([]domain.UserID, 0, len(items))
@@ -325,6 +325,11 @@ func (s *StorageItemService) views(ctx context.Context, items []domain.StorageIt
 	}
 
 	hardware, err := resolveHardware(ctx, s.repos, items)
+	if err != nil {
+		return nil, err
+	}
+
+	simCardItem, err := resolveSimCardItems(ctx, s.repos, items)
 	if err != nil {
 		return nil, err
 	}
@@ -359,6 +364,7 @@ func (s *StorageItemService) views(ctx context.Context, items []domain.StorageIt
 		}
 
 		v.Manufacturer, v.Model = hardware(i)
+		v.SimCardItem = simCardItem(i)
 
 		views = append(views, v)
 	}

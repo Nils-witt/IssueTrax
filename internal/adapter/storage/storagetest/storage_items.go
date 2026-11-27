@@ -179,7 +179,8 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	sim, wwan, opsys := item.Modules[3], item.Modules[4], item.Modules[5]
 	eth0, wlan0 := item.Modules[6], item.Modules[7]
 	eth0.Primary, wlan0.Primary = false, true
-	wwan.WWAN = &domain.WWAN{IMEI: wwan.WWAN.IMEI, APN: "iot.1nce.net", Technology: domain.WWAN4G}
+	simItem := storageItem(t, r, st, typ, "SIM 1")
+	wwan.WWAN = &domain.WWAN{IMEI: wwan.WWAN.IMEI, APN: "iot.1nce.net", Technology: domain.WWAN4G, SimCardItemID: &simItem.ID}
 	wlan0.NetworkInterface = new(*wlan0.NetworkInterface)
 	wlan0.NetworkInterface.SSID = "Guests"
 	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{SerialNumber: "S48"}}

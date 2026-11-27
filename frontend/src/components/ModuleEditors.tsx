@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type WWANTechnology, wwanTechnologies } from '../api/types';
 import { fieldErrorText, fieldErrorTextUnder } from '../lib/errors';
 import { CatalogPicker } from './CatalogPicker';
+import { StorageItemPicker } from './StorageItemPicker';
 import type { InterfaceForm, IPForm, ModuleForm, PurchaseForm } from '../lib/moduleForm';
 
 const roles: NetworkRole[] = ['router', 'switch', 'client'];
@@ -292,8 +293,9 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
 
 function WWANEditor({ value, onChange, path, error }: PayloadEditorProps) {
   const { t } = useTranslation();
-  const set = (key: keyof ModuleForm['wwan']) => (v: string) => onChange({ ...value, wwan: { ...value.wwan, [key]: v } });
+  const set = (key: 'imei' | 'apn') => (v: string) => onChange({ ...value, wwan: { ...value.wwan, [key]: v } });
   const technologyError = fieldErrorText(t, error, `${path}.technology`);
+  const simCardItemId = value.wwan.simCardItemId;
 
   return (
     <Grid container spacing={2}>
@@ -331,6 +333,18 @@ function WWANEditor({ value, onChange, path, error }: PayloadEditorProps) {
             </MenuItem>
           ))}
         </TextField>
+      </Grid>
+      <Grid size={12}>
+        {/* Single choice on top of the multi picker: a new pick replaces the old one. */}
+        <StorageItemPicker
+          id={`${path}.simCardItemId`}
+          size="small"
+          label={t('modules.simCardItem')}
+          value={simCardItemId ? [simCardItemId] : []}
+          onChange={(ids) => onChange({ ...value, wwan: { ...value.wwan, simCardItemId: ids.at(-1) ?? null } })}
+          known={value.wwan.simCardItem ? [value.wwan.simCardItem] : []}
+          error={fieldErrorText(t, error, `${path}.simCardItemId`)}
+        />
       </Grid>
     </Grid>
   );

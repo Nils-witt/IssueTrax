@@ -29,6 +29,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
+import { storageItemLabel } from '../lib/format';
 import { GeneralEditor, LifecycleEditor, ModuleEditor } from './StorageItemEditors';
 
 type T = ReturnType<typeof useTranslation>['t'];
@@ -378,6 +379,17 @@ function moduleFields(t: T, m: Module): ReactNode {
         <Field label={t('modules.imei')}>{w.imei && <code>{w.imei}</code>}</Field>
         <Field label={t('modules.apn')}>{w.apn && <code>{w.apn}</code>}</Field>
         <Field label={t('modules.technology')}>{w.technology.toUpperCase()}</Field>
+        <Field label={t('modules.simCardItem')}>
+          {w.simCardItemId && (
+            <Link
+              to={`/storages?item=${encodeURIComponent(w.simCardItemId)}`}
+              title={w.simCardItem?.deleted ? t('storageItems.deleted') : undefined}
+              style={w.simCardItem?.deleted ? { textDecoration: 'line-through' } : undefined}
+            >
+              {w.simCardItem ? storageItemLabel(w.simCardItem) : w.simCardItemId}
+            </Link>
+          )}
+        </Field>
       </>
     );
   }

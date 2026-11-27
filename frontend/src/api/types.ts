@@ -398,6 +398,10 @@ export interface WWAN {
   imei: string;
   apn: string;
   technology: WWANTechnology | '';
+  /** Another storage item, carrying a SIM card module, used as the SIM card. */
+  simCardItemId: string | null;
+  /** The item simCardItemId names (responses only). */
+  simCardItem?: StorageItemRef | null;
 }
 
 /** The operating system installed on a device; both fields may be empty. */
@@ -429,7 +433,7 @@ export interface ModuleInput {
   networkHost?: NetworkHost;
   purchase?: Omit<Purchase, 'price'> & { price: string | null };
   simCard?: SimCard;
-  wwan?: WWAN;
+  wwan?: Omit<WWAN, 'simCardItem'>;
   operatingSystem?: OperatingSystem;
   networkInterface?: NetworkInterfaceInput;
 }

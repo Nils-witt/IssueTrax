@@ -72,7 +72,7 @@ func (m Module) Equal(o Module) bool {
 		equalPtr(m.NetworkHost, o.NetworkHost, func(a, b NetworkHost) bool { return a == b }) &&
 		equalPtr(m.Purchase, o.Purchase, Purchase.Equal) &&
 		equalPtr(m.SimCard, o.SimCard, func(a, b SimCard) bool { return a == b }) &&
-		equalPtr(m.WWAN, o.WWAN, func(a, b WWAN) bool { return a == b }) &&
+		equalPtr(m.WWAN, o.WWAN, WWAN.Equal) &&
 		equalPtr(m.OperatingSystem, o.OperatingSystem, func(a, b OperatingSystem) bool { return a == b }) &&
 		equalPtr(m.NetworkInterface, o.NetworkInterface, NetworkInterface.Equal)
 }

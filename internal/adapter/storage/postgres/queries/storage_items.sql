@@ -159,10 +159,11 @@ SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = 
 SELECT * FROM module_sim_cards WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertWwanModule :exec
-INSERT INTO module_wwans (module_id, imei, apn, technology)
-VALUES (@module_id, @imei, @apn, @technology)
+INSERT INTO module_wwans (module_id, imei, apn, technology, sim_card_item_id)
+VALUES (@module_id, @imei, @apn, @technology, sqlc.narg('sim_card_item_id'))
 ON CONFLICT (module_id) DO UPDATE
-SET imei = EXCLUDED.imei, apn = EXCLUDED.apn, technology = EXCLUDED.technology;
+SET imei = EXCLUDED.imei, apn = EXCLUDED.apn, technology = EXCLUDED.technology,
+    sim_card_item_id = EXCLUDED.sim_card_item_id;
 
 -- name: ListWwanModules :many
 SELECT * FROM module_wwans WHERE module_id = ANY (@module_ids::uuid[]);

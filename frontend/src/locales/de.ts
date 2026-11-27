@@ -425,6 +425,7 @@ export const de: Messages = {
     apn: 'APN',
     technology: 'Technologie',
     technologyUnknown: 'Unbekannt',
+    simCardItem: 'SIM-Karten-Gegenstand',
     osName: 'Betriebssystem',
     osVersion: 'Version',
     interfaceName: 'Name der Schnittstelle',

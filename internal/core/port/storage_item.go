@@ -64,10 +64,11 @@ type StorageItemFilter struct {
 	Decommissioned *bool
 }
 
-// StorageItemView is a storage item with its type, responsible person and
-// hardware manufacturer and model resolved. Responsible is nil when nobody
-// is responsible; Manufacturer and Model are nil unless the hardware module
-// names them. An unknown entity has only the ID set.
+// StorageItemView is a storage item with its type, responsible person,
+// hardware manufacturer and model and WWAN SIM card item resolved.
+// Responsible is nil when nobody is responsible; Manufacturer and Model are
+// nil unless the hardware module names them, SimCardItem unless the WWAN
+// module names one. An unknown entity has only the ID set.
 type StorageItemView struct {
 	domain.StorageItem
 
@@ -75,6 +76,7 @@ type StorageItemView struct {
 	Responsible  *domain.User
 	Manufacturer *domain.Manufacturer
 	Model        *domain.HardwareModel
+	SimCardItem  *domain.StorageItem
 }
 
 // StorageItemService is the driving port for storage item use cases.

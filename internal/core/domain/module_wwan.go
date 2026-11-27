@@ -31,18 +31,44 @@ type WWAN struct {
 	IMEI       string
 	APN        string
 	Technology WWANTechnology
+	// SimCardItemID is another storage item, carrying a SIM card module,
+	// that is the SIM card used for the connection; nil when none is named.
+	SimCardItemID *StorageItemID
+}
+
+// Equal reports whether w and o hold the same connection.
+func (w WWAN) Equal(o WWAN) bool {
+	return w.IMEI == o.IMEI && w.APN == o.APN && w.Technology == o.Technology &&
+		equalPtr(w.SimCardItemID, o.SimCardItemID, func(a, b StorageItemID) bool { return a == b })
 }
 
 // String describes w in one line, for the audit log.
 func (w WWAN) String() string {
-	return strings.Join([]string{w.IMEI, w.APN, string(w.Technology)}, " / ")
+	parts := []string{w.IMEI, w.APN, string(w.Technology)}
+	if w.SimCardItemID != nil {
+		parts = append(parts, "SIM "+w.SimCardItemID.String())
+	}
+
+	return strings.Join(parts, " / ")
+}
+
+// WWANOf returns the WWAN payload among modules, or nil without one.
+func WWANOf(modules []Module) *WWAN {
+	for _, m := range modules {
+		if m.WWAN != nil {
+			return m.WWAN
+		}
+	}
+
+	return nil
 }
 
 // WWANParams is unvalidated input for a WWAN module.
 type WWANParams struct {
-	IMEI       string
-	APN        string
-	Technology WWANTechnology
+	IMEI          string
+	APN           string
+	Technology    WWANTechnology
+	SimCardItemID *StorageItemID
 }
 
 func checkWWAN(f fieldErrors, field string, p WWANParams) WWAN {
@@ -56,9 +82,10 @@ func checkWWAN(f fieldErrors, field string, p WWANParams) WWAN {
 	}
 
 	return WWAN{
-		IMEI:       imei,
-		APN:        checkOptionalText(f, field+".apn", p.APN, maxShortTextRunes),
-		Technology: p.Technology,
+		IMEI:          imei,
+		APN:           checkOptionalText(f, field+".apn", p.APN, maxShortTextRunes),
+		Technology:    p.Technology,
+		SimCardItemID: p.SimCardItemID,
 	}
 }
 

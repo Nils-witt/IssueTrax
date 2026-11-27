@@ -36,9 +36,14 @@ type simCardJSON struct {
 }
 
 type wwanJSON struct {
-	IMEI       string `json:"imei"`
-	APN        string `json:"apn"`
-	Technology string `json:"technology"`
+	IMEI          string  `json:"imei"`
+	APN           string  `json:"apn"`
+	Technology    string  `json:"technology"`
+	SimCardItemID *string `json:"simCardItemId"`
+	SimCardItem   *struct {
+		AssetTag string `json:"assetTag"`
+		Name     string `json:"name"`
+	} `json:"simCardItem"`
 }
 
 type purchaseJSON struct {
@@ -155,7 +160,7 @@ func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 		t.Fatalf("created sim card = %+v", item.Modules[2])
 	}
 
-	if w := item.Modules[3].WWAN; w == nil || *w != (wwanJSON{IMEI: "490154203237518", APN: "internet.telekom", Technology: "5g"}) {
+	if w := item.Modules[3].WWAN; w == nil || w.IMEI != "490154203237518" || w.APN != "internet.telekom" || w.Technology != "5g" || w.SimCardItemID != nil {
 		t.Fatalf("created wwan = %+v", item.Modules[3])
 	}
 
@@ -239,5 +244,29 @@ func TestStorageItems_Errors(t *testing.T) {
 		if r.status != tt.status || r.errorCode(t) != tt.code {
 			t.Errorf("%s: %d %s, want %d %s", tt.name, r.status, r.body, tt.status, tt.code)
 		}
+	}
+}
+
+func TestStorageItems_WWANSimCardItem(t *testing.T) {
+	t.Parallel()
+
+	env, c, shelf, typ := itemEnv(t)
+	base := `"storageId":"` + shelf.ID + `","typeId":"` + typ.ID + `","usable":true`
+
+	sim := env.createStorageItem(t, c, `{"assetTag":"SIM-1","name":"SIM 1",`+base+
+		`,"modules":[{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"","iccid":""}}]}`)
+
+	router := env.createStorageItem(t, c, `{"assetTag":"R-1","name":"LTE router",`+base+
+		`,"modules":[{"kind":"wwan","wwan":{"imei":"","apn":"internet","technology":"4g","simCardItemId":"`+sim.ID+`"}}]}`)
+
+	if w := router.Modules[0].WWAN; w == nil || w.SimCardItemID == nil || *w.SimCardItemID != sim.ID ||
+		w.SimCardItem == nil || w.SimCardItem.AssetTag != "SIM-1" || w.SimCardItem.Name != "SIM 1" {
+		t.Fatalf("wwan = %+v", router.Modules[0].WWAN)
+	}
+
+	r := env.do(t, c, http.MethodPost, "/api/storage-items", `{"assetTag":"R-2","name":"Other",`+base+
+		`,"modules":[{"kind":"wwan","wwan":{"imei":"","apn":"","technology":"","simCardItemId":"`+router.ID+`"}}]}`)
+	if r.status != http.StatusUnprocessableEntity {
+		t.Fatalf("item without sim card = %d %s", r.status, r.body)
 	}
 }

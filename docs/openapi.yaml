@@ -2301,7 +2301,7 @@ components:
 
     WWAN:
       type: object
-      required: [imei, apn, technology]
+      required: [imei, apn, technology, simCardItemId]
       description: |
         The device's mobile (cellular) connection. Every field may be empty.
         Spaces, hyphens, slashes, dots and parentheses are removed from
@@ -2318,6 +2318,17 @@ components:
           enum: ["", 2g, 3g, 4g, 5g]
           description: Mobile network generation; empty when unknown.
           example: 5g
+        simCardItemId:
+          type: [string, "null"]
+          format: uuid
+          description: |
+            Another storage item used as this connection's SIM card. It must
+            carry a `sim_card` module, be live when newly picked and not be
+            the item itself; one already named may have been deleted since.
+        simCardItem:
+          readOnly: true
+          description: The item `simCardItemId` names; responses only.
+          oneOf: [{ $ref: "#/components/schemas/StorageItemRef" }, { type: "null" }]
 
     OperatingSystem:
       type: object

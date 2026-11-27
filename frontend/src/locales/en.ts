@@ -425,6 +425,7 @@ export const en = {
     apn: 'APN',
     technology: 'Technology',
     technologyUnknown: 'Unknown',
+    simCardItem: 'SIM card item',
     osName: 'Operating system',
     osVersion: 'Version',
     interfaceName: 'Interface name',
