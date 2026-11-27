@@ -39,7 +39,7 @@ func toStorageItemResponse(v port.StorageItemView) storageItemResponse {
 		ID: v.ID.String(), AssetTag: v.AssetTag, Name: v.Name, Description: v.Description, StorageID: v.StorageID.String(),
 		Type: toItemTypeRef(v.Type), Usable: v.Usable, OrderDate: v.OrderDate, CommissionedAt: v.CommissionedAt,
 		DecommissionedAt: v.DecommissionedAt, DecommissioningReason: v.DecommissioningReason,
-		Modules: toModulesJSON(v.Modules), CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, DeletedAt: v.DeletedAt,
+		Modules: toModulesJSON(v), CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, DeletedAt: v.DeletedAt,
 	}
 
 	if v.Responsible != nil {

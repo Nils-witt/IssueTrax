@@ -1,5 +1,5 @@
 // TanStack Query hooks for every API resource.
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { query, request } from './client';
 import type {
   ApiKey,
@@ -14,9 +14,11 @@ import type {
   CreateItemTypeInput,
   CreateStorageInput,
   CreateStorageItemInput,
+  HardwareModel,
   Issue,
   ItemType,
   ItemTypeView,
+  Manufacturer,
   Me,
   Page,
   Project,
@@ -56,6 +58,8 @@ export const keys = {
   /** Children of parent; null lists the roots. */
   storageChildren: (parent: string | null) => ['storages', 'children', parent ?? ''] as const,
   storage: (id: string) => ['storages', 'one', id] as const,
+  /** Prefix of every storage path, see useStoragePath. */
+  storagePaths: ['storagePath'] as const,
   /** Prefix of every storage item query. */
   storageItems: ['storageItems'] as const,
   storageItemsIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'in', storage, filter] as const,
@@ -73,6 +77,11 @@ export const keys = {
     ['itemTypes', 'children', parent ?? '', includeDeleted] as const,
   itemTypeSearch: (q: string) => ['itemTypes', 'search', q] as const,
   itemType: (id: string) => ['itemTypes', 'one', id] as const,
+  /** Prefix of every manufacturer and hardware model query. */
+  manufacturers: ['manufacturers'] as const,
+  manufacturerList: (q: string, includeDeleted: boolean) => ['manufacturers', 'list', q, includeDeleted] as const,
+  hardwareModels: (manufacturer: string, q: string, includeDeleted: boolean) =>
+    ['manufacturers', 'models', manufacturer, q, includeDeleted] as const,
   // Under storageItems too, so a new item refreshes the proposal.
   nextAssetTag: (typeId: string) => ['storageItems', 'nextAssetTag', typeId] as const,
 };
@@ -404,12 +413,49 @@ export function useUpdateStorage() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateStorageInput }) =>
       request<Storage>('PATCH', `/api/storages/${encodeURIComponent(id)}`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.storages }),
+    // A move changes the paths through the storage too.
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.storages }), qc.invalidateQueries({ queryKey: keys.storagePaths })]),
   });
 }
 
+const storageOptions = (id: string) =>
+  queryOptions({ queryKey: keys.storage(id), queryFn: () => request<Storage>('GET', `/api/storages/${encodeURIComponent(id)}`) });
+
 export function useStorage(id: string) {
-  return useQuery({ queryKey: keys.storage(id), queryFn: () => request<Storage>('GET', `/api/storages/${encodeURIComponent(id)}`) });
+  return useQuery(storageOptions(id));
+}
+
+/** What a storage path leads to: a storage, or the storage an item is kept in. */
+export type StoragePathTarget = { storage: string } | { item: string };
+
+/**
+ * IDs of the target's storage and all its ancestors, from the storage up to
+ * the root. Walks parent by parent through the cached single-storage queries.
+ * Kept outside the storages prefix so storage changes do not refetch it.
+ */
+export function useStoragePath(target: StoragePathTarget | null) {
+  const qc = useQueryClient();
+
+  return useQuery({
+    queryKey: [...keys.storagePaths, target] as const,
+    queryFn: async () => {
+      let id: string | null =
+        target && 'item' in target ? (await qc.fetchQuery(storageItemOptions(target.item))).storageId : (target?.storage ?? null);
+      const path: string[] = [];
+
+      // The depth bound only guards against a cycle in bad data.
+      while (id && path.length < 100) {
+        path.push(id);
+        id = (await qc.fetchQuery(storageOptions(id))).parentId;
+      }
+
+      return path;
+    },
+    enabled: !!target,
+    staleTime: Infinity,
+    // Keep the previous path while the next one loads, so open nodes stay open.
+    placeholderData: (prev) => prev,
+  });
 }
 
 const flag = (on: boolean | undefined) => (on ? 'true' : undefined);
@@ -451,6 +497,14 @@ export function useStorageItemSearch(filter: StorageItemFilter, enabled = true) 
   });
 }
 
+/** One item, deleted ones included. */
+const storageItemOptions = (id: string) =>
+  queryOptions({ queryKey: keys.storageItem(id), queryFn: () => request<StorageItem>('GET', itemPath(id)) });
+
+export function useStorageItem(id: string) {
+  return useQuery(storageItemOptions(id));
+}
+
 /** Live (not deleted) items matching q; the first page only. */
 export function useStorageItemLookup(q: string) {
   return useQuery({
@@ -480,6 +534,7 @@ function useInvalidateStorageItems() {
       qc.invalidateQueries({ queryKey: keys.storageItems }),
       qc.invalidateQueries({ queryKey: keys.storages }),
       qc.invalidateQueries({ queryKey: keys.itemTypes }),
+      qc.invalidateQueries({ queryKey: keys.manufacturers }), // item counts
       // Issues show the names and deletion state of their linked items.
       qc.invalidateQueries({ queryKey: ['issue'] }),
       qc.invalidateQueries({ queryKey: ['issues'] }),
@@ -498,11 +553,13 @@ export function useCreateStorageItem() {
 }
 
 export function useUpdateStorageItem() {
-  const onSuccess = useInvalidateStorageItems();
+  const qc = useQueryClient();
+  const invalidate = useInvalidateStorageItems();
 
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateStorageItemInput }) => request<StorageItem>('PATCH', itemPath(id), input),
-    onSuccess,
+    // A move changes the item's storage path too.
+    onSuccess: () => Promise.all([invalidate(), qc.invalidateQueries({ queryKey: keys.storagePaths })]),
   });
 }
 
@@ -594,4 +651,101 @@ export function useRestoreItemType() {
   const onSuccess = useInvalidateItemTypes();
 
   return useMutation({ mutationFn: (id: string) => request<ItemTypeView>('POST', `${typePath(id)}/restore`), onSuccess });
+}
+
+/** Manufacturers whose name contains q (all for ''), loaded page by page. */
+export function useManufacturers(q: string, includeDeleted = false, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.manufacturerList(q, includeDeleted),
+    queryFn: ({ pageParam }) =>
+      request<Page<Manufacturer>>('GET', `/api/manufacturers${query({ q: q || undefined, includeDeleted: flag(includeDeleted), cursor: pageParam })}`),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: (prev) => prev,
+    enabled,
+  });
+}
+
+/** A manufacturer's models whose name contains q (all for ''), loaded page by page. */
+export function useHardwareModels(manufacturer: string | null, q: string, includeDeleted = false, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.hardwareModels(manufacturer ?? '', q, includeDeleted),
+    queryFn: ({ pageParam }) =>
+      request<Page<HardwareModel>>(
+        'GET',
+        `${manufacturerPath(manufacturer ?? '')}/models${query({ q: q || undefined, includeDeleted: flag(includeDeleted), cursor: pageParam })}`,
+      ),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: (prev) => prev,
+    enabled: enabled && !!manufacturer,
+  });
+}
+
+/** Catalog changes rename what items show, so items reload too. */
+function useInvalidateCatalog() {
+  const qc = useQueryClient();
+
+  return () => Promise.all([qc.invalidateQueries({ queryKey: keys.manufacturers }), qc.invalidateQueries({ queryKey: keys.storageItems })]);
+}
+
+const manufacturerPath = (id: string) => `/api/manufacturers/${encodeURIComponent(id)}`;
+const modelPath = (id: string) => `/api/hardware-models/${encodeURIComponent(id)}`;
+
+export function useCreateManufacturer() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({ mutationFn: (name: string) => request<Manufacturer>('POST', '/api/manufacturers', { name }), onSuccess });
+}
+
+export function useRenameManufacturer() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => request<Manufacturer>('PATCH', manufacturerPath(id), { name }),
+    onSuccess,
+  });
+}
+
+export function useDeleteManufacturer() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', manufacturerPath(id)), onSuccess });
+}
+
+export function useRestoreManufacturer() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({ mutationFn: (id: string) => request<Manufacturer>('POST', `${manufacturerPath(id)}/restore`), onSuccess });
+}
+
+export function useCreateHardwareModel() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({
+    mutationFn: ({ manufacturerId, name }: { manufacturerId: string; name: string }) =>
+      request<HardwareModel>('POST', `${manufacturerPath(manufacturerId)}/models`, { name }),
+    onSuccess,
+  });
+}
+
+export function useRenameHardwareModel() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => request<HardwareModel>('PATCH', modelPath(id), { name }),
+    onSuccess,
+  });
+}
+
+export function useDeleteHardwareModel() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', modelPath(id)), onSuccess });
+}
+
+export function useRestoreHardwareModel() {
+  const onSuccess = useInvalidateCatalog();
+
+  return useMutation({ mutationFn: (id: string) => request<HardwareModel>('POST', `${modelPath(id)}/restore`), onSuccess });
 }

@@ -31,6 +31,8 @@ type fixture struct {
 	storages    *service.StorageService
 	itemTypes   *service.ItemTypeService
 	items       *service.StorageItemService
+	makers      *service.ManufacturerService
+	models      *service.HardwareModelService
 	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
@@ -73,6 +75,8 @@ func newFixture(t *testing.T) *fixture {
 		Attachments:      memory.NewAttachmentRepository(store),
 		Storages:         memory.NewStorageRepository(store),
 		ItemTypes:        memory.NewItemTypeRepository(store),
+		Manufacturers:    memory.NewManufacturerRepository(store),
+		HardwareModels:   memory.NewHardwareModelRepository(store),
 		StorageItems:     memory.NewStorageItemRepository(store),
 		AssetTagCounters: memory.NewAssetTagCounterRepository(store),
 		Users:            memory.NewUserRepository(store),
@@ -95,6 +99,8 @@ func newFixture(t *testing.T) *fixture {
 		storages:    service.NewStorageService(repos, clock, notify),
 		itemTypes:   service.NewItemTypeService(repos, clock, notify, prefix),
 		items:       service.NewStorageItemService(repos, clock, notify, prefix),
+		makers:      service.NewManufacturerService(repos, clock, notify),
+		models:      service.NewHardwareModelService(repos, clock, notify),
 		users:       service.NewUserService(repos),
 		changes:     changes,
 	}

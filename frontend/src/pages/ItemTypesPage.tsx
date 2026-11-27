@@ -140,23 +140,18 @@ export function ItemTypesPage() {
   return (
     <Stack spacing={3}>
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-        <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
-          {t('itemTypes.title')}
-        </Typography>
+        <FormControlLabel
+            control={<Switch size="small" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />}
+            label={t('itemTypes.showDeleted')}
+        />
         {admin && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ kind: 'create', parent: null })}>
             {t('itemTypes.newRoot')}
           </Button>
         )}
       </Stack>
-      <Typography color="text.secondary" sx={{ maxWidth: '50rem' }}>
-        {t('itemTypes.intro')}
-      </Typography>
       {me.isSuccess && !admin && <Alert severity="info">{t('itemTypes.adminOnly')}</Alert>}
-      <FormControlLabel
-        control={<Switch size="small" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} />}
-        label={t('itemTypes.showDeleted')}
-      />
+
       <ErrorMessage error={del.error ?? restore.error} />
       <Paper variant="outlined">
         <TypeTree parent={null} depth={0} includeDeleted={showDeleted} actions={actions} />

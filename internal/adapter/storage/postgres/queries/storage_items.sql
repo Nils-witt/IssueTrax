@@ -49,7 +49,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
   AND (@pattern::text = ''
        OR i.name ILIKE @pattern::text OR i.description ILIKE @pattern::text OR i.asset_tag ILIKE @pattern::text
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
-                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE @pattern::text OR h.model ILIKE @pattern::text
+                      LEFT JOIN manufacturers mf ON mf.id = h.manufacturer_id
+                      LEFT JOIN hardware_models hm ON hm.id = h.model_id
+                  WHERE m.item_id = i.id AND (mf.name ILIKE @pattern::text OR hm.name ILIKE @pattern::text
                                               OR h.serial_number ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
@@ -81,7 +83,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
   AND (@pattern::text = ''
        OR i.name ILIKE @pattern::text OR i.description ILIKE @pattern::text OR i.asset_tag ILIKE @pattern::text
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
-                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE @pattern::text OR h.model ILIKE @pattern::text
+                      LEFT JOIN manufacturers mf ON mf.id = h.manufacturer_id
+                      LEFT JOIN hardware_models hm ON hm.id = h.model_id
+                  WHERE m.item_id = i.id AND (mf.name ILIKE @pattern::text OR hm.name ILIKE @pattern::text
                                               OR h.serial_number ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
@@ -106,10 +110,10 @@ WHERE storage_item_modules.item_id = EXCLUDED.item_id AND storage_item_modules.m
 SELECT id, item_id, module, is_primary FROM storage_item_modules WHERE item_id = ANY (@item_ids::uuid[]);
 
 -- name: UpsertHardwareModule :exec
-INSERT INTO module_hardware (module_id, manufacturer, model, serial_number)
-VALUES (@module_id, @manufacturer, @model, @serial_number)
+INSERT INTO module_hardware (module_id, manufacturer_id, model_id, serial_number)
+VALUES (@module_id, sqlc.narg('manufacturer_id'), sqlc.narg('model_id'), @serial_number)
 ON CONFLICT (module_id) DO UPDATE
-SET manufacturer = EXCLUDED.manufacturer, model = EXCLUDED.model, serial_number = EXCLUDED.serial_number;
+SET manufacturer_id = EXCLUDED.manufacturer_id, model_id = EXCLUDED.model_id, serial_number = EXCLUDED.serial_number;
 
 -- name: ListHardwareModules :many
 SELECT * FROM module_hardware WHERE module_id = ANY (@module_ids::uuid[]);

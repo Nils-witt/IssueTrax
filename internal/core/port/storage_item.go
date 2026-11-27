@@ -64,14 +64,17 @@ type StorageItemFilter struct {
 	Decommissioned *bool
 }
 
-// StorageItemView is a storage item with its type and responsible person
-// resolved. Responsible is nil when nobody is responsible; an unknown user
-// has only the ID set.
+// StorageItemView is a storage item with its type, responsible person and
+// hardware manufacturer and model resolved. Responsible is nil when nobody
+// is responsible; Manufacturer and Model are nil unless the hardware module
+// names them. An unknown entity has only the ID set.
 type StorageItemView struct {
 	domain.StorageItem
 
-	Type        domain.ItemType
-	Responsible *domain.User
+	Type         domain.ItemType
+	Responsible  *domain.User
+	Manufacturer *domain.Manufacturer
+	Model        *domain.HardwareModel
 }
 
 // StorageItemService is the driving port for storage item use cases.

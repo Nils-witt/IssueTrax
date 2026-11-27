@@ -25,6 +25,8 @@ func TestContract(t *testing.T) {
 			Attachments:      memory.NewAttachmentRepository(s),
 			Storages:         memory.NewStorageRepository(s),
 			ItemTypes:        memory.NewItemTypeRepository(s),
+			Manufacturers:    memory.NewManufacturerRepository(s),
+			HardwareModels:   memory.NewHardwareModelRepository(s),
 			StorageItems:     memory.NewStorageItemRepository(s),
 			AssetTagCounters: memory.NewAssetTagCounterRepository(s),
 			Users:            memory.NewUserRepository(s),

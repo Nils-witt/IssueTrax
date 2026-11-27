@@ -44,6 +44,16 @@ const (
 	AuditItemTypeDelete  AuditAction = "item_type.delete"
 	AuditItemTypeRestore AuditAction = "item_type.restore"
 
+	AuditManufacturerCreate  AuditAction = "manufacturer.create"
+	AuditManufacturerUpdate  AuditAction = "manufacturer.update"
+	AuditManufacturerDelete  AuditAction = "manufacturer.delete"
+	AuditManufacturerRestore AuditAction = "manufacturer.restore"
+
+	AuditHardwareModelCreate  AuditAction = "hardware_model.create"
+	AuditHardwareModelUpdate  AuditAction = "hardware_model.update"
+	AuditHardwareModelDelete  AuditAction = "hardware_model.delete"
+	AuditHardwareModelRestore AuditAction = "hardware_model.restore"
+
 	AuditServiceAccountCreate AuditAction = "service_account.create"
 	AuditAPIKeyCreate         AuditAction = "api_key.create"
 	AuditAPIKeyRevoke         AuditAction = "api_key.revoke" //nolint:gosec // an action name, not a credential
@@ -56,6 +66,8 @@ var AuditActions = []AuditAction{
 	AuditAttachmentCreate, AuditAttachmentDelete, AuditStorageCreate, AuditStorageUpdate,
 	AuditStorageItemCreate, AuditStorageItemUpdate, AuditStorageItemDelete, AuditStorageItemRestore,
 	AuditItemTypeCreate, AuditItemTypeUpdate, AuditItemTypeDelete, AuditItemTypeRestore,
+	AuditManufacturerCreate, AuditManufacturerUpdate, AuditManufacturerDelete, AuditManufacturerRestore,
+	AuditHardwareModelCreate, AuditHardwareModelUpdate, AuditHardwareModelDelete, AuditHardwareModelRestore,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
 }
 
@@ -73,6 +85,8 @@ const (
 	AuditTargetStorage        = "storage"
 	AuditTargetStorageItem    = "storage_item"
 	AuditTargetItemType       = "item_type"
+	AuditTargetManufacturer   = "manufacturer"
+	AuditTargetHardwareModel  = "hardware_model"
 	AuditTargetServiceAccount = "service_account"
 	AuditTargetAPIKey         = "api_key"
 )

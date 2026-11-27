@@ -26,6 +26,10 @@ const (
 	// ChangeItemTypes: an item type was created, changed, moved, deleted or
 	// restored. Types are global, so Project is empty.
 	ChangeItemTypes ChangeKind = "itemTypes"
+	// ChangeManufacturers: a manufacturer or hardware model was created,
+	// renamed, deleted or restored, which also changes how items naming it
+	// look. The list is global, so Project is empty.
+	ChangeManufacturers ChangeKind = "manufacturers"
 )
 
 // Change announces that data was committed. It carries only what changed,

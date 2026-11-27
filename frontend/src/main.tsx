@@ -17,6 +17,7 @@ import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ItemTypesPage } from './pages/ItemTypesPage';
+import { ManufacturersPage } from './pages/ManufacturersPage';
 import { StoragesPage } from './pages/StoragesPage';
 import { ServiceAccountsPage } from './pages/ServiceAccountsPage';
 import { theme } from './theme';
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: 'p/:key/settings', element: <ProjectSettingsPage /> },
       { path: 'storages', element: <StoragesPage /> },
       { path: 'item-types', element: <ItemTypesPage /> },
+      { path: 'manufacturers', element: <ManufacturersPage /> },
       { path: 'service-accounts', element: <ServiceAccountsPage /> },
       { path: 'audit-log', element: <AuditLogPage /> },
       { path: 'api-docs', lazy: () => import('./pages/ApiDocsPage').then((m) => ({ Component: m.ApiDocsPage })) },

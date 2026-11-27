@@ -73,7 +73,7 @@ func TestStorageItemModules(t *testing.T) {
 			modules: []domain.ModuleParams{
 				{Kind: domain.ModuleNetworkInterface, NetworkInterface: iface("eth1")},
 				{Kind: domain.ModuleNetworkInterface, Primary: true, NetworkInterface: iface("eth0")},
-				{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{Manufacturer: " ACME "}},
+				{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{SerialNumber: " SN-1 "}},
 				{Kind: domain.ModuleNetworkHost, NetworkHost: &domain.NetworkHostParams{Role: domain.NetworkRoleSwitch, Hostname: "sw1"}},
 				{Kind: domain.ModulePurchase, Purchase: &domain.PurchaseParams{Price: "12.5", Currency: "eur"}},
 			},

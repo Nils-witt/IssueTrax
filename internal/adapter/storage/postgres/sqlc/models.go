@@ -110,6 +110,15 @@ type Comment struct {
 	UpdatedAt time.Time
 }
 
+type HardwareModel struct {
+	ID             uuid.UUID
+	ManufacturerID uuid.UUID
+	Name           string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeletedAt      *time.Time
+}
+
 type Issue struct {
 	ID          uuid.UUID
 	ProjectID   uuid.UUID
@@ -153,11 +162,19 @@ type ItemTypeModuleDefault struct {
 	DefaultCount int32
 }
 
+type Manufacturer struct {
+	ID        uuid.UUID
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+}
+
 type ModuleHardware struct {
-	ModuleID     uuid.UUID
-	Manufacturer string
-	Model        string
-	SerialNumber string
+	ModuleID       uuid.UUID
+	SerialNumber   string
+	ManufacturerID pgtype.UUID
+	ModelID        pgtype.UUID
 }
 
 type ModuleNetworkHost struct {

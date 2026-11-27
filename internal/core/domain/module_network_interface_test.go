@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"nilswitt.dev/issuetrax/internal/core/domain"
 )
 
@@ -217,6 +219,13 @@ func TestNetworkHostAndHardwareModules(t *testing.T) {
 			name:   "serial too long",
 			module: domain.ModuleParams{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{SerialNumber: strings.Repeat("a", 101)}},
 			want:   map[string]string{"modules[0].hardware.serialNumber": domain.FieldTooLong},
+		},
+		{
+			name: "model without manufacturer",
+			module: domain.ModuleParams{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{
+				ModelID: new(domain.HardwareModelID(uuid.New())),
+			}},
+			want: map[string]string{"modules[0].hardware.manufacturerId": domain.FieldRequired},
 		},
 	}
 

@@ -61,6 +61,16 @@ const (
 	CodeItemTypeNameTaken  = "item_type_name_taken"
 	CodeItemTypeCycle      = "item_type_cycle"
 
+	CodeManufacturerNotFound   = "manufacturer_not_found"
+	CodeManufacturerDeleted    = "manufacturer_deleted"
+	CodeManufacturerNotDeleted = "manufacturer_not_deleted"
+	CodeManufacturerNameTaken  = "manufacturer_name_taken"
+
+	CodeHardwareModelNotFound   = "hardware_model_not_found"
+	CodeHardwareModelDeleted    = "hardware_model_deleted"
+	CodeHardwareModelNotDeleted = "hardware_model_not_deleted"
+	CodeHardwareModelNameTaken  = "hardware_model_name_taken"
+
 	CodeServiceAccountNotFound  = "service_account_not_found"
 	CodeServiceAccountNameTaken = "service_account_name_taken"
 	CodeUserIdentityTaken       = "user_identity_taken"
@@ -174,6 +184,18 @@ var (
 	ErrItemTypeParentNotFound = &Error{
 		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
 		Fields: map[string]string{"parentId": FieldInvalid},
+	}
+
+	ErrManufacturerNotFound   = &Error{kind: ErrNotFound, Code: CodeManufacturerNotFound, Message: "manufacturer not found"}
+	ErrManufacturerDeleted    = &Error{kind: ErrConflict, Code: CodeManufacturerDeleted, Message: "the manufacturer is deleted"}
+	ErrManufacturerNotDeleted = &Error{kind: ErrConflict, Code: CodeManufacturerNotDeleted, Message: "the manufacturer is not deleted"}
+	ErrManufacturerNameTaken  = &Error{kind: ErrConflict, Code: CodeManufacturerNameTaken, Message: "a manufacturer with this name already exists"}
+
+	ErrHardwareModelNotFound   = &Error{kind: ErrNotFound, Code: CodeHardwareModelNotFound, Message: "hardware model not found"}
+	ErrHardwareModelDeleted    = &Error{kind: ErrConflict, Code: CodeHardwareModelDeleted, Message: "the hardware model is deleted"}
+	ErrHardwareModelNotDeleted = &Error{kind: ErrConflict, Code: CodeHardwareModelNotDeleted, Message: "the hardware model is not deleted"}
+	ErrHardwareModelNameTaken  = &Error{
+		kind: ErrConflict, Code: CodeHardwareModelNameTaken, Message: "this manufacturer already has a model with this name",
 	}
 
 	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}

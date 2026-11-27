@@ -398,7 +398,7 @@ function StorageItemSection({ issue, disabled, error, onSave }: SectionProps) {
               title={item.deleted ? t('storageItems.deleted') : undefined}
               sx={item.deleted ? { textDecoration: 'line-through', opacity: 0.7 } : undefined}
               component={Link}
-              to={`/storages?storage=${encodeURIComponent(item.storageId)}`}
+              to={`/storages?item=${encodeURIComponent(item.id)}`}
               clickable
             />
           ))}

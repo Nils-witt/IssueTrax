@@ -324,10 +324,47 @@ export interface UpdateItemTypeInput {
   defaults?: ModuleDefault[];
 }
 
+/** A manufacturer or hardware model as named by an item. */
+export interface CatalogRef {
+  id: string;
+  name: string;
+  deleted: boolean;
+}
+
+/** Manufacturer and model come from the central list; the refs are only in responses. */
 export interface Hardware {
-  manufacturer: string;
-  model: string;
+  manufacturerId: string | null;
+  modelId: string | null;
   serialNumber: string;
+  manufacturer: CatalogRef | null;
+  model: CatalogRef | null;
+}
+
+export type HardwareInput = Pick<Hardware, 'manufacturerId' | 'modelId' | 'serialNumber'>;
+
+/** An entry of the central manufacturer list. Deleting only sets deletedAt. */
+export interface Manufacturer {
+  id: string;
+  name: string;
+  /** Live models. */
+  modelCount: number;
+  /** Live items whose hardware names it. */
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/** A model of one manufacturer. Deleting only sets deletedAt. */
+export interface HardwareModel {
+  id: string;
+  manufacturerId: string;
+  name: string;
+  /** Live items whose hardware names it. */
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface NetworkHost {
@@ -361,7 +398,7 @@ export interface ModuleInput {
   id?: string;
   kind: ModuleKind;
   primary?: boolean;
-  hardware?: Hardware;
+  hardware?: HardwareInput;
   networkHost?: NetworkHost;
   purchase?: Omit<Purchase, 'price'> & { price: string | null };
   networkInterface?: NetworkInterfaceInput;

@@ -53,7 +53,18 @@ function missingDefaults(defaults: ModuleDefault[], modules: ModuleForm[]): Modu
 }
 
 /** Creates an item in storage, or edits item. */
-export function StorageItemDialog({ storage, item, onClose }: { storage?: Storage; item?: StorageItem; onClose: () => void }) {
+export function StorageItemDialog({
+  storage,
+  item,
+  onClose,
+  onSaved,
+}: {
+  storage?: Storage;
+  item?: StorageItem;
+  onClose: () => void;
+  /** Called with the saved item before the dialog closes. */
+  onSaved?: (item: StorageItem) => void;
+}) {
   const { t } = useTranslation();
   const create = useCreateStorageItem();
   const update = useUpdateStorageItem();
@@ -139,8 +150,13 @@ export function StorageItemDialog({ storage, item, onClose }: { storage?: Storag
       modules: ordered.map(moduleInput),
     };
 
-    if (item) update.mutate({ id: item.id, input: common }, { onSuccess: onClose });
-    else if (storage) create.mutate({ ...common, assetTag, storageId: storage.id }, { onSuccess: onClose });
+    const onSuccess = (saved: StorageItem) => {
+      onSaved?.(saved);
+      onClose();
+    };
+
+    if (item) update.mutate({ id: item.id, input: common }, { onSuccess });
+    else if (storage) create.mutate({ ...common, assetTag, storageId: storage.id }, { onSuccess });
   }
 
   const text = (label: string, value: string, set: (v: string) => void, field: string, maxLength: number, autoFocus = false) => (

@@ -59,7 +59,7 @@ type Module struct {
 // Equal reports whether m and o are the same instance with the same content.
 func (m Module) Equal(o Module) bool {
 	return m.ID == o.ID && m.Kind == o.Kind && m.Primary == o.Primary &&
-		equalPtr(m.Hardware, o.Hardware, func(a, b Hardware) bool { return a == b }) &&
+		equalPtr(m.Hardware, o.Hardware, Hardware.Equal) &&
 		equalPtr(m.NetworkHost, o.NetworkHost, func(a, b NetworkHost) bool { return a == b }) &&
 		equalPtr(m.Purchase, o.Purchase, Purchase.Equal) &&
 		equalPtr(m.NetworkInterface, o.NetworkInterface, NetworkInterface.Equal)

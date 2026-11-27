@@ -127,7 +127,7 @@ func TestStorageItemApply(t *testing.T) {
 
 	p := validItem()
 	p.Modules = []domain.ModuleParams{
-		{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{Model: "X1"}},
+		{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{SerialNumber: "X1"}},
 		{Kind: domain.ModuleNetworkInterface, NetworkInterface: iface("eth0")},
 	}
 

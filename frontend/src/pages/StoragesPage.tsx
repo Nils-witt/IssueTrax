@@ -1,9 +1,6 @@
 import Autocomplete from '@mui/material/Autocomplete';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Grid from '@mui/material/Grid';
-import InputAdornment from '@mui/material/InputAdornment';
-import Switch from '@mui/material/Switch';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
@@ -12,42 +9,45 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import Divider from '@mui/material/Divider';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
-import ClearIcon from '@mui/icons-material/Clear';
-import DeleteIcon from '@mui/icons-material/DeleteOutlined';
-import RestoreIcon from '@mui/icons-material/RestoreFromTrashOutlined';
-import SearchIcon from '@mui/icons-material/Search';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ClearIcon from '@mui/icons-material/Clear';
 import DriveFileMoveIcon from '@mui/icons-material/DriveFileMoveOutlined';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
 import InventoryIcon from '@mui/icons-material/Inventory2Outlined';
-import LinkIcon from '@mui/icons-material/Link';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import ItemIcon from '@mui/icons-material/WidgetsOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SearchIcon from '@mui/icons-material/Search';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router';
-import MenuItem from '@mui/material/MenuItem';
+import { useSearchParams } from 'react-router';
 import {
   useCreateStorage,
-  useDeleteStorageItem,
-  useRestoreStorageItem,
   useStorage,
   useStorageChildren,
-  useStorageItemIssues,
   useStorageItems,
   useStorageItemSearch,
+  useStoragePath,
   useUpdateStorage,
   useUpdateStorageItem,
   useUsers,
@@ -57,8 +57,8 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { ItemTypePicker } from '../components/ItemTypePicker';
 import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
-import { StatusBadge } from '../components/StatusBadge';
 import { fieldErrorText } from '../lib/errors';
+import { StorageItemDetails } from './StorageItemDetails';
 import { StorageItemDialog } from './StorageItemDialog';
 
 /** The dialog currently open on the page, if any. */
@@ -68,16 +68,32 @@ type DialogState =
   | { kind: 'move'; storage: Storage }
   | { kind: 'createItem'; storage: Storage }
   | { kind: 'editItem'; item: StorageItem }
-  | { kind: 'moveItem'; item: StorageItem }
-  | { kind: 'linkedIssues'; item: StorageItem };
+  | { kind: 'moveItem'; item: StorageItem };
 
-/** What the item panel shows: a storage's items or search results. */
-interface Selection {
-  selectedId: string | null;
-  onSelect: (storage: Storage) => void;
+/** What a storage can do, offered in its menu and overview. */
+interface StorageActions {
+  onAddItem: (storage: Storage) => void;
+  onAddChild: (storage: Storage) => void;
+  onRename: (storage: Storage) => void;
+  onMove: (storage: Storage) => void;
 }
 
-/** Options of a tree used to pick a new parent instead of editing. */
+/** The sidebar tree: storages with their items as leaves. */
+interface Browse {
+  storageId: string | null;
+  itemId: string | null;
+  onSelectStorage: (id: string) => void;
+  onSelectItem: (id: string) => void;
+  /** Narrows the items shown under each storage. */
+  filter: StorageItemFilter;
+  actions: StorageActions;
+  /** Storages to open so the selection shows, e.g. after following a deep link; a new array opens them again. */
+  reveal: readonly string[];
+}
+
+const nothingToReveal: readonly string[] = [];
+
+/** Options of a tree used to pick a new parent instead of browsing. */
 interface Picker {
   /** Selected parent ID; null selects the root. */
   selected: string | null;
@@ -90,21 +106,22 @@ interface TreeProps {
   /** Whose children to show; null shows the roots. */
   parent: string | null;
   depth: number;
-  actions?: (storage: Storage) => ReactNode;
   picker?: Picker;
-  /** Outside a picker: which storage's items are shown. */
-  selection?: Selection;
+  browse?: Browse;
 }
 
 export function StoragesPage() {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const close = () => setDialog(null);
-  // ?storage= preselects a storage, e.g. when following a link from an issue.
-  const [params] = useSearchParams();
-  const [selectedId, setSelectedId] = useState<string | null>(() => params.get('storage'));
+  // ?storage= or ?item= selects what the center shows, e.g. when following a link from an issue.
+  const [params, setParams] = useSearchParams();
+  const storageId = params.get('storage');
+  const itemId = params.get('item');
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
+  const [filters, setFilters] = useState(noFilters);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Debounce the search box before querying.
   useEffect(() => {
@@ -112,44 +129,31 @@ export function StoragesPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const selection: Selection = {
-    selectedId,
-    onSelect: (st) => {
-      setSelectedId(st.id);
-      setSearch('');
-      setQ('');
-    },
+  const selectStorage = (id: string) => {
+    setParams({ storage: id });
+    setSearch('');
+    setQ('');
+  };
+  const selectItem = (id: string) => setParams({ item: id });
+
+  const actions: StorageActions = {
+    onAddItem: (storage) => setDialog({ kind: 'createItem', storage }),
+    onAddChild: (parent) => setDialog({ kind: 'create', parent }),
+    onRename: (storage) => setDialog({ kind: 'rename', storage }),
+    onMove: (storage) => setDialog({ kind: 'move', storage }),
   };
 
-  const itemDialogs = {
-    onCreate: (storage: Storage) => setDialog({ kind: 'createItem', storage }),
-    onEdit: (item: StorageItem) => setDialog({ kind: 'editItem', item }),
-    onMove: (item: StorageItem) => setDialog({ kind: 'moveItem', item }),
-    onShowIssues: (item: StorageItem) => setDialog({ kind: 'linkedIssues', item }),
-  };
+  // Open the tree down to whatever is selected, wherever the selection came
+  // from: a deep link, a search result or the storage chip of an item.
+  const path = useStoragePath(itemId ? { item: itemId } : storageId ? { storage: storageId } : null);
+  const reveal = path.data ?? nothingToReveal;
 
-  const actions = (s: Storage) => (
-    <Stack direction="row" spacing={0.5}>
-      <Tooltip title={t('storages.addChild')}>
-        <IconButton size="small" aria-label={t('storages.addChildTo', { name: s.name })} onClick={() => setDialog({ kind: 'create', parent: s })}>
-          <AddIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title={t('storages.rename')}>
-        <IconButton size="small" aria-label={t('storages.renameNamed', { name: s.name })} onClick={() => setDialog({ kind: 'rename', storage: s })}>
-          <EditIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title={t('storages.move')}>
-        <IconButton size="small" aria-label={t('storages.moveNamed', { name: s.name })} onClick={() => setDialog({ kind: 'move', storage: s })}>
-          <DriveFileMoveIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    </Stack>
-  );
+  const filter = toFilter(filters);
+  const browse: Browse = { storageId, itemId, onSelectStorage: selectStorage, onSelectItem: selectItem, filter, actions, reveal };
+  const activeFilters = countActive(filters);
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={2}>
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
           {t('storages.title')}
@@ -162,55 +166,103 @@ export function StoragesPage() {
         {t('storages.intro')}
       </Typography>
 
-      <TextField
-        type="search"
-        size="small"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder={t('storageItems.searchPlaceholder')}
-        sx={{ maxWidth: '40rem' }}
-        slotProps={{
-          htmlInput: { maxLength: 200, 'aria-label': t('storageItems.searchLabel') },
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, alignItems: { md: 'flex-start' } }}>
+        <Paper
+          component="nav"
+          aria-label={t('storages.browse')}
+          variant="outlined"
+          sx={{
+            width: { md: 340 },
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            position: { md: 'sticky' },
+            top: { md: 16 },
+            maxHeight: { xs: '60vh', md: 'calc(100vh - 32px)' },
+          }}
+        >
+          <Stack spacing={1} sx={{ p: 1.5 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <TextField
+                type="search"
+                size="small"
+                fullWidth
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('storageItems.searchShort')}
+                slotProps={{
+                  htmlInput: { maxLength: 200, 'aria-label': t('storageItems.searchLabel'), title: t('storageItems.searchPlaceholder') },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+              <Tooltip title={t('storageItems.filters')}>
+                <IconButton
+                  aria-label={t('storageItems.filters')}
+                  aria-expanded={showFilters}
+                  color={showFilters || activeFilters > 0 ? 'primary' : 'default'}
+                  onClick={() => setShowFilters((s) => !s)}
+                >
+                  <Badge badgeContent={activeFilters} color="primary">
+                    <FilterListIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            <Collapse in={showFilters}>
+              <Box sx={{ pt: 1 }}>
+                <ItemFilters value={filters} onChange={setFilters} />
+              </Box>
+            </Collapse>
+          </Stack>
+          <Divider />
+          <Box sx={{ overflowY: 'auto', flexGrow: 1, py: 0.5 }}>
+            {q ? (
+              <SearchResults q={q} filter={filter} selectedId={itemId} onSelect={selectItem} onClear={() => setSearch('')} />
+            ) : (
+              <StorageTree parent={null} depth={0} browse={browse} />
+            )}
+          </Box>
+        </Paper>
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined">
-            <StorageTree parent={null} depth={0} actions={actions} selection={selection} />
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          {q ? (
-            <SearchPanel q={q} onClear={() => setSearch('')} {...itemDialogs} />
-          ) : selectedId ? (
-            <ItemsPanel key={selectedId} storageId={selectedId} {...itemDialogs} />
+        <Box component="section" sx={{ flexGrow: 1, minWidth: 0 }}>
+          {itemId ? (
+            <StorageItemDetails
+              key={itemId}
+              id={itemId}
+              onEdit={(item) => setDialog({ kind: 'editItem', item })}
+              onMove={(item) => setDialog({ kind: 'moveItem', item })}
+              onSelectStorage={selectStorage}
+            />
+          ) : storageId ? (
+            <StorageOverview key={storageId} storageId={storageId} filter={filter} actions={actions} onSelectItem={selectItem} />
           ) : (
-            <Typography color="text.secondary">{t('storageItems.pickStorage')}</Typography>
+            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+              <Typography color="text.secondary">{t('storageItems.pickItem')}</Typography>
+            </Paper>
           )}
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {dialog?.kind === 'create' && <NameDialog parent={dialog.parent} onClose={close} />}
       {dialog?.kind === 'rename' && <NameDialog storage={dialog.storage} onClose={close} />}
       {dialog?.kind === 'move' && <MoveDialog storage={dialog.storage} onClose={close} />}
-      {dialog?.kind === 'createItem' && <StorageItemDialog storage={dialog.storage} onClose={close} />}
+      {dialog?.kind === 'createItem' && (
+        <StorageItemDialog storage={dialog.storage} onClose={close} onSaved={(item) => selectItem(item.id)} />
+      )}
       {dialog?.kind === 'editItem' && <StorageItemDialog item={dialog.item} onClose={close} />}
       {dialog?.kind === 'moveItem' && <MoveItemDialog item={dialog.item} onClose={close} />}
-      {dialog?.kind === 'linkedIssues' && <LinkedIssuesDialog item={dialog.item} onClose={close} />}
     </Stack>
   );
 }
 
 /** One level of the tree, loaded page by page; deeper levels load when expanded. */
-function StorageTree({ parent, depth, actions, picker, selection }: TreeProps) {
+function StorageTree({ parent, depth, picker, browse }: TreeProps) {
   const { t } = useTranslation();
   const children = useStorageChildren(parent);
   const items = children.data?.pages.flatMap((p) => p.items) ?? [];
@@ -225,7 +277,7 @@ function StorageTree({ parent, depth, actions, picker, selection }: TreeProps) {
         </ListItem>
       )}
       {items.map((s) => (
-        <StorageNode key={s.id} storage={s} depth={depth} actions={actions} picker={picker} selection={selection} />
+        <StorageNode key={s.id} storage={s} depth={depth} picker={picker} browse={browse} />
       ))}
       {children.hasNextPage && (
         <ListItem sx={{ pl: indent(depth) }}>
@@ -238,16 +290,28 @@ function StorageTree({ parent, depth, actions, picker, selection }: TreeProps) {
   );
 }
 
-const indent = (depth: number) => 1 + depth * 3;
+const indent = (depth: number) => 1 + depth * 2.5;
 
-function StorageNode({ storage, depth, actions, picker, selection }: { storage: Storage } & Omit<TreeProps, 'parent'>) {
+function StorageNode({ storage, depth, picker, browse }: { storage: Storage } & Omit<TreeProps, 'parent'>) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const reveal = browse?.reveal ?? nothingToReveal;
+  const [open, setOpen] = useState(() => reveal.includes(storage.id));
+  // Opens the node when a new path to reveal runs through it; collapsing it
+  // afterwards sticks until the selection changes. Adjusted while rendering.
+  const [revealed, setRevealed] = useState(reveal);
+  if (reveal !== revealed) {
+    setRevealed(reveal);
+    if (reveal.includes(storage.id)) setOpen(true);
+  }
+  const selectedRef = useScrollIntoView<HTMLDivElement>(!!browse && browse.storageId === storage.id && !browse.itemId);
 
   // In a picker, the moved storage's subtree stays closed: none of it can
-  // become the new parent.
+  // become the new parent. While browsing, items count as content too; deleted
+  // ones are not counted, so with them shown every storage may hold some.
   const excluded = picker?.excludeId === storage.id;
-  const expandable = storage.childCount > 0 && !excluded;
+  const expandable = picker
+    ? storage.childCount > 0 && !excluded
+    : storage.childCount > 0 || storage.itemCount > 0 || !!browse?.filter.deleted;
 
   const toggle = (
     <IconButton
@@ -265,24 +329,15 @@ function StorageNode({ storage, depth, actions, picker, selection }: { storage: 
     </IconButton>
   );
 
-  const label = (
-    <>
-      <ListItemIcon sx={{ minWidth: 32 }}>
-        <InventoryIcon fontSize="small" color={excluded ? 'disabled' : 'action'} />
-      </ListItemIcon>
-      <ListItemText primary={storage.name} />
-      {storage.childCount > 0 && (
-        <Chip size="small" variant="outlined" label={t('storages.children', { count: storage.childCount })} sx={{ mr: 1 }} />
-      )}
-      {storage.itemCount > 0 && (
-        <Chip size="small" variant="outlined" color="primary" label={t('storages.items', { count: storage.itemCount })} sx={{ mr: 1 }} />
-      )}
-    </>
+  const icon = (
+    <ListItemIcon sx={{ minWidth: 30 }}>
+      <InventoryIcon fontSize="small" color={excluded ? 'disabled' : 'action'} />
+    </ListItemIcon>
   );
 
-  return (
-    <>
-      {picker ? (
+  if (picker) {
+    return (
+      <>
         <ListItemButton
           selected={picker.selected === storage.id}
           disabled={excluded}
@@ -290,36 +345,492 @@ function StorageNode({ storage, depth, actions, picker, selection }: { storage: 
           sx={{ pl: indent(depth) }}
         >
           {toggle}
-          {label}
+          {icon}
+          <ListItemText primary={storage.name} />
+          {storage.childCount > 0 && (
+            <Chip size="small" variant="outlined" label={t('storages.children', { count: storage.childCount })} sx={{ mr: 1 }} />
+          )}
         </ListItemButton>
-      ) : (
-        <ListItem
-          sx={{ pl: indent(depth), '&:hover': { bgcolor: 'action.hover' } }}
-          secondaryAction={actions?.(storage)}
-          slotProps={{ secondaryAction: { sx: { right: 8 } } }}
+        {expandable && (
+          <Collapse in={open} unmountOnExit>
+            <StorageTree parent={storage.id} depth={depth + 1} picker={picker} />
+          </Collapse>
+        )}
+      </>
+    );
+  }
+
+  if (!browse) return null;
+
+  const selected = browse.storageId === storage.id && !browse.itemId;
+
+  return (
+    <>
+      <ListItem disablePadding secondaryAction={<StorageMenu storage={storage} actions={browse.actions} />}>
+        <ListItemButton
+          ref={selectedRef}
+          selected={selected}
+          aria-current={selected ? 'true' : undefined}
+          onClick={() => {
+            browse.onSelectStorage(storage.id);
+            setOpen(true);
+          }}
+          sx={{ pl: indent(depth), pr: 6 }}
         >
           {toggle}
-          {selection ? (
-            <ListItemButton
-              selected={selection.selectedId === storage.id}
-              aria-label={t('storages.select', { name: storage.name })}
-              onClick={() => selection.onSelect(storage)}
-              sx={{ flexGrow: 1, mr: 14, py: 0.25, borderRadius: 1 }}
-            >
-              {label}
-            </ListItemButton>
-          ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, pr: 14 }}>{label}</Box>
+          {icon}
+          <ListItemText primary={storage.name} slotProps={{ primary: { noWrap: true } }} />
+          {storage.itemCount > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }} title={t('storages.items', { count: storage.itemCount })}>
+              {storage.itemCount}
+            </Typography>
           )}
-        </ListItem>
-      )}
+        </ListItemButton>
+      </ListItem>
       {expandable && (
         <Collapse in={open} unmountOnExit>
-          <StorageTree parent={storage.id} depth={depth + 1} actions={actions} picker={picker} selection={selection} />
+          {storage.childCount > 0 && <StorageTree parent={storage.id} depth={depth + 1} browse={browse} />}
+          <StorageItemLeaves storage={storage} depth={depth + 1} browse={browse} />
         </Collapse>
       )}
     </>
   );
+}
+
+/** The add, rename and move actions of one storage. */
+function StorageMenu({ storage, actions }: { storage: Storage; actions: StorageActions }) {
+  const { t } = useTranslation();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+
+  const entry = (label: string, icon: ReactNode, run: (s: Storage) => void) => (
+    <MenuItem
+      onClick={() => {
+        setAnchor(null);
+        run(storage);
+      }}
+    >
+      <ListItemIcon>{icon}</ListItemIcon>
+      <ListItemText>{label}</ListItemText>
+    </MenuItem>
+  );
+
+  return (
+    <>
+      <IconButton size="small" edge="end" aria-label={t('storages.actionsFor', { name: storage.name })} onClick={(e) => setAnchor(e.currentTarget)}>
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        {entry(t('storageItems.add'), <ItemIcon fontSize="small" />, actions.onAddItem)}
+        {entry(t('storages.addChild'), <AddIcon fontSize="small" />, actions.onAddChild)}
+        {entry(t('storages.rename'), <EditIcon fontSize="small" />, actions.onRename)}
+        {entry(t('storages.move'), <DriveFileMoveIcon fontSize="small" />, actions.onMove)}
+      </Menu>
+    </>
+  );
+}
+
+/** The items directly in a storage, as leaves of the tree. */
+function StorageItemLeaves({ storage, depth, browse }: { storage: Storage; depth: number; browse: Browse }) {
+  const { t } = useTranslation();
+  const query = useStorageItems(storage.id, browse.filter);
+  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+
+  return (
+    <List dense disablePadding aria-label={t('storageItems.inStorage', { name: storage.name })}>
+      {query.isPending && <Loading />}
+      <ErrorMessage error={query.error} />
+      {query.isSuccess && items.length === 0 && storage.childCount === 0 && (
+        <ListItem sx={{ pl: indent(depth) + 3.5 }}>
+          <ListItemText secondary={browse.filter.deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')} />
+        </ListItem>
+      )}
+      {items.map((item) => (
+        <ItemRow key={item.id} item={item} depth={depth} selected={browse.itemId === item.id} onSelect={browse.onSelectItem} />
+      ))}
+      {query.hasNextPage && (
+        <ListItem sx={{ pl: indent(depth) + 3.5 }}>
+          <Button size="small" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+            {t('app.loadMore')}
+          </Button>
+        </ListItem>
+      )}
+    </List>
+  );
+}
+
+/** One selectable item in the sidebar. */
+function ItemRow({
+  item,
+  depth,
+  selected,
+  onSelect,
+  showStorage = false,
+}: {
+  item: StorageItem;
+  depth: number;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  showStorage?: boolean;
+}) {
+  const ref = useScrollIntoView<HTMLDivElement>(selected);
+
+  return (
+    <ListItemButton
+      ref={ref}
+      selected={selected}
+      aria-current={selected ? 'true' : undefined}
+      onClick={() => onSelect(item.id)}
+      // Leaves line up with the storage names beside the expand toggles.
+      sx={{ pl: indent(depth) + 3.5, opacity: item.deletedAt ? 0.6 : 1 }}
+    >
+      <ListItemIcon sx={{ minWidth: 30 }}>
+        <ItemIcon fontSize="small" color={item.usable ? 'action' : 'error'} />
+      </ListItemIcon>
+      <ListItemText
+        primary={item.name}
+        secondary={
+          <>
+            <KeyText>{item.assetTag}</KeyText>
+            {' · '}
+            {item.type.name}
+            {showStorage && (
+              <>
+                {' · '}
+                <StorageName id={item.storageId} />
+              </>
+            )}
+          </>
+        }
+        slotProps={{
+          primary: { noWrap: true, sx: { textDecoration: item.deletedAt ? 'line-through' : undefined } },
+          secondary: { noWrap: true },
+        }}
+      />
+    </ListItemButton>
+  );
+}
+
+/**
+ * Scrolls the element into view when it becomes selected, also when it mounts
+ * selected inside a node that is just opening; waits for the Collapse
+ * animation so the final position is used.
+ */
+function useScrollIntoView<E extends HTMLElement>(selected: boolean) {
+  const ref = useRef<E>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    const timer = setTimeout(() => ref.current?.scrollIntoView({ block: 'nearest' }), 350);
+    return () => clearTimeout(timer);
+  }, [selected]);
+
+  return ref;
+}
+
+/** The name of the storage an item is kept in. */
+function StorageName({ id }: { id: string }) {
+  const storage = useStorage(id);
+
+  return <>{storage.data?.name ?? '…'}</>;
+}
+
+/** Items across all storages matching q and the filters, in the sidebar. */
+function SearchResults({
+  q,
+  filter,
+  selectedId,
+  onSelect,
+  onClear,
+}: {
+  q: string;
+  filter: StorageItemFilter;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+  const query = useStorageItemSearch({ ...filter, q });
+  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const total = query.data?.pages[0]?.total ?? 0;
+
+  return (
+    <>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, py: 0.5 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+          {query.isSuccess && (items.length === 0 ? t('storageItems.noMatches') : t('storageItems.count', { count: total }))}
+        </Typography>
+        <Button size="small" startIcon={<ClearIcon />} onClick={onClear}>
+          {t('storageItems.clearSearch')}
+        </Button>
+      </Stack>
+      {query.isPending && <Loading />}
+      <ErrorMessage error={query.error} />
+      <List dense disablePadding aria-label={t('storageItems.searchTitle', { q })}>
+        {items.map((item) => (
+          <ItemRow key={item.id} item={item} depth={0} selected={selectedId === item.id} onSelect={onSelect} showStorage />
+        ))}
+      </List>
+      {query.hasNextPage && (
+        <Box sx={{ px: 2 }}>
+          <Button size="small" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+            {t('app.loadMore')}
+          </Button>
+        </Box>
+      )}
+    </>
+  );
+}
+
+/** The center view of a selected storage: its actions and items, optionally with its subtree. */
+function StorageOverview({
+  storageId,
+  filter,
+  actions,
+  onSelectItem,
+}: {
+  storageId: string;
+  filter: StorageItemFilter;
+  actions: StorageActions;
+  onSelectItem: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const storage = useStorage(storageId);
+  const [recursive, setRecursive] = useState(false);
+  const items = useStorageItems(storageId, { ...filter, recursive });
+
+  if (storage.isPending) return <Loading />;
+  if (storage.isError) return <ErrorMessage error={storage.error} />;
+
+  const st = storage.data;
+
+  return (
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Stack spacing={2}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'flex-start' } }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="h5" component="h2" sx={{ overflowWrap: 'anywhere' }}>
+              {st.name}
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Chip size="small" variant="outlined" label={t('storages.children', { count: st.childCount })} />
+              <Chip size="small" variant="outlined" color="primary" label={t('storages.items', { count: st.itemCount })} />
+            </Stack>
+          </Box>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', flexShrink: 0 }}>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => actions.onAddItem(st)}>
+              {t('storageItems.add')}
+            </Button>
+            <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => actions.onAddChild(st)}>
+              {t('storages.addChild')}
+            </Button>
+            <Tooltip title={t('storages.rename')}>
+              <IconButton size="small" aria-label={t('storages.renameNamed', { name: st.name })} onClick={() => actions.onRename(st)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('storages.move')}>
+              <IconButton size="small" aria-label={t('storages.moveNamed', { name: st.name })} onClick={() => actions.onMove(st)}>
+                <DriveFileMoveIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+        <Divider />
+        <Stack direction="row" sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600, flexGrow: 1 }}>
+            {t('storageItems.inStorage', { name: st.name })}
+          </Typography>
+          <FormControlLabel
+            control={<Switch size="small" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />}
+            label={t('storageItems.recursive')}
+          />
+        </Stack>
+        <ItemList
+          query={items}
+          showStorage={recursive}
+          emptyText={filter.deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')}
+          onSelect={onSelectItem}
+        />
+      </Stack>
+    </Paper>
+  );
+}
+
+/** The list filters, as edited. */
+interface FilterState {
+  type: ItemTypeRef | null;
+  includeSubtypes: boolean;
+  usable: '' | 'true' | 'false';
+  decommissioned: '' | 'true' | 'false';
+  responsible: User | null;
+  deleted: boolean;
+}
+
+const noFilters: FilterState = { type: null, includeSubtypes: true, usable: '', decommissioned: '', responsible: null, deleted: false };
+
+const triState = (v: '' | 'true' | 'false') => (v === '' ? undefined : v === 'true');
+
+function toFilter(f: FilterState): StorageItemFilter {
+  return {
+    typeId: f.type?.id,
+    includeSubtypes: f.type ? f.includeSubtypes : undefined,
+    usable: triState(f.usable),
+    decommissioned: triState(f.decommissioned),
+    responsibleId: f.responsible?.id,
+    deleted: f.deleted,
+  };
+}
+
+/** How many filters narrow the lists. */
+const countActive = (f: FilterState) =>
+  [f.type !== null, f.usable !== '', f.decommissioned !== '', f.responsible !== null, f.deleted].filter(Boolean).length;
+
+/** Filters by type (with subtypes), usable, decommissioning, responsible person and deletion. */
+function ItemFilters({ value, onChange }: { value: FilterState; onChange: (next: FilterState) => void }) {
+  const { t } = useTranslation();
+  const users = useUsers();
+  const people = (users.data ?? []).filter((u) => !u.serviceAccount);
+  const set = <K extends keyof FilterState>(key: K, v: FilterState[K]) => onChange({ ...value, [key]: v });
+
+  const tri = (label: string, key: 'usable' | 'decommissioned') => (
+    <TextField select fullWidth size="small" label={label} value={value[key]} onChange={(e) => set(key, e.target.value as FilterState[typeof key])}>
+      <MenuItem value="">{t('storageItems.any')}</MenuItem>
+      <MenuItem value="true">{t('storageItems.yes')}</MenuItem>
+      <MenuItem value="false">{t('storageItems.no')}</MenuItem>
+    </TextField>
+  );
+
+  return (
+    <Stack spacing={1.5}>
+      <ItemTypePicker id="filter-type" label={t('storageItems.filterType')} value={value.type} onChange={(v) => set('type', v)} />
+      {value.type && (
+        <FormControlLabel
+          control={<Switch size="small" checked={value.includeSubtypes} onChange={(e) => set('includeSubtypes', e.target.checked)} />}
+          label={t('storageItems.includeSubtypes')}
+        />
+      )}
+      <Stack direction="row" spacing={1}>
+        {tri(t('storageItems.filterUsable'), 'usable')}
+        {tri(t('storageItems.filterDecommissioned'), 'decommissioned')}
+      </Stack>
+      <Autocomplete
+        size="small"
+        options={people}
+        value={value.responsible}
+        onChange={(_, u) => set('responsible', u)}
+        getOptionLabel={(u) => u.displayName}
+        getOptionKey={(u) => u.id}
+        isOptionEqualToValue={(a, b) => a.id === b.id}
+        renderInput={(params) => <TextField {...params} label={t('storageItems.filterResponsible')} />}
+      />
+      <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <FormControlLabel
+          control={<Switch size="small" checked={value.deleted} onChange={(e) => set('deleted', e.target.checked)} />}
+          label={t('storageItems.showDeleted')}
+        />
+        {countActive(value) > 0 && (
+          <Button size="small" onClick={() => onChange(noFilters)}>
+            {t('storageItems.resetFilters')}
+          </Button>
+        )}
+      </Stack>
+    </Stack>
+  );
+}
+
+/** What ItemList needs of an infinite item query. */
+interface ItemQuery {
+  data?: { pages: Page<StorageItem>[] };
+  error: unknown;
+  isPending: boolean;
+  isSuccess: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => Promise<unknown>;
+}
+
+/** Items with a summary line each, selecting one on click. */
+function ItemList({
+  query,
+  showStorage,
+  emptyText,
+  onSelect,
+}: {
+  query: ItemQuery;
+  showStorage: boolean;
+  emptyText: string;
+  onSelect: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
+  const total = query.data?.pages[0]?.total ?? 0;
+
+  return (
+    <>
+      {query.isPending && <Loading />}
+      <ErrorMessage error={query.error} />
+      {query.isSuccess && (
+        <Typography variant="body2" color="text.secondary">
+          {items.length === 0 ? emptyText : t('storageItems.count', { count: total })}
+        </Typography>
+      )}
+      {items.length > 0 && (
+        <Paper variant="outlined">
+          <List dense disablePadding>
+            {items.map((item, i) => (
+              <ListItem key={item.id} disablePadding divider={i < items.length - 1}>
+                <ListItemButton onClick={() => onSelect(item.id)}>
+                  <ListItemText
+                    primary={
+                      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <KeyText>{item.assetTag}</KeyText>
+                        <span>{item.name}</span>
+                        <Chip size="small" variant="outlined" label={item.type.name} />
+                        {!item.usable && <Chip size="small" color="error" variant="outlined" label={t('storageItems.notUsable')} />}
+                        {item.decommissionedAt && <Chip size="small" variant="outlined" label={t('storageItems.decommissionedBadge')} />}
+                        {item.deletedAt && <Chip size="small" color="warning" variant="outlined" label={t('storageItems.deleted')} />}
+                        {showStorage && <Chip size="small" variant="outlined" icon={<InventoryIcon />} label={<StorageName id={item.storageId} />} />}
+                      </Stack>
+                    }
+                    secondary={itemSummary(t, item) || undefined}
+                    slotProps={{ secondary: { sx: { whiteSpace: 'pre-line', overflowWrap: 'anywhere' } } }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
+      )}
+      {query.hasNextPage && (
+        <Box>
+          <Button size="small" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
+            {t('app.loadMore')}
+          </Button>
+        </Box>
+      )}
+    </>
+  );
+}
+
+/** One line about an item (responsible person, model, host, primary MAC, interface count), then its description. */
+function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageItem): string {
+  const parts: string[] = [];
+  const ifaces = item.modules.filter((m) => m.networkInterface);
+
+  if (item.personResponsible) parts.push(item.personResponsible.displayName);
+
+  for (const m of item.modules) {
+    if (m.hardware) parts.push([m.hardware.manufacturer?.name, m.hardware.model?.name].filter(Boolean).join(' '));
+    if (m.networkHost) parts.push([t(`modules.roles.${m.networkHost.role}`), m.networkHost.hostname].filter(Boolean).join(' '));
+  }
+
+  const primary = ifaces.find((m) => m.primary) ?? ifaces[0];
+  if (primary?.networkInterface) parts.push(primary.networkInterface.mac);
+  if (ifaces.length > 1) parts.push(t('modules.moreInterfaces', { count: ifaces.length }));
+
+  const line = parts.filter(Boolean).join(' · ');
+
+  return item.description ? `${line}\n${item.description}` : line;
 }
 
 /** Creates a storage under parent, or renames storage. */
@@ -418,304 +929,6 @@ function MoveDialog({ storage, onClose }: { storage: Storage; onClose: () => voi
   );
 }
 
-interface ItemDialogs {
-  onCreate: (storage: Storage) => void;
-  onEdit: (item: StorageItem) => void;
-  onMove: (item: StorageItem) => void;
-  onShowIssues: (item: StorageItem) => void;
-}
-
-type ItemActions = Pick<ItemDialogs, 'onEdit' | 'onMove' | 'onShowIssues'>;
-
-/** The list filters both item panels share, as edited. */
-interface FilterState {
-  type: ItemTypeRef | null;
-  includeSubtypes: boolean;
-  usable: '' | 'true' | 'false';
-  decommissioned: '' | 'true' | 'false';
-  responsible: User | null;
-  deleted: boolean;
-}
-
-const noFilters: FilterState = { type: null, includeSubtypes: true, usable: '', decommissioned: '', responsible: null, deleted: false };
-
-const triState = (v: '' | 'true' | 'false') => (v === '' ? undefined : v === 'true');
-
-function toFilter(f: FilterState): StorageItemFilter {
-  return {
-    typeId: f.type?.id,
-    includeSubtypes: f.type ? f.includeSubtypes : undefined,
-    usable: triState(f.usable),
-    decommissioned: triState(f.decommissioned),
-    responsibleId: f.responsible?.id,
-    deleted: f.deleted,
-  };
-}
-
-/** Filters by type (with subtypes), usable, decommissioning, responsible person and deletion. */
-function ItemFilters({ value, onChange }: { value: FilterState; onChange: (next: FilterState) => void }) {
-  const { t } = useTranslation();
-  const users = useUsers();
-  const people = (users.data ?? []).filter((u) => !u.serviceAccount);
-  const set = <K extends keyof FilterState>(key: K, v: FilterState[K]) => onChange({ ...value, [key]: v });
-
-  const tri = (label: string, key: 'usable' | 'decommissioned') => (
-    <TextField select size="small" label={label} value={value[key]} onChange={(e) => set(key, e.target.value as FilterState[typeof key])} sx={{ minWidth: 140 }}>
-      <MenuItem value="">{t('storageItems.any')}</MenuItem>
-      <MenuItem value="true">{t('storageItems.yes')}</MenuItem>
-      <MenuItem value="false">{t('storageItems.no')}</MenuItem>
-    </TextField>
-  );
-
-  return (
-    <Stack spacing={1}>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-        <ItemTypePicker id="filter-type" label={t('storageItems.filterType')} value={value.type} onChange={(v) => set('type', v)} sx={{ minWidth: 220 }} />
-        {tri(t('storageItems.filterUsable'), 'usable')}
-        {tri(t('storageItems.filterDecommissioned'), 'decommissioned')}
-        <Autocomplete
-          size="small"
-          options={people}
-          value={value.responsible}
-          onChange={(_, u) => set('responsible', u)}
-          getOptionLabel={(u) => u.displayName}
-          getOptionKey={(u) => u.id}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          sx={{ minWidth: 200 }}
-          renderInput={(params) => <TextField {...params} label={t('storageItems.filterResponsible')} />}
-        />
-      </Stack>
-      <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
-        {value.type && (
-          <FormControlLabel
-            control={<Switch size="small" checked={value.includeSubtypes} onChange={(e) => set('includeSubtypes', e.target.checked)} />}
-            label={t('storageItems.includeSubtypes')}
-          />
-        )}
-        <FormControlLabel
-          control={<Switch size="small" checked={value.deleted} onChange={(e) => set('deleted', e.target.checked)} />}
-          label={t('storageItems.showDeleted')}
-        />
-      </Stack>
-    </Stack>
-  );
-}
-
-/** The items kept in one storage, optionally with its subtree, narrowed by the filters. */
-function ItemsPanel({ storageId, onCreate, ...actions }: { storageId: string } & ItemDialogs) {
-  const { t } = useTranslation();
-  const storage = useStorage(storageId);
-  const [recursive, setRecursive] = useState(false);
-  const [filters, setFilters] = useState(noFilters);
-  const items = useStorageItems(storageId, { ...toFilter(filters), recursive });
-
-  if (storage.isPending) return <Loading />;
-  if (storage.isError) return <ErrorMessage error={storage.error} />;
-
-  const st = storage.data;
-
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="h6" component="h2" sx={{ flexGrow: 1 }}>
-            {t('storageItems.inStorage', { name: st.name })}
-          </Typography>
-          <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => onCreate(st)}>
-            {t('storageItems.add')}
-          </Button>
-        </Stack>
-        <FormControlLabel
-          control={<Switch size="small" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />}
-          label={t('storageItems.recursive')}
-        />
-        <ItemFilters value={filters} onChange={setFilters} />
-        <ItemList
-          query={items}
-          showStorage={recursive}
-          emptyText={filters.deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')}
-          {...actions}
-        />
-      </Stack>
-    </Paper>
-  );
-}
-
-/** Items across all storages matching q and the filters. */
-function SearchPanel({ q, onClear, ...actions }: { q: string; onClear: () => void } & ItemActions) {
-  const { t } = useTranslation();
-  const [filters, setFilters] = useState(noFilters);
-  const items = useStorageItemSearch({ ...toFilter(filters), q });
-
-  return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Typography variant="h6" component="h2" sx={{ flexGrow: 1 }}>
-            {t('storageItems.searchTitle', { q })}
-          </Typography>
-          <Button size="small" startIcon={<ClearIcon />} onClick={onClear}>
-            {t('storageItems.clearSearch')}
-          </Button>
-        </Stack>
-        <ItemFilters value={filters} onChange={setFilters} />
-        <ItemList query={items} showStorage emptyText={t('storageItems.noMatches')} {...actions} />
-      </Stack>
-    </Paper>
-  );
-}
-
-/** What ItemList needs of an infinite item query. */
-interface ItemQuery {
-  data?: { pages: Page<StorageItem>[] };
-  error: unknown;
-  isPending: boolean;
-  isSuccess: boolean;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  fetchNextPage: () => Promise<unknown>;
-}
-
-function ItemList({
-  query,
-  showStorage,
-  emptyText,
-  onEdit,
-  onMove,
-  onShowIssues,
-}: { query: ItemQuery; showStorage: boolean; emptyText: string } & ItemActions) {
-  const { t } = useTranslation();
-  const del = useDeleteStorageItem();
-  const restore = useRestoreStorageItem();
-  const items = query.data?.pages.flatMap((p) => p.items) ?? [];
-  const total = query.data?.pages[0]?.total ?? 0;
-
-  const busy = (m: { isPending: boolean; variables?: string }, item: StorageItem) => m.isPending && m.variables === item.id;
-
-  const issuesButton = (item: StorageItem) => (
-    <Tooltip title={t('storageItems.showLinkedIssues')}>
-      <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
-        <LinkIcon fontSize="small" />
-      </IconButton>
-    </Tooltip>
-  );
-
-  return (
-    <>
-      {query.isPending && <Loading />}
-      <ErrorMessage error={query.error ?? del.error ?? restore.error} />
-      {query.isSuccess && (
-        <Typography variant="body2" color="text.secondary">
-          {items.length === 0 ? emptyText : t('storageItems.count', { count: total })}
-        </Typography>
-      )}
-      <List dense disablePadding>
-        {items.map((item) => (
-          <ListItem
-            key={item.id}
-            divider
-            secondaryAction={
-              item.deletedAt ? (
-                <Stack direction="row" spacing={0.5}>
-                  {issuesButton(item)}
-                  <Tooltip title={t('storageItems.restore')}>
-                    <IconButton
-                      size="small"
-                      aria-label={t('storageItems.restoreNamed', { name: item.name })}
-                      loading={busy(restore, item)}
-                      onClick={() => restore.mutate(item.id)}
-                    >
-                      <RestoreIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              ) : (
-                <Stack direction="row" spacing={0.5}>
-                  {issuesButton(item)}
-                  <Tooltip title={t('storageItems.edit')}>
-                    <IconButton size="small" aria-label={t('storageItems.editNamed', { name: item.name })} onClick={() => onEdit(item)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('storageItems.move')}>
-                    <IconButton size="small" aria-label={t('storageItems.moveNamed', { name: item.name })} onClick={() => onMove(item)}>
-                      <DriveFileMoveIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('storageItems.delete')}>
-                    <IconButton
-                      size="small"
-                      aria-label={t('storageItems.deleteNamed', { name: item.name })}
-                      loading={busy(del, item)}
-                      onClick={() => del.mutate(item.id)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              )
-            }
-            sx={{ pr: item.deletedAt ? 10 : 20 }}
-          >
-            <ListItemText
-              primary={
-                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                  <KeyText>{item.assetTag}</KeyText>
-                  <span>{item.name}</span>
-                  <Chip size="small" variant="outlined" label={item.type.name} />
-                  {!item.usable && <Chip size="small" color="error" variant="outlined" label={t('storageItems.notUsable')} />}
-                  {item.decommissionedAt && <Chip size="small" variant="outlined" label={t('storageItems.decommissionedBadge')} />}
-                  {item.deletedAt && <Chip size="small" color="warning" variant="outlined" label={t('storageItems.deleted')} />}
-                  {showStorage && <StorageChip id={item.storageId} />}
-                </Stack>
-              }
-              secondary={itemSummary(t, item) || undefined}
-              slotProps={{ secondary: { sx: { whiteSpace: 'pre-line', overflowWrap: 'anywhere' } } }}
-            />
-          </ListItem>
-        ))}
-      </List>
-      {query.hasNextPage && (
-        <Box>
-          <Button size="small" loading={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
-            {t('app.loadMore')}
-          </Button>
-        </Box>
-      )}
-    </>
-  );
-}
-
-/** One line about an item (responsible person, model, host, primary MAC, interface count), then its description. */
-function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageItem): string {
-  const parts: string[] = [];
-  const ifaces = item.modules.filter((m) => m.networkInterface);
-
-  if (item.personResponsible) parts.push(item.personResponsible.displayName);
-
-  for (const m of item.modules) {
-    if (m.hardware) parts.push([m.hardware.manufacturer, m.hardware.model].filter(Boolean).join(' '));
-    if (m.networkHost) parts.push([t(`modules.roles.${m.networkHost.role}`), m.networkHost.hostname].filter(Boolean).join(' '));
-  }
-
-  const primary = ifaces.find((m) => m.primary) ?? ifaces[0];
-  if (primary?.networkInterface) parts.push(primary.networkInterface.mac);
-  if (ifaces.length > 1) parts.push(t('modules.moreInterfaces', { count: ifaces.length }));
-
-  const line = parts.filter(Boolean).join(' · ');
-
-  return item.description ? `${line}\n${item.description}` : line;
-}
-
-/** The name of the storage an item is kept in. */
-function StorageChip({ id }: { id: string }) {
-  const storage = useStorage(id);
-
-  if (!storage.data) return null;
-
-  return <Chip size="small" variant="outlined" icon={<InventoryIcon />} label={storage.data.name} />;
-}
-
 /** Picks the storage to keep item in. */
 function MoveItemDialog({ item, onClose }: { item: StorageItem; onClose: () => void }) {
   const { t } = useTranslation();
@@ -745,49 +958,6 @@ function MoveItemDialog({ item, onClose }: { item: StorageItem; onClose: () => v
         <Button variant="contained" disabled={selected === item.storageId} loading={update.isPending} onClick={submit}>
           {t('storageItems.moveHere')}
         </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-/** The issues of every project linking item, each opening the issue. */
-function LinkedIssuesDialog({ item, onClose }: { item: StorageItem; onClose: () => void }) {
-  const { t } = useTranslation();
-  const issues = useStorageItemIssues(item.id);
-  const list = issues.data?.pages.flatMap((p) => p.items) ?? [];
-
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{t('storageItems.linkedIssuesTitle', { name: item.name })}</DialogTitle>
-      <DialogContent>
-        {issues.isPending && <Loading />}
-        <ErrorMessage error={issues.error} />
-        {issues.isSuccess && list.length === 0 && <DialogContentText>{t('storageItems.noLinkedIssues')}</DialogContentText>}
-        <List dense disablePadding>
-          {list.map((issue) => (
-            <ListItem key={issue.id} disablePadding divider>
-              <ListItemButton component={Link} to={`/p/${issue.projectKey}/issues/${issue.number}`}>
-                <ListItemText
-                  primary={
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      <KeyText>{issue.key}</KeyText>
-                      <span>{issue.title}</span>
-                    </Stack>
-                  }
-                />
-                <StatusBadge status={issue.status} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-        {issues.hasNextPage && (
-          <Button size="small" loading={issues.isFetchingNextPage} onClick={() => void issues.fetchNextPage()}>
-            {t('app.loadMore')}
-          </Button>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('app.close')}</Button>
       </DialogActions>
     </Dialog>
   );

@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole } from '../api/types';
 import { fieldErrorText, fieldErrorTextUnder } from '../lib/errors';
+import { CatalogPicker } from './CatalogPicker';
 import type { InterfaceForm, IPForm, ModuleForm, PurchaseForm } from '../lib/moduleForm';
 
 const roles: NetworkRole[] = ['router', 'switch', 'client'];
@@ -137,18 +138,41 @@ function PayloadText({
 
 function HardwareEditor({ value, onChange, path, error }: PayloadEditorProps) {
   const { t } = useTranslation();
-  const set = (key: keyof ModuleForm['hardware']) => (v: string) => onChange({ ...value, hardware: { ...value.hardware, [key]: v } });
+  const hw = value.hardware;
+  const set = (next: Partial<ModuleForm['hardware']>) => onChange({ ...value, hardware: { ...hw, ...next } });
 
   return (
     <Grid container spacing={2}>
       <Grid size={{ xs: 12, sm: 4 }}>
-        <PayloadText label={t('modules.manufacturer')} value={value.hardware.manufacturer} onChange={set('manufacturer')} field={`${path}.manufacturer`} error={error} />
+        <CatalogPicker
+          kind="manufacturer"
+          id={`${path}-manufacturer-${value.key}`}
+          label={t('modules.manufacturer')}
+          value={hw.manufacturer}
+          // A model belongs to one manufacturer, so changing it clears the model.
+          onChange={(manufacturer) => set({ manufacturer, model: manufacturer?.id === hw.manufacturer?.id ? hw.model : null })}
+          error={fieldErrorText(t, error, `${path}.manufacturerId`)}
+        />
       </Grid>
       <Grid size={{ xs: 12, sm: 4 }}>
-        <PayloadText label={t('modules.model')} value={value.hardware.model} onChange={set('model')} field={`${path}.model`} error={error} />
+        <CatalogPicker
+          kind="model"
+          id={`${path}-model-${value.key}`}
+          manufacturerId={hw.manufacturer?.id ?? null}
+          label={t('modules.model')}
+          value={hw.model}
+          onChange={(model) => set({ model })}
+          error={fieldErrorText(t, error, `${path}.modelId`)}
+        />
       </Grid>
       <Grid size={{ xs: 12, sm: 4 }}>
-        <PayloadText label={t('modules.serialNumber')} value={value.hardware.serialNumber} onChange={set('serialNumber')} field={`${path}.serialNumber`} error={error} />
+        <PayloadText
+          label={t('modules.serialNumber')}
+          value={hw.serialNumber}
+          onChange={(serialNumber) => set({ serialNumber })}
+          field={`${path}.serialNumber`}
+          error={error}
+        />
       </Grid>
     </Grid>
   );

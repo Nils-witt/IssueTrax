@@ -37,6 +37,9 @@ export function Layout() {
           <Button component={Link} to="/item-types" size="small" color="inherit">
             {t('itemTypes.nav')}
           </Button>
+          <Button component={Link} to="/manufacturers" size="small" color="inherit">
+            {t('catalog.nav')}
+          </Button>
           <Button component={Link} to="/service-accounts" size="small" color="inherit">
             {t('serviceAccounts.nav')}
           </Button>

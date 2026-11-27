@@ -35,7 +35,11 @@ type Config struct {
 	ItemTypes port.ItemTypeService
 	// StorageItems manages the items kept in storages.
 	StorageItems port.StorageItemService
-	Users        port.UserService
+	// Manufacturers and HardwareModels manage the central list hardware
+	// modules pick from.
+	Manufacturers  port.ManufacturerService
+	HardwareModels port.HardwareModelService
+	Users          port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
 	// Audit reads the audit log (admins only).
@@ -60,22 +64,24 @@ type Config struct {
 
 // Handler routes HTTP requests to the core services and the SPA.
 type Handler struct {
-	auth         port.AuthService
-	projects     port.ProjectService
-	issues       port.IssueService
-	tags         port.TagService
-	comments     port.CommentService
-	attachments  port.AttachmentService
-	storages     port.StorageService
-	itemTypes    port.ItemTypeService
-	storageItems port.StorageItemService
-	users        port.UserService
-	accounts     port.ServiceAccountService
-	audit        port.AuditService
-	changes      port.ChangeFeed
-	logger       *slog.Logger
-	cookies      cookies
-	openAPI      []byte
+	auth           port.AuthService
+	projects       port.ProjectService
+	issues         port.IssueService
+	tags           port.TagService
+	comments       port.CommentService
+	attachments    port.AttachmentService
+	storages       port.StorageService
+	itemTypes      port.ItemTypeService
+	storageItems   port.StorageItemService
+	manufacturers  port.ManufacturerService
+	hardwareModels port.HardwareModelService
+	users          port.UserService
+	accounts       port.ServiceAccountService
+	audit          port.AuditService
+	changes        port.ChangeFeed
+	logger         *slog.Logger
+	cookies        cookies
+	openAPI        []byte
 	// wsOrigins are the origins (besides the request host) allowed to
 	// open WebSockets: the public URL's.
 	wsOrigins []string
@@ -92,22 +98,24 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	}
 
 	h := &Handler{
-		auth:         cfg.Auth,
-		projects:     cfg.Projects,
-		issues:       cfg.Issues,
-		tags:         cfg.Tags,
-		comments:     cfg.Comments,
-		attachments:  cfg.Attachments,
-		storages:     cfg.Storages,
-		itemTypes:    cfg.ItemTypes,
-		storageItems: cfg.StorageItems,
-		users:        cfg.Users,
-		accounts:     cfg.ServiceAccounts,
-		audit:        cfg.Audit,
-		changes:      cfg.Changes,
-		logger:       cfg.Logger,
-		cookies:      cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
-		openAPI:      cfg.OpenAPISpec,
+		auth:           cfg.Auth,
+		projects:       cfg.Projects,
+		issues:         cfg.Issues,
+		tags:           cfg.Tags,
+		comments:       cfg.Comments,
+		attachments:    cfg.Attachments,
+		storages:       cfg.Storages,
+		itemTypes:      cfg.ItemTypes,
+		storageItems:   cfg.StorageItems,
+		manufacturers:  cfg.Manufacturers,
+		hardwareModels: cfg.HardwareModels,
+		users:          cfg.Users,
+		accounts:       cfg.ServiceAccounts,
+		audit:          cfg.Audit,
+		changes:        cfg.Changes,
+		logger:         cfg.Logger,
+		cookies:        cookies{secure: !cfg.InsecureCookies, key: cfg.CookieKey},
+		openAPI:        cfg.OpenAPISpec,
 	}
 
 	csrf, err := crossOriginProtection(cfg.PublicURL)
@@ -180,6 +188,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("DELETE /api/item-types/{id}", h.authed(h.deleteItemType))
 	mux.Handle("POST /api/item-types/{id}/restore", h.authed(h.restoreItemType))
 	mux.Handle("GET /api/item-types/{id}/next-asset-tag", h.authed(h.nextAssetTag))
+	h.catalogRoutes(mux)
 	mux.Handle("GET /api/storages/{id}/storage-items", h.authed(h.listStorageItemsInStorage))
 	mux.Handle("GET /api/storage-items", h.authed(h.searchStorageItems))
 	mux.Handle("POST /api/storage-items", h.authed(h.createStorageItem))
@@ -200,7 +209,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 func (c Config) missingDependency() bool {
 	// Only interface values: a nil pointer in an any is not == nil.
 	services := []any{
-		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.ItemTypes, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
+		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.ItemTypes, c.StorageItems,
+		c.Manufacturers, c.HardwareModels, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
 	}
 
 	return c.Logger == nil || slices.Contains(services, nil)

@@ -67,7 +67,7 @@ func TestStorageItemService_Create(t *testing.T) {
 		in.OrderDate = new(testNow.Add(-time.Hour))
 		in.Modules = []domain.ModuleParams{
 			{Kind: domain.ModuleNetworkInterface, NetworkInterface: ethParams("eth1")},
-			{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{Model: "X1"}},
+			{Kind: domain.ModuleHardware, Hardware: &domain.HardwareParams{SerialNumber: "X1"}},
 		}
 	})
 

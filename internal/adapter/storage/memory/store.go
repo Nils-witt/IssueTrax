@@ -41,6 +41,10 @@ type data struct {
 	// never changed in place, so snapshots share them.
 	itemTypes    map[domain.ItemTypeID]domain.ItemType
 	storageItems map[domain.StorageItemID]domain.StorageItem
+	// manufacturers and hardwareModels hold values that are replaced,
+	// never changed in place.
+	manufacturers  map[domain.ManufacturerID]domain.Manufacturer
+	hardwareModels map[domain.HardwareModelID]domain.HardwareModel
 	// assetTagCounters maps a lower-case prefix to its counter.
 	assetTagCounters map[string]int64
 	users            map[domain.UserID]domain.User
@@ -61,6 +65,8 @@ func NewStore() *Store {
 		storages:         map[domain.StorageID]domain.Storage{},
 		itemTypes:        map[domain.ItemTypeID]domain.ItemType{},
 		storageItems:     map[domain.StorageItemID]domain.StorageItem{},
+		manufacturers:    map[domain.ManufacturerID]domain.Manufacturer{},
+		hardwareModels:   map[domain.HardwareModelID]domain.HardwareModel{},
 		assetTagCounters: map[string]int64{},
 		users:            map[domain.UserID]domain.User{},
 		sessions:         map[string]domain.Session{},
@@ -111,6 +117,8 @@ func (d data) clone() data {
 		storages:         maps.Clone(d.storages),
 		itemTypes:        maps.Clone(d.itemTypes),
 		storageItems:     maps.Clone(d.storageItems),
+		manufacturers:    maps.Clone(d.manufacturers),
+		hardwareModels:   maps.Clone(d.hardwareModels),
 		assetTagCounters: maps.Clone(d.assetTagCounters),
 		users:            maps.Clone(d.users),
 		sessions:         maps.Clone(d.sessions),

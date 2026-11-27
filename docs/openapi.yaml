@@ -64,6 +64,16 @@ tags:
       only marks it deleted: its children and items keep working, but it
       cannot get new or moved-in children or be given to items, and its name
       is free again among its siblings.
+  - name: manufacturers
+    description: |
+      The central list of manufacturers and their hardware models that
+      `hardware` modules pick from. Everyone may read and change it.
+      Manufacturer names are unique among live manufacturers and model names
+      among the live models of one manufacturer, both ignoring case.
+      Deleting a manufacturer or model only marks it deleted: items keep
+      it, but it cannot be picked for items any more (and a deleted
+      manufacturer gets no new models), and its name is free again.
+      Renaming an entry renames it on every item that names it.
   - name: storage-items
     description: |
       Things kept in a storage. Every item has an asset tag (unique ignoring
@@ -982,6 +992,252 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/manufacturers:
+    get:
+      tags: [manufacturers]
+      summary: List manufacturers
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - $ref: "#/components/parameters/CatalogQuery"
+        - $ref: "#/components/parameters/CatalogIncludeDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of manufacturers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ManufacturerPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [manufacturers]
+      summary: Create a manufacturer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogName" }
+      responses:
+        "201":
+          description: The new manufacturer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manufacturer" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: "`manufacturer_name_taken`: a live manufacturer has the name."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/manufacturers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [manufacturers]
+      summary: Get a manufacturer
+      description: Deleted manufacturers are returned too.
+      responses:
+        "200":
+          description: The manufacturer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manufacturer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [manufacturers]
+      summary: Rename a manufacturer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogName" }
+      responses:
+        "200":
+          description: The renamed manufacturer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manufacturer" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`manufacturer_name_taken` or `manufacturer_deleted`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [manufacturers]
+      summary: Delete a manufacturer
+      description: Only marks it deleted; its models and items keep it.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`manufacturer_deleted`: it already is deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/manufacturers/{id}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [manufacturers]
+      summary: Restore a deleted manufacturer
+      responses:
+        "200":
+          description: The restored manufacturer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Manufacturer" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`manufacturer_not_deleted`, or `manufacturer_name_taken` when a live manufacturer took the name meanwhile."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/manufacturers/{id}/models:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [manufacturers]
+      summary: List a manufacturer's models
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - $ref: "#/components/parameters/CatalogQuery"
+        - $ref: "#/components/parameters/CatalogIncludeDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of models.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareModelPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [manufacturers]
+      summary: Add a model to a manufacturer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogName" }
+      responses:
+        "201":
+          description: The new model.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareModel" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`hardware_model_name_taken` (a live model of the manufacturer has the name) or `manufacturer_deleted`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/hardware-models/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [manufacturers]
+      summary: Get a hardware model
+      description: Deleted models are returned too.
+      responses:
+        "200":
+          description: The model.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareModel" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [manufacturers]
+      summary: Rename a hardware model
+      description: A model never changes its manufacturer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogName" }
+      responses:
+        "200":
+          description: The renamed model.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareModel" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`hardware_model_name_taken` or `hardware_model_deleted`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [manufacturers]
+      summary: Delete a hardware model
+      description: Only marks it deleted; items keep it.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`hardware_model_deleted`: it already is deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/hardware-models/{id}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [manufacturers]
+      summary: Restore a deleted hardware model
+      responses:
+        "200":
+          description: The restored model.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HardwareModel" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`hardware_model_not_deleted`, or `hardware_model_name_taken` when a live model of the manufacturer took the name meanwhile."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/storages/{id}/storage-items:
     parameters:
       - name: id
@@ -1057,7 +1313,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "409":
-          description: "`asset_tag_taken` or `item_type_deleted` (the type is deleted)."
+          description: "`asset_tag_taken`, `item_type_deleted` (the type is deleted), or `manufacturer_deleted` / `hardware_model_deleted` (the hardware picks a deleted entry)."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1105,7 +1361,7 @@ paths:
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: "`storage_item_deleted`, or `item_type_deleted` when retyping to a deleted type."
+          description: "`storage_item_deleted`, `item_type_deleted` when retyping to a deleted type, or `manufacturer_deleted` / `hardware_model_deleted` when the hardware newly picks a deleted entry."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1289,6 +1545,16 @@ components:
       description: A service account's API key (`itx_…`), created via `POST /api/service-accounts/{id}/keys`.
 
   parameters:
+    CatalogQuery:
+      name: q
+      in: query
+      description: Keep entries whose name contains this, ignoring case.
+      schema: { type: string }
+    CatalogIncludeDeleted:
+      name: includeDeleted
+      in: query
+      description: Also list deleted entries.
+      schema: { type: boolean, default: false }
     StorageItemDeleted:
       name: deleted
       in: query
@@ -1362,7 +1628,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `storage_not_found`, `storage_item_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
+      description: "`project_not_found`, `issue_not_found`, `tag_not_found`, `comment_not_found`, `attachment_not_found`, `storage_not_found`, `storage_item_not_found`, `item_type_not_found`, `manufacturer_not_found`, `hardware_model_not_found`, `service_account_not_found`, `api_key_not_found` or `not_found`."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1475,6 +1741,14 @@ components:
         - item_type.update
         - item_type.delete
         - item_type.restore
+        - manufacturer.create
+        - manufacturer.update
+        - manufacturer.delete
+        - manufacturer.restore
+        - hardware_model.create
+        - hardware_model.update
+        - hardware_model.delete
+        - hardware_model.restore
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -1496,10 +1770,13 @@ components:
         types, whose `itemCount` may have changed); `project` is empty.
         `itemTypes`: an item type was created, changed, moved, deleted or
         restored (reload item types and items, which show their type's
-        name); `project` is empty.
+        name); `project` is empty. `manufacturers`: a manufacturer or
+        hardware model was created, renamed, deleted or restored (reload
+        manufacturers, models and items, which show their names); `project`
+        is empty.
       properties:
-        type: { type: string, enum: [project, tags, issue, comments, attachments, storages, storageItems, itemTypes] }
-        project: { type: string, example: TRAX, description: "Empty for `storages`, `storageItems` and `itemTypes`." }
+        type: { type: string, enum: [project, tags, issue, comments, attachments, storages, storageItems, itemTypes, manufacturers] }
+        project: { type: string, example: TRAX, description: "Empty for `storages`, `storageItems`, `itemTypes` and `manufacturers`." }
         issue:
           type: integer
           format: int64
@@ -1909,11 +2186,77 @@ components:
 
     Hardware:
       type: object
-      required: [manufacturer, model, serialNumber]
+      required: [manufacturerId, modelId, serialNumber]
+      description: |
+        Manufacturer and model come from the central list. A model needs its
+        manufacturer and must belong to it. Newly picked entries must be
+        live; ones an item already has may have been deleted since.
+        Responses also carry the named entries; requests leave them out.
       properties:
-        manufacturer: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
+        manufacturerId: { type: [string, "null"], format: uuid }
+        modelId: { type: [string, "null"], format: uuid }
         serialNumber: { type: string, maxLength: 100 }
+        manufacturer:
+          readOnly: true
+          oneOf: [{ $ref: "#/components/schemas/CatalogRef" }, { type: "null" }]
+        model:
+          readOnly: true
+          oneOf: [{ $ref: "#/components/schemas/CatalogRef" }, { type: "null" }]
+
+    CatalogRef:
+      type: object
+      required: [id, name, deleted]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: ACME }
+        deleted: { type: boolean }
+
+    CatalogName:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+
+    Manufacturer:
+      type: object
+      required: [id, name, modelCount, itemCount, createdAt, updatedAt, deletedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 100, example: ACME }
+        modelCount: { type: integer, format: int64, description: Live models. }
+        itemCount: { type: integer, format: int64, description: Live items whose hardware names the manufacturer. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null unless deleted. }
+
+    ManufacturerPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Manufacturer" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    HardwareModel:
+      type: object
+      required: [id, manufacturerId, name, itemCount, createdAt, updatedAt, deletedAt]
+      properties:
+        id: { type: string, format: uuid }
+        manufacturerId: { type: string, format: uuid }
+        name: { type: string, maxLength: 100, example: S24 }
+        itemCount: { type: integer, format: int64, description: Live items whose hardware names the model. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null unless deleted. }
+
+    HardwareModelPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/HardwareModel" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
 
     NetworkHost:
       type: object

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
+	"nilswitt.dev/issuetrax/internal/core/port"
 )
 
 type ipConfigJSON struct {
@@ -30,10 +31,14 @@ type networkInterfaceJSON struct {
 	IPv6        ipConfigJSON `json:"ipv6"`
 }
 
+// hardwareJSON names a device. Requests set the IDs; responses also carry
+// the named entries (null when unset) so clients need no extra lookups.
 type hardwareJSON struct {
-	Manufacturer string `json:"manufacturer"`
-	Model        string `json:"model"`
-	SerialNumber string `json:"serialNumber"`
+	ManufacturerID *string         `json:"manufacturerId"`
+	ModelID        *string         `json:"modelId"`
+	SerialNumber   string          `json:"serialNumber"`
+	Manufacturer   *catalogRefJSON `json:"manufacturer"`
+	Model          *catalogRefJSON `json:"model"`
 }
 
 type networkHostJSON struct {
@@ -63,13 +68,14 @@ type moduleJSON struct {
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
 
-func toModuleJSON(m domain.Module) moduleJSON {
+// toModuleJSON converts m; v resolves the hardware's manufacturer and model.
+func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 	id := m.ID.String()
 	resp := moduleJSON{ID: &id, Kind: string(m.Kind), Primary: m.Primary}
 
 	switch {
 	case m.Hardware != nil:
-		resp.Hardware = &hardwareJSON{Manufacturer: m.Hardware.Manufacturer, Model: m.Hardware.Model, SerialNumber: m.Hardware.SerialNumber}
+		resp.Hardware = toHardwareJSON(*m.Hardware, v)
 	case m.NetworkHost != nil:
 		resp.NetworkHost = &networkHostJSON{Role: string(m.NetworkHost.Role), Hostname: m.NetworkHost.Hostname}
 	case m.Purchase != nil:
@@ -88,13 +94,34 @@ func toModuleJSON(m domain.Module) moduleJSON {
 	return resp
 }
 
-func toModulesJSON(modules []domain.Module) []moduleJSON {
-	out := make([]moduleJSON, 0, len(modules))
-	for _, m := range modules {
-		out = append(out, toModuleJSON(m))
+// toModulesJSON converts the modules of v.
+func toModulesJSON(v port.StorageItemView) []moduleJSON {
+	out := make([]moduleJSON, 0, len(v.Modules))
+	for _, m := range v.Modules {
+		out = append(out, toModuleJSON(m, v))
 	}
 
 	return out
+}
+
+func toHardwareJSON(h domain.Hardware, v port.StorageItemView) *hardwareJSON {
+	resp := &hardwareJSON{SerialNumber: h.SerialNumber}
+
+	if h.ManufacturerID != nil {
+		resp.ManufacturerID = new(h.ManufacturerID.String())
+		if v.Manufacturer != nil {
+			resp.Manufacturer = new(toManufacturerRef(*v.Manufacturer))
+		}
+	}
+
+	if h.ModelID != nil {
+		resp.ModelID = new(h.ModelID.String())
+		if v.Model != nil {
+			resp.Model = new(toHardwareModelRef(*v.Model))
+		}
+	}
+
+	return resp
 }
 
 func toNetworkInterfaceJSON(n domain.NetworkInterface) networkInterfaceJSON {
@@ -151,7 +178,12 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 		}
 
 		if h := m.Hardware; h != nil {
-			p.Hardware = &domain.HardwareParams{Manufacturer: h.Manufacturer, Model: h.Model, SerialNumber: h.SerialNumber}
+			hw, err := h.params("modules[" + strconv.Itoa(i) + "].hardware")
+			if err != nil {
+				return nil, err
+			}
+
+			p.Hardware = &hw
 		}
 
 		if h := m.NetworkHost; h != nil {
@@ -173,6 +205,31 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 	}
 
 	return out, nil
+}
+
+// params converts h; an unparsable ID is reported below field.
+func (h hardwareJSON) params(field string) (domain.HardwareParams, error) {
+	p := domain.HardwareParams{SerialNumber: h.SerialNumber}
+
+	if h.ManufacturerID != nil {
+		id, err := uuid.Parse(*h.ManufacturerID)
+		if err != nil {
+			return p, domain.NewValidationError(map[string]string{field + ".manufacturerId": domain.FieldInvalid})
+		}
+
+		p.ManufacturerID = new(domain.ManufacturerID(id))
+	}
+
+	if h.ModelID != nil {
+		id, err := uuid.Parse(*h.ModelID)
+		if err != nil {
+			return p, domain.NewValidationError(map[string]string{field + ".modelId": domain.FieldInvalid})
+		}
+
+		p.ModelID = new(domain.HardwareModelID(id))
+	}
+
+	return p, nil
 }
 
 func (n networkInterfaceJSON) params() domain.NetworkInterfaceParams {

@@ -45,7 +45,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
   AND ($7::text = ''
        OR i.name ILIKE $7::text OR i.description ILIKE $7::text OR i.asset_tag ILIKE $7::text
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
-                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE $7::text OR h.model ILIKE $7::text
+                      LEFT JOIN manufacturers mf ON mf.id = h.manufacturer_id
+                      LEFT JOIN hardware_models hm ON hm.id = h.model_id
+                  WHERE m.item_id = i.id AND (mf.name ILIKE $7::text OR hm.name ILIKE $7::text
                                               OR h.serial_number ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
@@ -191,7 +193,7 @@ func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 }
 
 const listHardwareModules = `-- name: ListHardwareModules :many
-SELECT module_id, manufacturer, model, serial_number FROM module_hardware WHERE module_id = ANY ($1::uuid[])
+SELECT module_id, serial_number, manufacturer_id, model_id FROM module_hardware WHERE module_id = ANY ($1::uuid[])
 `
 
 func (q *Queries) ListHardwareModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleHardware, error) {
@@ -205,9 +207,9 @@ func (q *Queries) ListHardwareModules(ctx context.Context, moduleIds []uuid.UUID
 		var i ModuleHardware
 		if err := rows.Scan(
 			&i.ModuleID,
-			&i.Manufacturer,
-			&i.Model,
 			&i.SerialNumber,
+			&i.ManufacturerID,
+			&i.ModelID,
 		); err != nil {
 			return nil, err
 		}
@@ -364,7 +366,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
   AND ($7::text = ''
        OR i.name ILIKE $7::text OR i.description ILIKE $7::text OR i.asset_tag ILIKE $7::text
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
-                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE $7::text OR h.model ILIKE $7::text
+                      LEFT JOIN manufacturers mf ON mf.id = h.manufacturer_id
+                      LEFT JOIN hardware_models hm ON hm.id = h.model_id
+                  WHERE m.item_id = i.id AND (mf.name ILIKE $7::text OR hm.name ILIKE $7::text
                                               OR h.serial_number ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
@@ -508,24 +512,24 @@ func (q *Queries) UpdateStorageItem(ctx context.Context, arg UpdateStorageItemPa
 }
 
 const upsertHardwareModule = `-- name: UpsertHardwareModule :exec
-INSERT INTO module_hardware (module_id, manufacturer, model, serial_number)
+INSERT INTO module_hardware (module_id, manufacturer_id, model_id, serial_number)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (module_id) DO UPDATE
-SET manufacturer = EXCLUDED.manufacturer, model = EXCLUDED.model, serial_number = EXCLUDED.serial_number
+SET manufacturer_id = EXCLUDED.manufacturer_id, model_id = EXCLUDED.model_id, serial_number = EXCLUDED.serial_number
 `
 
 type UpsertHardwareModuleParams struct {
-	ModuleID     uuid.UUID
-	Manufacturer string
-	Model        string
-	SerialNumber string
+	ModuleID       uuid.UUID
+	ManufacturerID pgtype.UUID
+	ModelID        pgtype.UUID
+	SerialNumber   string
 }
 
 func (q *Queries) UpsertHardwareModule(ctx context.Context, arg UpsertHardwareModuleParams) error {
 	_, err := q.db.Exec(ctx, upsertHardwareModule,
 		arg.ModuleID,
-		arg.Manufacturer,
-		arg.Model,
+		arg.ManufacturerID,
+		arg.ModelID,
 		arg.SerialNumber,
 	)
 	return err

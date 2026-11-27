@@ -8,8 +8,8 @@ import { keys } from './hooks';
 
 /** One committed change, as sent by the server (see ChangeEvent in docs/openapi.yaml). */
 interface ChangeEvent {
-  type: 'project' | 'tags' | 'issue' | 'comments' | 'attachments' | 'storages' | 'storageItems' | 'itemTypes';
-  /** Empty for 'storages', 'storageItems' and 'itemTypes', which are global. */
+  type: 'project' | 'tags' | 'issue' | 'comments' | 'attachments' | 'storages' | 'storageItems' | 'itemTypes' | 'manufacturers';
+  /** Empty for 'storages', 'storageItems', 'itemTypes' and 'manufacturers', which are global. */
   project: string;
   issue?: number;
 }
@@ -53,6 +53,7 @@ function applyChange(qc: QueryClient, ev: ChangeEvent): void {
       invalidate(keys.storageItems);
       invalidate(keys.storages); // item counts
       invalidate(keys.itemTypes); // item counts
+      invalidate(keys.manufacturers); // item counts
       // Issues of every project show their linked items' names and deletion state.
       invalidate(['issue']);
       invalidate(['issues']);
@@ -60,6 +61,10 @@ function applyChange(qc: QueryClient, ev: ChangeEvent): void {
     case 'itemTypes':
       invalidate(keys.itemTypes);
       invalidate(keys.storageItems); // items show their type's name
+      break;
+    case 'manufacturers':
+      invalidate(keys.manufacturers);
+      invalidate(keys.storageItems); // items show manufacturer and model names
       break;
   }
 

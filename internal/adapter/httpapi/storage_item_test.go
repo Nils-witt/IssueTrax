@@ -76,7 +76,7 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 		`","usable":true,"personResponsibleId":"`+me+`","modules":[`+
 		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
 		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
-		`{"kind":"hardware","hardware":{"model":"S24"}}]}`)
+		`{"kind":"hardware","hardware":{"serialNumber":"S24"}}]}`)
 
 	wantCreatedItem(t, item, me)
 

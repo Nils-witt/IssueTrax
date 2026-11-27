@@ -147,7 +147,7 @@ func (r *StorageItemRepository) matching(filter port.StorageItemFilter, inScope 
 
 	for _, item := range r.s.data.storageItems {
 		if inScope(item) && item.IsDeleted() == filter.Deleted && (types == nil || types[item.TypeID]) &&
-			matchesFields(item, filter) && matchesQuery(item, query, mac, isMAC) {
+			matchesFields(item, filter) && r.s.matchesQuery(item, query, mac, isMAC) {
 			items = append(items, cloneStorageItem(item))
 		}
 	}
@@ -171,14 +171,15 @@ func matchesFields(item domain.StorageItem, filter port.StorageItemFilter) bool 
 }
 
 // matchesQuery reports whether a searchable field of item contains query
-// (lower case), or one of its MACs is mac.
-func matchesQuery(item domain.StorageItem, query, mac string, isMAC bool) bool {
+// (lower case), or one of its MACs is mac. Callers hold s.mu.
+func (s *Store) matchesQuery(item domain.StorageItem, query, mac string, isMAC bool) bool {
 	fields := []string{item.Name, item.Description, item.AssetTag}
 
 	for _, m := range item.Modules {
 		switch {
 		case m.Hardware != nil:
-			fields = append(fields, m.Hardware.Manufacturer, m.Hardware.Model, m.Hardware.SerialNumber)
+			manufacturer, model := s.hardwareNames(*m.Hardware)
+			fields = append(fields, manufacturer, model, m.Hardware.SerialNumber)
 		case m.NetworkHost != nil:
 			fields = append(fields, m.NetworkHost.Hostname)
 		case m.NetworkInterface != nil:
@@ -271,7 +272,10 @@ func cloneStorageItem(item domain.StorageItem) domain.StorageItem {
 }
 
 func cloneModule(m domain.Module) domain.Module {
-	m.Hardware = clonePtr(m.Hardware)
+	if m.Hardware = clonePtr(m.Hardware); m.Hardware != nil {
+		m.Hardware.ManufacturerID, m.Hardware.ModelID = clonePtr(m.Hardware.ManufacturerID), clonePtr(m.Hardware.ModelID)
+	}
+
 	m.NetworkHost = clonePtr(m.NetworkHost)
 
 	if m.Purchase != nil {

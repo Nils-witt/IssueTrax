@@ -97,7 +97,7 @@ func (s *StorageItemService) Create(
 	}
 
 	err = s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
-		chain, err := s.checkRefs(ctx, item, nil)
+		chain, err := s.checkRefs(ctx, item, nil, in.Modules)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,12 @@ func (s *StorageItemService) Update(
 			return err
 		}
 
-		if _, err := s.checkRefs(ctx, item, &before); err != nil {
+		var modules []domain.ModuleParams
+		if in.Modules != nil {
+			modules = *in.Modules
+		}
+
+		if _, err := s.checkRefs(ctx, item, &before, modules); err != nil {
 			return err
 		}
 
@@ -237,10 +242,18 @@ func (s *StorageItemService) get(ctx context.Context, id domain.StorageItemID) (
 	return item, nil
 }
 
-// checkRefs checks the storage, type and responsible person of item where
-// they differ from before (all of them for a new item, whose before is
-// nil) and returns the chain of item's type when it was checked.
-func (s *StorageItemService) checkRefs(ctx context.Context, item domain.StorageItem, before *domain.StorageItem) ([]domain.ItemType, error) {
+// checkRefs checks the storage, type, responsible person and hardware
+// manufacturer and model of item where they differ from before (all of
+// them for a new item, whose before is nil) and returns the chain of
+// item's type when it was checked. modules are the request's modules, to
+// name the hardware module in errors.
+func (s *StorageItemService) checkRefs(
+	ctx context.Context, item domain.StorageItem, before *domain.StorageItem, modules []domain.ModuleParams,
+) ([]domain.ItemType, error) {
+	if err := checkHardwareRefs(ctx, s.repos, item, before, hardwareField(modules)); err != nil {
+		return nil, err
+	}
+
 	isNew := before == nil
 	if isNew {
 		before = &domain.StorageItem{}
@@ -298,8 +311,8 @@ func (s *StorageItemService) pageViews(
 	return domain.Page[port.StorageItemView]{Items: views, Total: items.Total, NextCursor: items.NextCursor}, nil
 }
 
-// views resolves the types and responsible people of items with one lookup
-// each. Unknown ones are passed with only the ID set.
+// views resolves the types, responsible people and hardware manufacturers
+// and models of items with one lookup each. Unknown ones are passed with only the ID set.
 func (s *StorageItemService) views(ctx context.Context, items []domain.StorageItem) ([]port.StorageItemView, error) {
 	typeIDs := make([]domain.ItemTypeID, 0, len(items))
 	userIDs := make([]domain.UserID, 0, len(items))
@@ -309,6 +322,11 @@ func (s *StorageItemService) views(ctx context.Context, items []domain.StorageIt
 		if i.ResponsibleID != nil {
 			userIDs = append(userIDs, *i.ResponsibleID)
 		}
+	}
+
+	hardware, err := resolveHardware(ctx, s.repos, items)
+	if err != nil {
+		return nil, err
 	}
 
 	types, err := s.repos.ItemTypes.GetMany(ctx, unique(typeIDs))
@@ -339,6 +357,8 @@ func (s *StorageItemService) views(ctx context.Context, items []domain.StorageIt
 
 			v.Responsible = &u
 		}
+
+		v.Manufacturer, v.Model = hardware(i)
 
 		views = append(views, v)
 	}

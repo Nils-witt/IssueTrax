@@ -120,7 +120,8 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 	switch {
 	case m.Hardware != nil:
 		return q.UpsertHardwareModule(ctx, sqlc.UpsertHardwareModuleParams{
-			ModuleID: id, Manufacturer: m.Hardware.Manufacturer, Model: m.Hardware.Model, SerialNumber: m.Hardware.SerialNumber,
+			ModuleID: id, ManufacturerID: toPgUUID(m.Hardware.ManufacturerID), ModelID: toPgUUID(m.Hardware.ModelID),
+			SerialNumber: m.Hardware.SerialNumber,
 		})
 	case m.NetworkHost != nil:
 		return q.UpsertNetworkHostModule(ctx, sqlc.UpsertNetworkHostModuleParams{
@@ -401,7 +402,11 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 	}
 
 	for _, h := range hardware {
-		out[h.ModuleID] = domain.Module{Hardware: &domain.Hardware{Manufacturer: h.Manufacturer, Model: h.Model, SerialNumber: h.SerialNumber}}
+		out[h.ModuleID] = domain.Module{Hardware: &domain.Hardware{
+			ManufacturerID: fromPgUUID[domain.ManufacturerID](h.ManufacturerID),
+			ModelID:        fromPgUUID[domain.HardwareModelID](h.ModelID),
+			SerialNumber:   h.SerialNumber,
+		}}
 	}
 
 	hosts, err := q.ListNetworkHostModules(ctx, ids)

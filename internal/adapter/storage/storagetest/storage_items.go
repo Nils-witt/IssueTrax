@@ -72,13 +72,19 @@ func itemNames(items []domain.StorageItem) []string {
 func moduleID() domain.ModuleID { return domain.ModuleID(newID()) }
 
 // fullModules returns one module of every kind plus a second interface, in
-// display order.
-func fullModules() []domain.Module {
+// display order. The hardware is an "ACME S24", stored in r's catalog.
+func fullModules(t *testing.T, r service.Repositories) []domain.Module {
+	t.Helper()
+
 	warranty := now.Add(24 * time.Hour)
 	price := int64(129900)
+	acme := manufacturer(t, r, "ACME")
+	s24 := hardwareModel(t, r, acme, "S24")
 
 	modules := []domain.Module{
-		{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{Manufacturer: "ACME", Model: "S24", SerialNumber: "SN-42"}},
+		{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{
+			ManufacturerID: &acme.ID, ModelID: &s24.ID, SerialNumber: "SN-42",
+		}},
 		{ID: moduleID(), Kind: domain.ModuleNetworkHost, NetworkHost: &domain.NetworkHost{Role: domain.NetworkRoleSwitch, Hostname: "sw1.lan"}},
 		{ID: moduleID(), Kind: domain.ModulePurchase, Purchase: &domain.Purchase{
 			Supplier: "Shop", InvoiceNumber: "R-1", PriceCents: &price, Currency: "EUR", WarrantyEnd: &warranty,
@@ -116,7 +122,7 @@ func testStorageItemsCreateGetAndUpdate(t *testing.T, newRepos NewRepositories) 
 	item := domain.StorageItem{
 		ID: domain.StorageItemID(newID()), AssetTag: "NET-00001", StorageID: st.ID, TypeID: sw.ID, Name: coreSwitch,
 		Description: "rack 1", Usable: true, OrderDate: &ordered, CommissionedAt: &now, ResponsibleID: &ada.ID,
-		Modules: fullModules(), CreatedAt: now, UpdatedAt: now,
+		Modules: fullModules(t, r), CreatedAt: now, UpdatedAt: now,
 	}
 	must(t, r.StorageItems.Create(t.Context(), item))
 
@@ -157,7 +163,7 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	typ := itemType(t, r, switchName)
 
 	item := storageItem(t, r, st, typ, "sw1")
-	item.Modules = fullModules()
+	item.Modules = fullModules(t, r)
 	must(t, r.StorageItems.Update(t.Context(), item))
 
 	// Move the primary flag, edit a payload, drop a module and add one.
@@ -165,7 +171,7 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	eth0.Primary, wlan0.Primary = false, true
 	wlan0.NetworkInterface = new(*wlan0.NetworkInterface)
 	wlan0.NetworkInterface.SSID = "Guests"
-	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{Model: "S48"}}
+	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{SerialNumber: "S48"}}
 
 	item.Modules = []domain.Module{added, item.Modules[1], eth0, wlan0}
 	domain.SortModules(item.Modules)
@@ -285,7 +291,7 @@ func testStorageItemsSearch(t *testing.T, newRepos NewRepositories) {
 	typ := itemType(t, r, switchName)
 
 	sw := storageItem(t, r, st, typ, coreSwitch)
-	sw.Description, sw.Modules = "rack one", fullModules()
+	sw.Description, sw.Modules = "rack one", fullModules(t, r)
 	must(t, r.StorageItems.Update(t.Context(), sw))
 
 	drillItem := storageItem(t, r, st, typ, drill)

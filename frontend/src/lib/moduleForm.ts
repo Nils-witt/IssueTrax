@@ -1,6 +1,7 @@
 // Module instances as edited in forms, and their conversion to and from the API.
 import {
   isMultiModule,
+  type CatalogRef,
   type IPConfig,
   type IPConfigInput,
   type IPv4Mode,
@@ -34,6 +35,13 @@ export interface InterfaceForm {
   ipv6: IPForm<IPv6Mode>;
 }
 
+/** The hardware payload as edited: the picked entries keep their names for display. */
+export interface HardwareForm {
+  manufacturer: CatalogRef | null;
+  model: CatalogRef | null;
+  serialNumber: string;
+}
+
 export interface PurchaseForm {
   supplier: string;
   invoiceNumber: string;
@@ -51,7 +59,7 @@ export interface ModuleForm {
   id?: string;
   kind: ModuleKind;
   primary: boolean;
-  hardware: { manufacturer: string; model: string; serialNumber: string };
+  hardware: HardwareForm;
   networkHost: { role: NetworkRole; hostname: string };
   purchase: PurchaseForm;
   networkInterface: InterfaceForm;
@@ -82,6 +90,15 @@ function interfaceForm(n?: NetworkInterface): InterfaceForm {
   };
 }
 
+function hardwareForm(m?: Module): HardwareForm {
+  const h = m?.hardware;
+  // An unknown entry still keeps its ID, so saving does not drop it.
+  const ref = (id: string | null | undefined, named: CatalogRef | null | undefined): CatalogRef | null =>
+    id ? (named ?? { id, name: id, deleted: false }) : null;
+
+  return { manufacturer: ref(h?.manufacturerId, h?.manufacturer), model: ref(h?.modelId, h?.model), serialNumber: h?.serialNumber ?? '' };
+}
+
 /** A form for module m, or an empty one of kind. */
 export function moduleForm(m: Module | ModuleKind): ModuleForm {
   const stored = typeof m === 'string' ? undefined : m;
@@ -92,7 +109,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
     id: stored?.id,
     kind: stored?.kind ?? (m as ModuleKind),
     primary: stored?.primary ?? false,
-    hardware: stored?.hardware ?? { manufacturer: '', model: '', serialNumber: '' },
+    hardware: hardwareForm(stored),
     networkHost: stored?.networkHost ?? { role: 'client', hostname: '' },
     purchase: {
       supplier: p?.supplier ?? '',
@@ -146,7 +163,14 @@ export function moduleInput(f: ModuleForm): ModuleInput {
 
   switch (f.kind) {
     case 'hardware':
-      return { ...base, hardware: f.hardware };
+      return {
+        ...base,
+        hardware: {
+          manufacturerId: f.hardware.manufacturer?.id ?? null,
+          modelId: f.hardware.model?.id ?? null,
+          serialNumber: f.hardware.serialNumber,
+        },
+      };
     case 'network_host':
       return { ...base, networkHost: f.networkHost };
     case 'purchase':

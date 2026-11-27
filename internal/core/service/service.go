@@ -29,6 +29,10 @@ type Repositories struct {
 	ItemTypes port.ItemTypeRepository
 	// StorageItems stores the items kept in storages with their modules.
 	StorageItems port.StorageItemRepository
+	// Manufacturers and HardwareModels store the central list hardware
+	// modules pick from.
+	Manufacturers  port.ManufacturerRepository
+	HardwareModels port.HardwareModelRepository
 	// AssetTagCounters stores the per-prefix counters of proposed asset tags.
 	AssetTagCounters port.AssetTagCounterRepository
 	Users            port.UserRepository
