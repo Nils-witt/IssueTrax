@@ -206,6 +206,7 @@ type ModuleNetworkInterface struct {
 	Ipv6Address *netip.Prefix
 	Ipv6Gateway *netip.Addr
 	Ipv6Dns     []netip.Addr
+	Poe         string
 }
 
 type ModuleOperatingSystem struct {

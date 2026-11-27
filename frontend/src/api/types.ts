@@ -214,6 +214,9 @@ export interface UpdateStorageInput {
 
 export type NetworkRole = 'router' | 'switch' | 'client';
 export type NetworkInterfaceType = 'wired' | 'wireless';
+/** Power over Ethernet role: supplies power, can be powered, must be powered, or neither. Always 'none' for wireless interfaces. */
+export const poeModes = ['none', 'provider', 'receiver', 'required'] as const;
+export type PoE = (typeof poeModes)[number];
 export type IPv4Mode = 'dhcp' | 'static' | 'off';
 /** SLAAC only exists for IPv6. */
 export type IPv6Mode = 'dhcp' | 'slaac' | 'static' | 'off';
@@ -234,6 +237,7 @@ export interface NetworkInterface {
   type: NetworkInterfaceType;
   /** Always empty for wired interfaces. */
   ssid: string;
+  poe: PoE;
   /** The untagged VLAN, if any. */
   nativeVlan: number | null;
   taggedVlans: number[];
@@ -256,6 +260,8 @@ export interface NetworkInterfaceInput {
   type: NetworkInterfaceType;
   /** Only for wireless interfaces. */
   ssid?: string | null;
+  /** Leave out for 'none'; wireless interfaces only allow 'none'. */
+  poe?: PoE;
   nativeVlan?: number | null;
   taggedVlans?: number[];
   ipv4: IPConfigInput<IPv4Mode>;

@@ -444,6 +444,8 @@ export const en = {
     type: 'Type',
     types: { wired: 'Wired', wireless: 'Wireless' },
     ssid: 'SSID',
+    poe: 'PoE',
+    poeModes: { none: 'No PoE', provider: 'PoE provider', receiver: 'PoE receiver', required: 'PoE required' },
     nativeVlan: 'Native VLAN',
     taggedVlans: 'Tagged VLANs',
     ipv4Mode: 'IPv4',

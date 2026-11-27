@@ -24,6 +24,9 @@ type networkInterfaceJSON struct {
 	MAC  string `json:"mac"`
 	Type string `json:"type"`
 	SSID string `json:"ssid"`
+	// PoE is none, provider, receiver or required; empty in requests
+	// means none.
+	PoE string `json:"poe"`
 	// NativeVLAN is null when the interface has no untagged VLAN.
 	NativeVLAN  *int         `json:"nativeVlan"`
 	TaggedVLANs []int        `json:"taggedVlans"`
@@ -193,6 +196,7 @@ func toNetworkInterfaceJSON(n domain.NetworkInterface) networkInterfaceJSON {
 		MAC:         n.MAC,
 		Type:        string(n.Type),
 		SSID:        n.SSID,
+		PoE:         string(n.PoE),
 		TaggedVLANs: append([]int{}, n.TaggedVLANs...),
 		IPv4:        toIPConfigJSON(n.IPv4),
 		IPv6:        toIPConfigJSON(n.IPv6),
@@ -363,6 +367,7 @@ func (n networkInterfaceJSON) params() domain.NetworkInterfaceParams {
 		MAC:         n.MAC,
 		Type:        domain.NetworkInterfaceType(n.Type),
 		SSID:        n.SSID,
+		PoE:         domain.PoE(n.PoE),
 		NativeVLAN:  n.NativeVLAN,
 		TaggedVLANs: n.TaggedVLANs,
 		IPv4:        n.IPv4.params(),

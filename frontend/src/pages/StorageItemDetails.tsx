@@ -439,6 +439,7 @@ function moduleFields(t: T, m: Module): ReactNode {
         <Field label={t('modules.mac')}>{n.mac && <code>{n.mac}</code>}</Field>
         <Field label={t('modules.type')}>{t(`modules.types.${n.type}`)}</Field>
         {n.type === 'wireless' && <Field label={t('modules.ssid')}>{n.ssid}</Field>}
+        {n.type === 'wired' && <Field label={t('modules.poe')}>{t(`modules.poeModes.${n.poe}`)}</Field>}
         <Field label={t('modules.nativeVlan')}>{n.nativeVlan ?? undefined}</Field>
         <Field label={t('modules.taggedVlans')}>{n.taggedVlans.join(', ')}</Field>
         <Field label={t('modules.ipv4Mode')}>{ipText(t, n.ipv4)}</Field>

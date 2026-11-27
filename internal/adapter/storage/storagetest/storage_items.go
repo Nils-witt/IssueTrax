@@ -105,7 +105,7 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 			Name: "Core BT", Address: "cc:dd:ee:00:11:33", Version: "5.3",
 		}},
 		{ID: moduleID(), Kind: domain.ModuleNetworkInterface, Primary: true, NetworkInterface: &domain.NetworkInterface{
-			Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, NativeVLAN: 10, TaggedVLANs: []int{20, 30},
+			Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, PoE: domain.PoERequired, NativeVLAN: 10, TaggedVLANs: []int{20, 30},
 			IPv4: domain.IPConfig{
 				Mode: domain.IPModeStatic, Address: netip.MustParsePrefix("10.0.0.2/24"), Gateway: netip.MustParseAddr("10.0.0.1"),
 				DNSServers: []netip.Addr{netip.MustParseAddr("10.0.0.1")},
@@ -113,7 +113,7 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 			IPv6: domain.IPConfig{Mode: domain.IPModeSLAAC, DNSServers: []netip.Addr{}},
 		}},
 		{ID: moduleID(), Kind: domain.ModuleNetworkInterface, NetworkInterface: &domain.NetworkInterface{
-			Name: "wlan0", MAC: "02:00:00:00:00:01", Type: domain.NetworkInterfaceWireless, SSID: "Office", TaggedVLANs: []int{},
+			Name: "wlan0", MAC: "02:00:00:00:00:01", Type: domain.NetworkInterfaceWireless, SSID: "Office", PoE: domain.PoENone, TaggedVLANs: []int{},
 			IPv4: domain.IPConfig{Mode: domain.IPModeDHCP, DNSServers: []netip.Addr{}},
 			IPv6: domain.IPConfig{Mode: domain.IPModeOff, DNSServers: []netip.Addr{}},
 		}},

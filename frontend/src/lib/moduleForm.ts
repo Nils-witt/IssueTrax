@@ -13,6 +13,7 @@ import {
   type NetworkInterfaceInput,
   type NetworkInterfaceType,
   type NetworkRole,
+  type PoE,
   type OperatingSystem,
   type Bluetooth,
   type SIPClient,
@@ -34,6 +35,7 @@ export interface InterfaceForm {
   mac: string;
   type: NetworkInterfaceType;
   ssid: string;
+  poe: PoE;
   nativeVlan: string;
   taggedVlans: string[];
   ipv4: IPForm<IPv4Mode>;
@@ -98,6 +100,7 @@ function interfaceForm(n?: NetworkInterface): InterfaceForm {
     mac: n?.mac ?? '',
     type: n?.type ?? 'wired',
     ssid: n?.ssid ?? '',
+    poe: n?.poe ?? 'none',
     nativeVlan: n?.nativeVlan == null ? '' : String(n.nativeVlan),
     taggedVlans: n?.taggedVlans.map(String) ?? [],
     ipv4: n ? ipForm(n.ipv4) : { mode: 'dhcp', address: '', prefixLength: '', gateway: '', dnsServers: [] },
@@ -171,6 +174,7 @@ function interfaceInput(f: InterfaceForm): NetworkInterfaceInput {
     mac: f.mac,
     type: f.type,
     ssid: f.type === 'wireless' ? f.ssid : null,
+    poe: f.type === 'wired' ? f.poe : 'none',
     nativeVlan: optionalNumber(f.nativeVlan),
     taggedVlans: f.taggedVlans.map(Number),
     ipv4: ipInput(f.ipv4),

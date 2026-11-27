@@ -13,7 +13,7 @@ import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/DeleteOutlined';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type SIPTransport, sipTransports, type WWANTechnology, wwanTechnologies } from '../api/types';
+import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type PoE, poeModes, type SIPTransport, sipTransports, type WWANTechnology, wwanTechnologies } from '../api/types';
 import { fieldErrorText, fieldErrorTextUnder } from '../lib/errors';
 import { CatalogPicker } from './CatalogPicker';
 import { StorageItemPicker } from './StorageItemPicker';
@@ -574,6 +574,26 @@ function InterfaceEditor({ value, onChange, path, error }: InterfaceEditorProps)
             ))}
           </TextField>
         </Grid>
+        {value.type === 'wired' && (
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={t('modules.poe')}
+              value={value.poe}
+              onChange={(e) => set('poe', e.target.value as PoE)}
+              error={!!fieldError('poe')}
+              helperText={fieldError('poe')}
+            >
+              {poeModes.map((mode) => (
+                <MenuItem key={mode} value={mode}>
+                  {t(`modules.poeModes.${mode}`)}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+        )}
         {value.type === 'wireless' && (
           <Grid size={{ xs: 12, sm: 4 }}>
             <TextField
@@ -588,7 +608,7 @@ function InterfaceEditor({ value, onChange, path, error }: InterfaceEditorProps)
             />
           </Grid>
         )}
-        <Grid size={{ xs: 12, sm: value.type === 'wireless' ? 3 : 4 }}>
+        <Grid size={{ xs: 12, sm: 3 }}>
           <TextField
             fullWidth
             size="small"
@@ -601,7 +621,7 @@ function InterfaceEditor({ value, onChange, path, error }: InterfaceEditorProps)
             slotProps={{ htmlInput: { min: 1, max: 4094 } }}
           />
         </Grid>
-        <Grid size={{ xs: 12, sm: value.type === 'wireless' ? 5 : 8 }}>
+        <Grid size={{ xs: 12, sm: 5 }}>
           <ChipListInput
             label={t('modules.taggedVlans')}
             value={value.taggedVlans}

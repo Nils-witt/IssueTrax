@@ -211,16 +211,17 @@ SELECT * FROM module_bluetooth WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (
-    module_id, name, mac, type, ssid, native_vlan, tagged_vlans,
+    module_id, name, mac, type, ssid, poe, native_vlan, tagged_vlans,
     ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns,
     ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns
 ) VALUES (
-    @module_id, @name, @mac, @type, @ssid, @native_vlan, @tagged_vlans,
+    @module_id, @name, @mac, @type, @ssid, @poe, @native_vlan, @tagged_vlans,
     @ipv4_mode, @ipv4_address, @ipv4_gateway, @ipv4_dns,
     @ipv6_mode, @ipv6_address, @ipv6_gateway, @ipv6_dns
 )
 ON CONFLICT (module_id) DO UPDATE
 SET name = EXCLUDED.name, mac = EXCLUDED.mac, type = EXCLUDED.type, ssid = EXCLUDED.ssid,
+    poe = EXCLUDED.poe,
     native_vlan = EXCLUDED.native_vlan, tagged_vlans = EXCLUDED.tagged_vlans,
     ipv4_mode = EXCLUDED.ipv4_mode, ipv4_address = EXCLUDED.ipv4_address, ipv4_gateway = EXCLUDED.ipv4_gateway,
     ipv4_dns = EXCLUDED.ipv4_dns, ipv6_mode = EXCLUDED.ipv6_mode, ipv6_address = EXCLUDED.ipv6_address,

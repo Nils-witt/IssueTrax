@@ -33,6 +33,26 @@ func (t NetworkInterfaceType) Valid() bool {
 	return t == NetworkInterfaceWired || t == NetworkInterfaceWireless
 }
 
+// PoE is an interface's Power over Ethernet role.
+type PoE string
+
+// PoE roles.
+const (
+	// PoENone means the interface neither supplies nor draws PoE.
+	PoENone PoE = "none"
+	// PoEProvider supplies power (power sourcing equipment, e.g. a switch port).
+	PoEProvider PoE = "provider"
+	// PoEReceiver can be powered over the cable but has another supply too.
+	PoEReceiver PoE = "receiver"
+	// PoERequired must be powered over the cable to run.
+	PoERequired PoE = "required"
+)
+
+// Valid reports whether p is a known PoE role.
+func (p PoE) Valid() bool {
+	return p == PoENone || p == PoEProvider || p == PoEReceiver || p == PoERequired
+}
+
 // IPMode is how an interface gets its address for one IP family.
 type IPMode string
 
@@ -99,6 +119,8 @@ type NetworkInterface struct {
 	Type NetworkInterfaceType
 	// SSID is the wireless network name; always empty for wired interfaces.
 	SSID string
+	// PoE is never empty; always PoENone for wireless interfaces.
+	PoE PoE
 	// NativeVLAN is the untagged VLAN ID; 0 means none.
 	NativeVLAN int
 	// TaggedVLANs are distinct VLAN IDs, never including NativeVLAN.
@@ -109,7 +131,7 @@ type NetworkInterface struct {
 
 // Equal reports whether n and o are the same interface configuration.
 func (n NetworkInterface) Equal(o NetworkInterface) bool {
-	return n.Name == o.Name && n.MAC == o.MAC && n.Type == o.Type && n.SSID == o.SSID && n.NativeVLAN == o.NativeVLAN &&
+	return n.Name == o.Name && n.MAC == o.MAC && n.Type == o.Type && n.SSID == o.SSID && n.PoE == o.PoE && n.NativeVLAN == o.NativeVLAN &&
 		slices.Equal(n.TaggedVLANs, o.TaggedVLANs) && n.IPv4.Equal(o.IPv4) && n.IPv6.Equal(o.IPv6)
 }
 
@@ -121,6 +143,10 @@ func (n NetworkInterface) String() string {
 
 	if n.SSID != "" {
 		fmt.Fprintf(&b, " ssid %q", n.SSID)
+	}
+
+	if n.PoE != "" && n.PoE != PoENone {
+		fmt.Fprintf(&b, " poe %s", n.PoE)
 	}
 
 	if n.NativeVLAN != 0 {
@@ -152,12 +178,14 @@ type IPConfigParams struct {
 	DNSServers   []string
 }
 
-// NetworkInterfaceParams is unvalidated input for one interface.
+// NetworkInterfaceParams is unvalidated input for one interface. An empty
+// PoE means PoENone.
 type NetworkInterfaceParams struct {
 	Name        string
 	MAC         string
 	Type        NetworkInterfaceType
 	SSID        string
+	PoE         PoE
 	NativeVLAN  *int
 	TaggedVLANs []int
 	IPv4        IPConfigParams
@@ -170,6 +198,11 @@ func checkInterface(f fieldErrors, field string, p NetworkInterfaceParams) Netwo
 		MAC:  checkMAC(f, field+".mac", p.MAC),
 		Type: p.Type,
 		SSID: strings.TrimSpace(p.SSID),
+		PoE:  p.PoE,
+	}
+
+	if n.PoE == "" {
+		n.PoE = PoENone
 	}
 
 	switch {
@@ -185,6 +218,13 @@ func checkInterface(f fieldErrors, field string, p NetworkInterfaceParams) Netwo
 		f.add(field+".ssid", FieldInvalid)
 	case len(n.SSID) > maxSSIDBytes:
 		f.add(field+".ssid", FieldTooLong)
+	}
+
+	switch {
+	case !n.PoE.Valid():
+		f.add(field+".poe", FieldInvalid)
+	case n.PoE != PoENone && p.Type == NetworkInterfaceWireless:
+		f.add(field+".poe", FieldInvalid)
 	}
 
 	if p.NativeVLAN != nil {

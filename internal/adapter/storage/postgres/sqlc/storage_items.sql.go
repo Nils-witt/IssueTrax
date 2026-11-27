@@ -288,7 +288,7 @@ func (q *Queries) ListNetworkHostModules(ctx context.Context, moduleIds []uuid.U
 }
 
 const listNetworkInterfaceModules = `-- name: ListNetworkInterfaceModules :many
-SELECT module_id, name, mac, type, ssid, native_vlan, tagged_vlans, ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns, ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns FROM module_network_interfaces WHERE module_id = ANY ($1::uuid[])
+SELECT module_id, name, mac, type, ssid, native_vlan, tagged_vlans, ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns, ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns, poe FROM module_network_interfaces WHERE module_id = ANY ($1::uuid[])
 `
 
 func (q *Queries) ListNetworkInterfaceModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleNetworkInterface, error) {
@@ -316,6 +316,7 @@ func (q *Queries) ListNetworkInterfaceModules(ctx context.Context, moduleIds []u
 			&i.Ipv6Address,
 			&i.Ipv6Gateway,
 			&i.Ipv6Dns,
+			&i.Poe,
 		); err != nil {
 			return nil, err
 		}
@@ -747,16 +748,17 @@ func (q *Queries) UpsertNetworkHostModule(ctx context.Context, arg UpsertNetwork
 
 const upsertNetworkInterfaceModule = `-- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (
-    module_id, name, mac, type, ssid, native_vlan, tagged_vlans,
+    module_id, name, mac, type, ssid, poe, native_vlan, tagged_vlans,
     ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns,
     ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7,
-    $8, $9, $10, $11,
-    $12, $13, $14, $15
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12,
+    $13, $14, $15, $16
 )
 ON CONFLICT (module_id) DO UPDATE
 SET name = EXCLUDED.name, mac = EXCLUDED.mac, type = EXCLUDED.type, ssid = EXCLUDED.ssid,
+    poe = EXCLUDED.poe,
     native_vlan = EXCLUDED.native_vlan, tagged_vlans = EXCLUDED.tagged_vlans,
     ipv4_mode = EXCLUDED.ipv4_mode, ipv4_address = EXCLUDED.ipv4_address, ipv4_gateway = EXCLUDED.ipv4_gateway,
     ipv4_dns = EXCLUDED.ipv4_dns, ipv6_mode = EXCLUDED.ipv6_mode, ipv6_address = EXCLUDED.ipv6_address,
@@ -769,6 +771,7 @@ type UpsertNetworkInterfaceModuleParams struct {
 	Mac         net.HardwareAddr
 	Type        string
 	Ssid        string
+	Poe         string
 	NativeVlan  *int32
 	TaggedVlans []int32
 	Ipv4Mode    string
@@ -788,6 +791,7 @@ func (q *Queries) UpsertNetworkInterfaceModule(ctx context.Context, arg UpsertNe
 		arg.Mac,
 		arg.Type,
 		arg.Ssid,
+		arg.Poe,
 		arg.NativeVlan,
 		arg.TaggedVlans,
 		arg.Ipv4Mode,

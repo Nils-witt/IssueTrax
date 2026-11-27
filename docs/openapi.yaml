@@ -2558,12 +2558,19 @@ components:
 
     NetworkInterface:
       type: object
-      required: [name, mac, type, ssid, nativeVlan, taggedVlans, ipv4, ipv6]
+      required: [name, mac, type, ssid, poe, nativeVlan, taggedVlans, ipv4, ipv6]
       properties:
         name: { type: string, maxLength: 100, example: eth0 }
         mac: { type: string, description: "EUI-48, lower case and colon-separated.", example: "aa:bb:cc:00:11:22" }
         type: { type: string, enum: [wired, wireless] }
         ssid: { type: string, description: Wireless network name; always empty for wired interfaces. }
+        poe:
+          type: string
+          enum: [none, provider, receiver, required]
+          description: |
+            Power over Ethernet role: `provider` supplies power (e.g. a switch
+            port), `receiver` can be powered over the cable, `required` must
+            be, `none` neither. Always `none` for wireless interfaces.
         nativeVlan: { type: [integer, "null"], minimum: 1, maximum: 4094, description: Untagged VLAN. }
         taggedVlans: { type: array, items: { type: integer, minimum: 1, maximum: 4094 } }
         ipv4: { $ref: "#/components/schemas/IPv4Config" }
@@ -2594,6 +2601,11 @@ components:
         mac: { type: string, description: "EUI-48 in any common notation (aa:bb:…, AA-BB-…, aabb.cc…)." }
         type: { type: string, enum: [wired, wireless] }
         ssid: { type: [string, "null"], maxLength: 32, description: Only allowed for wireless interfaces. }
+        poe:
+          type: string
+          enum: ["", none, provider, receiver, required]
+          default: none
+          description: Power over Ethernet role; empty or absent means `none`. Wireless interfaces only allow `none`.
         nativeVlan: { type: [integer, "null"], minimum: 1, maximum: 4094 }
         taggedVlans:
           type: array

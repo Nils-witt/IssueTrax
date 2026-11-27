@@ -30,7 +30,7 @@ func TestNetworkInterfaceModule(t *testing.T) {
 	t.Parallel()
 
 	item, err := itemWith(domain.ModuleParams{Kind: domain.ModuleNetworkInterface, NetworkInterface: &domain.NetworkInterfaceParams{
-		Name: " eth0 ", MAC: "AA-BB-CC-00-11-22", Type: domain.NetworkInterfaceWired,
+		Name: " eth0 ", MAC: "AA-BB-CC-00-11-22", Type: domain.NetworkInterfaceWired, PoE: domain.PoERequired,
 		NativeVLAN: new(1), TaggedVLANs: []int{4094, 20},
 		IPv4: domain.IPConfigParams{
 			Mode: domain.IPModeStatic, Address: " 192.168.1.10 ", PrefixLength: new(24),
@@ -46,7 +46,7 @@ func TestNetworkInterfaceModule(t *testing.T) {
 	}
 
 	want := domain.NetworkInterface{
-		Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, NativeVLAN: 1, TaggedVLANs: []int{4094, 20},
+		Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, PoE: domain.PoERequired, NativeVLAN: 1, TaggedVLANs: []int{4094, 20},
 		IPv4: domain.IPConfig{
 			Mode: domain.IPModeStatic, Address: netip.MustParsePrefix("192.168.1.10/24"), Gateway: netip.MustParseAddr("192.168.1.1"),
 			DNSServers: []netip.Addr{netip.MustParseAddr("192.168.1.1"), netip.MustParseAddr("9.9.9.9")},
@@ -97,6 +97,19 @@ var interfaceValidationCases = []struct {
 			p.SSID = strings.Repeat("a", 33)
 		},
 		want: map[string]string{"ssid": domain.FieldTooLong},
+	},
+	{
+		name:   "unknown poe",
+		change: func(p *domain.NetworkInterfaceParams) { p.PoE = "passive" },
+		want:   map[string]string{"poe": domain.FieldInvalid},
+	},
+	{
+		name: "poe on wireless",
+		change: func(p *domain.NetworkInterfaceParams) {
+			p.Type = domain.NetworkInterfaceWireless
+			p.PoE = domain.PoEReceiver
+		},
+		want: map[string]string{"poe": domain.FieldInvalid},
 	},
 	{
 		name: "vlans",
@@ -240,6 +253,37 @@ func TestNetworkHostAndHardwareModules(t *testing.T) {
 				t.Fatalf("host = %+v", item.Modules[0].NetworkHost)
 			}
 		})
+	}
+}
+
+func TestNetworkInterfacePoEDefaultsToNone(t *testing.T) {
+	t.Parallel()
+
+	for _, typ := range []domain.NetworkInterfaceType{domain.NetworkInterfaceWired, domain.NetworkInterfaceWireless} {
+		p := dhcpInterface()
+		p.Type = typ
+
+		item, err := itemWith(domain.ModuleParams{Kind: domain.ModuleNetworkInterface, NetworkInterface: &p})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := item.Modules[0].NetworkInterface.PoE; got != domain.PoENone {
+			t.Fatalf("%s poe = %q, want %q", typ, got, domain.PoENone)
+		}
+	}
+}
+
+func TestNetworkInterfaceStringPoE(t *testing.T) {
+	t.Parallel()
+
+	n := domain.NetworkInterface{
+		Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, PoE: domain.PoEProvider,
+		IPv4: domain.IPConfig{Mode: domain.IPModeDHCP}, IPv6: domain.IPConfig{Mode: domain.IPModeOff},
+	}
+
+	if got, want := n.String(), "eth0 aa:bb:cc:00:11:22 wired poe provider; ipv4 dhcp; ipv6 off"; got != want {
+		t.Fatalf("String() = %q, want %q", got, want)
 	}
 }
 

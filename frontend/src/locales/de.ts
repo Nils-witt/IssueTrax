@@ -444,6 +444,8 @@ export const de: Messages = {
     type: 'Art',
     types: { wired: 'Kabelgebunden', wireless: 'Drahtlos' },
     ssid: 'SSID',
+    poe: 'PoE',
+    poeModes: { none: 'Kein PoE', provider: 'PoE-Versorger', receiver: 'PoE-Empfänger', required: 'PoE erforderlich' },
     nativeVlan: 'Natives VLAN',
     taggedVlans: 'Getaggte VLANs',
     ipv4Mode: 'IPv4',

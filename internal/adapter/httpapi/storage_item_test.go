@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,7 @@ type moduleBodyJSON struct {
 	NetworkInterface *struct {
 		Name string `json:"name"`
 		MAC  string `json:"mac"`
+		PoE  string `json:"poe"`
 	} `json:"networkInterface"`
 }
 
@@ -114,7 +116,7 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 
 	item := env.createStorageItem(t, c, `{"assetTag":"NET-00001","name":"Core","storageId":"`+shelf.ID+`","typeId":"`+typ.ID+
 		`","usable":true,"personResponsibleId":"`+me+`","modules":[`+
-		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
+		`{"kind":"network_interface","primary":true,"networkInterface":`+strings.Replace(ethJSON, `"wired"`, `"wired","poe":"receiver"`, 1)+`},`+
 		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
 		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890","imsi":"262 01 1234567890"}},`+
 		`{"kind":"wwan","wwan":{"imei":"49-015420-323751-8","apn":"internet.telekom","technology":"5g"}},`+
@@ -136,7 +138,7 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 	r.json(t, &updated)
 
 	if updated.Usable || updated.PersonResponsible != nil || updated.DecommissionedAt == nil || len(updated.Modules) != 1 ||
-		updated.Modules[0].ID != eth.ID || updated.Modules[0].Primary {
+		updated.Modules[0].ID != eth.ID || updated.Modules[0].Primary || updated.Modules[0].NetworkInterface.PoE != "none" {
 		t.Fatalf("updated = %+v", updated)
 	}
 
@@ -161,7 +163,7 @@ func wantCreatedItem(t *testing.T, item storageItemJSON, me string) {
 	}
 
 	if p := item.Modules[1].Purchase; p == nil || *p.Price != "12.50" || p.Currency != "EUR" ||
-		item.Modules[7].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
+		item.Modules[7].NetworkInterface.MAC != "aa:bb:cc:00:11:22" || item.Modules[7].NetworkInterface.PoE != "receiver" {
 		t.Fatalf("created modules = %+v", item.Modules)
 	}
 
