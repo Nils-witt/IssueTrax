@@ -7,15 +7,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
-	"unicode/utf8"
 )
 
-// Network device limits.
+// Network interface limits.
 const (
-	maxDeviceTextRunes    = 100
-	maxHostnameBytes      = 253
-	maxHostnameLabelBytes = 63
 	maxInterfaceNameRunes = 100
 	// maxSSIDBytes is the 802.11 limit for a network name.
 	maxSSIDBytes = 32
@@ -23,21 +18,6 @@ const (
 	MinVLAN = 1
 	MaxVLAN = 4094
 )
-
-// NetworkRole is what a network device does in the network.
-type NetworkRole string
-
-// Network roles.
-const (
-	NetworkRoleRouter NetworkRole = "router"
-	NetworkRoleSwitch NetworkRole = "switch"
-	NetworkRoleClient NetworkRole = "client"
-)
-
-// Valid reports whether r is a known role.
-func (r NetworkRole) Valid() bool {
-	return r == NetworkRoleRouter || r == NetworkRoleSwitch || r == NetworkRoleClient
-}
 
 // NetworkInterfaceType is the physical medium of a network interface.
 type NetworkInterfaceType string
@@ -108,7 +88,8 @@ func (c IPConfig) String() string {
 	return b.String()
 }
 
-// NetworkInterface is one network interface of a NetworkDevice.
+// NetworkInterface is one network interface: the payload of a
+// ModuleNetworkInterface module.
 type NetworkInterface struct {
 	// Name labels the interface, e.g. "eth0".
 	Name string
@@ -160,20 +141,6 @@ func (n NetworkInterface) String() string {
 	return b.String()
 }
 
-// NetworkDevice is a storage item of kind StorageItemKindNetworkDevice: a
-// device with exactly one primary and any number of secondary interfaces.
-type NetworkDevice struct {
-	StorageItem
-	Role NetworkRole
-	// Hostname, Manufacturer, Model and SerialNumber may be empty.
-	Hostname     string
-	Manufacturer string
-	Model        string
-	SerialNumber string
-	Primary      NetworkInterface
-	Secondary    []NetworkInterface
-}
-
 // IPConfigParams is unvalidated input for one IP family of an interface.
 // Address, PrefixLength, Gateway and DNSServers are only allowed when Mode
 // is IPModeStatic; Address and PrefixLength are then required.
@@ -195,216 +162,6 @@ type NetworkInterfaceParams struct {
 	TaggedVLANs []int
 	IPv4        IPConfigParams
 	IPv6        IPConfigParams
-}
-
-// NewNetworkDeviceParams are the inputs for NewNetworkDevice.
-type NewNetworkDeviceParams struct {
-	ID           StorageItemID
-	StorageID    StorageID
-	Name         string
-	Description  string
-	Role         NetworkRole
-	Hostname     string
-	Manufacturer string
-	Model        string
-	SerialNumber string
-	Primary      NetworkInterfaceParams
-	Secondary    []NetworkInterfaceParams
-	Now          time.Time
-}
-
-// NewNetworkDevice validates p and builds a NetworkDevice. It does not
-// check that the storage exists; that needs storage. Field errors use the
-// API field names, e.g. "secondaryInterfaces[1].ipv4.gateway".
-func NewNetworkDevice(p NewNetworkDeviceParams) (NetworkDevice, error) {
-	f := fieldErrors{}
-
-	device := NetworkDevice{
-		ID:           p.ID,
-		StorageID:    p.StorageID,
-		Kind:         StorageItemKindNetworkDevice,
-		Name:         checkRequiredText(f, "name", p.Name, maxProjectNameRunes),
-		Description:  checkDescription(f, "description", p.Description),
-		CreatedAt:    p.Now,
-		UpdatedAt:    p.Now,
-		Role:         checkRole(f, p.Role),
-		Hostname:     checkHostname(f, p.Hostname),
-		Manufacturer: checkOptionalText(f, "manufacturer", p.Manufacturer, maxDeviceTextRunes),
-		Model:        checkOptionalText(f, "model", p.Model, maxDeviceTextRunes),
-		SerialNumber: checkOptionalText(f, "serialNumber", p.SerialNumber, maxDeviceTextRunes),
-		Primary:      checkInterface(f, "primaryInterface", p.Primary),
-		Secondary:    checkInterfaces(f, p.Secondary),
-	}
-
-	if err := f.err(); err != nil {
-		return NetworkDevice{}, err
-	}
-
-	return device, nil
-}
-
-// NetworkDeviceChanges lists the mutable fields; nil means unchanged.
-// StorageID moves the device. Primary and Secondary each replace what is
-// stored, so swapping them makes a secondary interface primary.
-type NetworkDeviceChanges struct {
-	Name         *string
-	Description  *string
-	StorageID    *StorageID
-	Role         *NetworkRole
-	Hostname     *string
-	Manufacturer *string
-	Model        *string
-	SerialNumber *string
-	Primary      *NetworkInterfaceParams
-	Secondary    *[]NetworkInterfaceParams
-}
-
-// Apply validates and applies c. On error d is left unchanged. A deleted
-// device fails with ErrStorageItemDeleted.
-func (d *NetworkDevice) Apply(c NetworkDeviceChanges, now time.Time) error {
-	if d.IsDeleted() {
-		return ErrStorageItemDeleted
-	}
-
-	f := fieldErrors{}
-	next := *d
-
-	if c.Name != nil {
-		next.Name = checkRequiredText(f, "name", *c.Name, maxProjectNameRunes)
-	}
-
-	if c.Description != nil {
-		next.Description = checkDescription(f, "description", *c.Description)
-	}
-
-	if c.StorageID != nil {
-		next.StorageID = *c.StorageID
-	}
-
-	next.applyDetails(f, c)
-
-	if c.Primary != nil {
-		next.Primary = checkInterface(f, "primaryInterface", *c.Primary)
-	}
-
-	if c.Secondary != nil {
-		next.Secondary = checkInterfaces(f, *c.Secondary)
-	}
-
-	if err := f.err(); err != nil {
-		return err
-	}
-
-	if !next.sameContent(*d) {
-		next.UpdatedAt = now
-	}
-
-	*d = next
-
-	return nil
-}
-
-// applyDetails applies the role and identification fields of c to d.
-func (d *NetworkDevice) applyDetails(f fieldErrors, c NetworkDeviceChanges) {
-	if c.Role != nil {
-		d.Role = checkRole(f, *c.Role)
-	}
-
-	if c.Hostname != nil {
-		d.Hostname = checkHostname(f, *c.Hostname)
-	}
-
-	if c.Manufacturer != nil {
-		d.Manufacturer = checkOptionalText(f, "manufacturer", *c.Manufacturer, maxDeviceTextRunes)
-	}
-
-	if c.Model != nil {
-		d.Model = checkOptionalText(f, "model", *c.Model, maxDeviceTextRunes)
-	}
-
-	if c.SerialNumber != nil {
-		d.SerialNumber = checkOptionalText(f, "serialNumber", *c.SerialNumber, maxDeviceTextRunes)
-	}
-}
-
-// sameContent reports whether d and o have the same mutable fields.
-func (d NetworkDevice) sameContent(o NetworkDevice) bool {
-	return d.Name == o.Name && d.Description == o.Description && d.StorageID == o.StorageID && d.Role == o.Role &&
-		d.Hostname == o.Hostname && d.Manufacturer == o.Manufacturer && d.Model == o.Model &&
-		d.SerialNumber == o.SerialNumber && d.Primary.Equal(o.Primary) &&
-		slices.EqualFunc(d.Secondary, o.Secondary, NetworkInterface.Equal)
-}
-
-func checkRole(f fieldErrors, r NetworkRole) NetworkRole {
-	switch {
-	case r == "":
-		f.add("role", FieldRequired)
-	case !r.Valid():
-		f.add("role", FieldInvalid)
-	}
-
-	return r
-}
-
-// checkOptionalText trims s and records too_long for field.
-func checkOptionalText(f fieldErrors, field, s string, maxRunes int) string {
-	s = strings.TrimSpace(s)
-	if utf8.RuneCountInString(s) > maxRunes {
-		f.add(field, FieldTooLong)
-	}
-
-	return s
-}
-
-// checkHostname trims s and checks it is empty or an RFC 1123 host name:
-// dot-separated labels of letters, digits and hyphens, not starting or
-// ending with a hyphen.
-func checkHostname(f fieldErrors, s string) string {
-	s = strings.TrimSpace(s)
-
-	switch {
-	case s == "":
-	case len(s) > maxHostnameBytes:
-		f.add("hostname", FieldTooLong)
-	case !validHostname(s):
-		f.add("hostname", FieldInvalid)
-	}
-
-	return s
-}
-
-func validHostname(s string) bool {
-	for label := range strings.SplitSeq(s, ".") {
-		if !validHostnameLabel(label) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func validHostnameLabel(label string) bool {
-	if label == "" || len(label) > maxHostnameLabelBytes || label[0] == '-' || label[len(label)-1] == '-' {
-		return false
-	}
-
-	for _, c := range []byte(label) {
-		letterOrDigit := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
-		if !letterOrDigit && c != '-' {
-			return false
-		}
-	}
-
-	return true
-}
-
-func checkInterfaces(f fieldErrors, ps []NetworkInterfaceParams) []NetworkInterface {
-	out := make([]NetworkInterface, 0, len(ps))
-	for i, p := range ps {
-		out = append(out, checkInterface(f, fmt.Sprintf("secondaryInterfaces[%d]", i), p))
-	}
-
-	return out
 }
 
 func checkInterface(f fieldErrors, field string, p NetworkInterfaceParams) NetworkInterface {
@@ -611,4 +368,15 @@ func checkAddr(f fieldErrors, field, s string, v6, required bool) (netip.Addr, b
 	}
 
 	return addr, true
+}
+
+// NormalizeMAC returns s as a lower-case, colon-separated EUI-48 MAC
+// address; ok is false when s is not one in any notation net.ParseMAC knows.
+func NormalizeMAC(s string) (mac string, ok bool) {
+	hw, err := net.ParseMAC(strings.TrimSpace(s))
+	if err != nil || len(hw) != 6 {
+		return "", false
+	}
+
+	return hw.String(), true
 }

@@ -2,17 +2,17 @@ package httpapi
 
 import (
 	"net/http"
-	"strings"
+	"net/url"
+
+	"github.com/google/uuid"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
-	"nilswitt.dev/issuetrax/internal/core/port"
 )
 
-// storageItemRefResponse is the shared part of a storage item of any kind,
-// as linked from issues and found by the kind-agnostic search.
+// storageItemRefResponse is a storage item as linked from issues.
 type storageItemRefResponse struct {
 	ID        string `json:"id"`
-	Kind      string `json:"kind"`
+	AssetTag  string `json:"assetTag"`
 	StorageID string `json:"storageId"`
 	Name      string `json:"name"`
 	Deleted   bool   `json:"deleted"`
@@ -21,38 +21,11 @@ type storageItemRefResponse struct {
 func toStorageItemRefResponse(i domain.StorageItem) storageItemRefResponse {
 	return storageItemRefResponse{
 		ID:        i.ID.String(),
-		Kind:      string(i.Kind),
+		AssetTag:  i.AssetTag,
 		StorageID: i.StorageID.String(),
 		Name:      i.Name,
 		Deleted:   i.IsDeleted(),
 	}
-}
-
-// GET /api/storage-items?q=&deleted=&limit=&cursor= searches items of every kind.
-func (h *Handler) searchStorageItems(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	q := r.URL.Query()
-
-	page, err := pageRequest(q)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	deleted, err := boolParam(q, "deleted")
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	filter := port.StorageItemFilter{Query: strings.TrimSpace(q.Get("q")), Deleted: deleted}
-
-	found, err := h.storageItems.Search(r.Context(), filter, page)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, toPageResponse(found, toStorageItemRefResponse))
 }
 
 // GET /api/storage-items/{id}/issues?limit=&cursor= lists the issues of
@@ -77,4 +50,35 @@ func (h *Handler) listStorageItemIssues(w http.ResponseWriter, r *http.Request, 
 	}
 
 	writeJSON(w, http.StatusOK, toPageResponse(issues, toIssueResponse))
+}
+
+func storageItemPathID(r *http.Request) (domain.StorageItemID, bool) {
+	id, err := uuid.Parse(r.PathValue("id"))
+
+	return domain.StorageItemID(id), err == nil
+}
+
+// optionalBoolParam reads an optional "true"/"false" query parameter;
+// absent or empty is nil.
+func optionalBoolParam(q url.Values, name string) (*bool, error) {
+	if q.Get(name) == "" {
+		return nil, nil //nolint:nilnil // nil means "no filter"
+	}
+
+	v, err := boolParam(q, name)
+
+	return &v, err
+}
+
+// boolParam reads an optional "true"/"false" query parameter; absent or
+// empty is false.
+func boolParam(q url.Values, name string) (bool, error) {
+	switch q.Get(name) {
+	case "", "false":
+		return false, nil
+	case "true":
+		return true, nil
+	default:
+		return false, domain.NewValidationError(map[string]string{name: domain.FieldInvalid})
+	}
 }

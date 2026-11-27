@@ -18,17 +18,16 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 
 	store := memory.NewStore()
 	valid := httpapi.Config{
-		Auth:                service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
-		Projects:            service.NewProjectService(service.Repositories{Tx: store}),
-		Issues:              service.NewIssueService(service.Repositories{Tx: store}),
-		Tags:                service.NewTagService(service.Repositories{Tx: store}),
-		Comments:            service.NewCommentService(service.Repositories{Tx: store}),
-		Attachments:         service.NewAttachmentService(service.Repositories{Tx: store}),
-		Storages:            service.NewStorageService(service.Repositories{Tx: store}),
-		GenericStorageItems: service.NewGenericStorageItemService(service.Repositories{Tx: store}),
-		NetworkDevices:      service.NewNetworkDeviceService(service.Repositories{Tx: store}),
-		StorageItems:        service.NewStorageItemLookupService(service.Repositories{Tx: store}),
-		Users:               service.NewUserService(service.Repositories{Tx: store}),
+		Auth:         service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{}),
+		Projects:     service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:       service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:         service.NewTagService(service.Repositories{Tx: store}),
+		Comments:     service.NewCommentService(service.Repositories{Tx: store}),
+		Attachments:  service.NewAttachmentService(service.Repositories{Tx: store}),
+		Storages:     service.NewStorageService(service.Repositories{Tx: store}),
+		ItemTypes:    service.NewItemTypeService(service.Repositories{Tx: store}),
+		StorageItems: service.NewStorageItemService(service.Repositories{Tx: store}),
+		Users:        service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
 		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),
@@ -44,17 +43,16 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 	}
 
 	tests := map[string]func(c *httpapi.Config){
-		"short cookie key":   func(c *httpapi.Config) { c.CookieKey = []byte("short") },
-		"bad public url":     func(c *httpapi.Config) { c.PublicURL = "trax.example" },
-		"no index.html":      func(c *httpapi.Config) { c.Frontend = fstest.MapFS{} },
-		"no auth service":    func(c *httpapi.Config) { c.Auth = nil },
-		"no accounts":        func(c *httpapi.Config) { c.ServiceAccounts = nil },
-		"no audit":           func(c *httpapi.Config) { c.Audit = nil },
-		"no storages":        func(c *httpapi.Config) { c.Storages = nil },
-		"no storage items":   func(c *httpapi.Config) { c.GenericStorageItems = nil },
-		"no network devices": func(c *httpapi.Config) { c.NetworkDevices = nil },
-		"no storage lookup":  func(c *httpapi.Config) { c.StorageItems = nil },
-		"no change feed":     func(c *httpapi.Config) { c.Changes = nil },
+		"short cookie key":  func(c *httpapi.Config) { c.CookieKey = []byte("short") },
+		"bad public url":    func(c *httpapi.Config) { c.PublicURL = "trax.example" },
+		"no index.html":     func(c *httpapi.Config) { c.Frontend = fstest.MapFS{} },
+		"no auth service":   func(c *httpapi.Config) { c.Auth = nil },
+		"no accounts":       func(c *httpapi.Config) { c.ServiceAccounts = nil },
+		"no audit":          func(c *httpapi.Config) { c.Audit = nil },
+		"no storages":       func(c *httpapi.Config) { c.Storages = nil },
+		"no storage items":  func(c *httpapi.Config) { c.StorageItems = nil },
+		"no storage lookup": func(c *httpapi.Config) { c.StorageItems = nil },
+		"no change feed":    func(c *httpapi.Config) { c.Changes = nil },
 	}
 
 	for name, mutate := range tests {

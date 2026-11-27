@@ -1,193 +1,200 @@
 package httpapi_test
 
 import (
+	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 )
 
-type genericItemJSON struct {
-	ID          string  `json:"id"`
-	StorageID   string  `json:"storageId"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	DeletedAt   *string `json:"deletedAt"`
+type userRefJSON struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
 }
 
-func (e *testEnv) createItem(t *testing.T, c *http.Client, storageID, name, description string) genericItemJSON {
+type moduleBodyJSON struct {
+	ID               string          `json:"id"`
+	Kind             string          `json:"kind"`
+	Primary          bool            `json:"primary"`
+	Hardware         json.RawMessage `json:"hardware"`
+	Purchase         *purchaseJSON   `json:"purchase"`
+	NetworkInterface *struct {
+		Name string `json:"name"`
+		MAC  string `json:"mac"`
+	} `json:"networkInterface"`
+}
+
+type purchaseJSON struct {
+	Price    *string `json:"price"`
+	Currency string  `json:"currency"`
+}
+
+type storageItemJSON struct {
+	ID                string           `json:"id"`
+	AssetTag          string           `json:"assetTag"`
+	Name              string           `json:"name"`
+	StorageID         string           `json:"storageId"`
+	Type              itemTypeRefJSON  `json:"type"`
+	Usable            bool             `json:"usable"`
+	DecommissionedAt  *string          `json:"decommissionedAt"`
+	PersonResponsible *userRefJSON     `json:"personResponsible"`
+	Modules           []moduleBodyJSON `json:"modules"`
+	DeletedAt         *string          `json:"deletedAt"`
+}
+
+const ethJSON = `{"name":"eth0","mac":"AA-BB-CC-00-11-22","type":"wired","ipv4":{"mode":"dhcp"},"ipv6":{"mode":"off"}}`
+
+func (e *testEnv) createStorageItem(t *testing.T, c *http.Client, body string) storageItemJSON {
 	t.Helper()
 
-	r := e.do(t, c, http.MethodPost, "/api/generic-storage-items",
-		`{"storageId":"`+storageID+`","name":"`+name+`","description":"`+description+`"}`)
+	r := e.do(t, c, http.MethodPost, "/api/storage-items", body)
 	wantStatus(t, r, http.StatusCreated)
 
-	var item genericItemJSON
+	var item storageItemJSON
 	r.json(t, &item)
 
 	return item
 }
 
-func (e *testEnv) listItems(t *testing.T, c *http.Client, path string) pageJSON[genericItemJSON] {
+// itemEnv is an admin session with a storage tree and a Switch type.
+func itemEnv(t *testing.T) (env *testEnv, c *http.Client, shelf storageJSON, typ itemTypeJSON) {
 	t.Helper()
 
-	r := e.do(t, c, http.MethodGet, path, "")
+	env, c = signedInAdmin(t)
+	_, shelf = storageTree(t, env, c)
+	typ = env.createItemType(t, c, `{"name":"Switch","tagPrefix":"NET-"}`)
+
+	return env, c, shelf, typ
+}
+
+func TestStorageItems_CreateGetUpdate(t *testing.T) {
+	t.Parallel()
+
+	env, c, shelf, typ := itemEnv(t)
+	me := env.me(t, c)
+
+	item := env.createStorageItem(t, c, `{"assetTag":"NET-00001","name":"Core","storageId":"`+shelf.ID+`","typeId":"`+typ.ID+
+		`","usable":true,"personResponsibleId":"`+me+`","modules":[`+
+		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
+		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
+		`{"kind":"hardware","hardware":{"model":"S24"}}]}`)
+
+	wantCreatedItem(t, item, me)
+
+	eth := item.Modules[2]
+
+	r := env.do(t, c, http.MethodPatch, "/api/storage-items/"+item.ID, `{"usable":false,"personResponsibleId":null,`+
+		`"decommissionedAt":"2026-05-01T00:00:00Z","decommissioningReason":"broken","modules":[`+
+		`{"id":"`+eth.ID+`","kind":"network_interface","networkInterface":`+ethJSON+`}]}`)
 	wantStatus(t, r, http.StatusOK)
 
-	var p pageJSON[genericItemJSON]
-	r.json(t, &p)
+	var updated storageItemJSON
+	r.json(t, &updated)
 
-	return p
-}
-
-func itemJSONNames(items []genericItemJSON) string {
-	names := make([]string, 0, len(items))
-	for _, i := range items {
-		names = append(names, i.Name)
+	if updated.Usable || updated.PersonResponsible != nil || updated.DecommissionedAt == nil || len(updated.Modules) != 1 ||
+		updated.Modules[0].ID != eth.ID || updated.Modules[0].Primary {
+		t.Fatalf("updated = %+v", updated)
 	}
 
-	return strings.Join(names, ",")
-}
-
-func TestGenericStorageItems_RequireSession(t *testing.T) {
-	t.Parallel()
-
-	env := newTestEnv(t)
-	id := "0190d2a4-7f3e-7c4b-9e3a-2b1c0d9e8f7a"
-
-	for _, path := range []string{"/api/generic-storage-items", "/api/generic-storage-items/" + id, "/api/storages/" + id + "/generic-storage-items"} {
-		r := env.do(t, newClient(t), http.MethodGet, path, "")
-		if r.status != http.StatusUnauthorized || r.errorCode(t) != "unauthenticated" {
-			t.Errorf("GET %s = %d %s, want 401 unauthenticated", path, r.status, r.body)
-		}
+	r = env.do(t, c, http.MethodPatch, "/api/storage-items/"+item.ID, `{"assetTag":"X"}`)
+	if r.status != http.StatusUnprocessableEntity {
+		t.Fatalf("asset tag change = %d %s", r.status, r.body)
 	}
+
+	wantStatus(t, env.do(t, c, http.MethodDelete, "/api/storage-items/"+item.ID, ""), http.StatusNoContent)
+
+	r = env.do(t, c, http.MethodPost, "/api/storage-items/"+item.ID+"/restore", "")
+	wantStatus(t, r, http.StatusOK)
 }
 
-func TestGenericStorageItems_CreateListAndUpdate(t *testing.T) {
-	t.Parallel()
+// wantCreatedItem checks the item TestStorageItems_CreateGetUpdate creates.
+func wantCreatedItem(t *testing.T, item storageItemJSON, me string) {
+	t.Helper()
 
-	env, c := signedIn(t)
-	root, shelf := storageTree(t, env, c)
-
-	item := env.createItem(t, c, shelf.ID, " Drill ", "cordless")
-	if item.ID == "" || item.Name != "Drill" || item.StorageID != shelf.ID || item.Description != "cordless" || item.DeletedAt != nil {
+	if item.AssetTag != "NET-00001" || item.Type.Name != "Switch" || item.PersonResponsible == nil ||
+		item.PersonResponsible.ID != me || len(item.Modules) != 3 || item.Modules[0].Kind != "hardware" {
 		t.Fatalf("created = %+v", item)
 	}
 
-	env.createItem(t, c, root.ID, "lamp", "")
-
-	r := env.do(t, c, http.MethodGet, "/api/storages/"+shelf.ID, "")
-
-	var st struct {
-		ItemCount int64 `json:"itemCount"`
-	}
-	r.json(t, &st)
-
-	if st.ItemCount != 1 {
-		t.Fatalf("shelf itemCount = %d", st.ItemCount)
-	}
-
-	if got := itemJSONNames(env.listItems(t, c, "/api/storages/"+root.ID+"/generic-storage-items").Items); got != "lamp" {
-		t.Fatalf("direct = %s", got)
-	}
-
-	if got := itemJSONNames(env.listItems(t, c, "/api/storages/"+root.ID+"/generic-storage-items?recursive=true").Items); got != "Drill,lamp" {
-		t.Fatalf("recursive = %s", got)
-	}
-
-	if got := itemJSONNames(env.listItems(t, c, "/api/generic-storage-items?q=CORDLESS").Items); got != "Drill" {
-		t.Fatalf("search = %s", got)
-	}
-
-	r = env.do(t, c, http.MethodPatch, "/api/generic-storage-items/"+item.ID, `{"name":"Hammer","storageId":"`+root.ID+`"}`)
-	wantStatus(t, r, http.StatusOK)
-
-	var moved genericItemJSON
-	r.json(t, &moved)
-
-	if moved.Name != "Hammer" || moved.StorageID != root.ID || moved.Description != "cordless" {
-		t.Fatalf("patched = %+v", moved)
+	if p := item.Modules[1].Purchase; p == nil || *p.Price != "12.50" || p.Currency != "EUR" ||
+		item.Modules[2].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
+		t.Fatalf("created modules = %+v", item.Modules)
 	}
 }
 
-func TestGenericStorageItems_DeleteAndRestore(t *testing.T) {
+func TestStorageItems_ListAndFilters(t *testing.T) {
 	t.Parallel()
 
-	env, c := signedIn(t)
-	root, _ := storageTree(t, env, c)
-	item := env.createItem(t, c, root.ID, "Hammer", "")
+	env, c, shelf, typ := itemEnv(t)
 
-	wantStatus(t, env.do(t, c, http.MethodDelete, "/api/generic-storage-items/"+item.ID, ""), http.StatusNoContent)
+	env.createStorageItem(t, c, `{"assetTag":"A-1","name":"Router","storageId":"`+shelf.ID+`","typeId":"`+typ.ID+`","usable":true,`+
+		`"modules":[{"kind":"network_interface","networkInterface":`+ethJSON+`}]}`)
+	env.createStorageItem(t, c, `{"assetTag":"A-2","name":"Chair","storageId":"`+shelf.ID+`","typeId":"`+typ.ID+`","usable":false,`+
+		`"decommissionedAt":"2026-01-01T00:00:00Z"}`)
 
-	r := env.do(t, c, http.MethodGet, "/api/generic-storage-items/"+item.ID, "")
-	wantStatus(t, r, http.StatusOK)
+	list := func(path string) []string {
+		t.Helper()
 
-	var deleted genericItemJSON
-	r.json(t, &deleted)
+		r := env.do(t, c, http.MethodGet, path, "")
+		wantStatus(t, r, http.StatusOK)
 
-	if deleted.DeletedAt == nil {
-		t.Fatalf("GET deleted = %+v", deleted)
+		var page pageJSON[storageItemJSON]
+		r.json(t, &page)
+
+		names := make([]string, 0, len(page.Items))
+		for _, i := range page.Items {
+			names = append(names, i.Name)
+		}
+
+		return names
 	}
 
-	if got := itemJSONNames(env.listItems(t, c, "/api/storages/"+root.ID+"/generic-storage-items?deleted=true").Items); got != "Hammer" {
-		t.Fatalf("deleted list = %s", got)
-	}
-
-	for _, tt := range []struct{ method, path, body string }{
-		{http.MethodPatch, "/api/generic-storage-items/" + item.ID, `{"name":"x"}`},
-		{http.MethodDelete, "/api/generic-storage-items/" + item.ID, ""},
+	for path, want := range map[string]int{
+		"/api/storages/" + shelf.ID + "/storage-items":                      2,
+		"/api/storage-items?usable=false":                                   1,
+		"/api/storage-items?decommissioned=false":                           1,
+		"/api/storage-items?typeId=" + typ.ID + "&includeSubtypes=true":     2,
+		"/api/storage-items?q=aa:bb:cc:00:11:22":                            1,
+		"/api/storage-items?q=a-2":                                          1,
+		"/api/storage-items?deleted=true":                                   0,
+		"/api/storages/" + shelf.ID + "/storage-items?recursive=true&q=rou": 1,
 	} {
-		r := env.do(t, c, tt.method, tt.path, tt.body)
-		if r.status != http.StatusConflict || r.errorCode(t) != "storage_item_deleted" {
-			t.Fatalf("%s deleted item = %d %s", tt.method, r.status, r.body)
+		if got := list(path); len(got) != want {
+			t.Errorf("GET %s = %v, want %d items", path, got, want)
 		}
 	}
 
-	r = env.do(t, c, http.MethodPost, "/api/generic-storage-items/"+item.ID+"/restore", "")
-	wantStatus(t, r, http.StatusOK)
-
-	var restored genericItemJSON
-	r.json(t, &restored)
-
-	if restored.DeletedAt != nil {
-		t.Fatalf("restored = %+v", restored)
-	}
-
-	r = env.do(t, c, http.MethodPost, "/api/generic-storage-items/"+item.ID+"/restore", "")
-	if r.status != http.StatusConflict || r.errorCode(t) != "storage_item_not_deleted" {
-		t.Fatalf("restore live item = %d %s", r.status, r.body)
+	for _, path := range []string{
+		"/api/storage-items?usable=maybe", "/api/storage-items?typeId=nope", "/api/storage-items?responsibleId=nope",
+	} {
+		wantStatus(t, env.do(t, c, http.MethodGet, path, ""), http.StatusUnprocessableEntity)
 	}
 }
 
-func TestGenericStorageItems_Errors(t *testing.T) {
+func TestStorageItems_Errors(t *testing.T) {
 	t.Parallel()
 
-	env, c := signedIn(t)
-	_, shelf := storageTree(t, env, c)
-	missing := "0190d2a4-7f3e-7c4b-9e3a-2b1c0d9e8f7a"
+	env, c, shelf, typ := itemEnv(t)
+	env.createStorageItem(t, c, `{"assetTag":"A-1","name":"Router","storageId":"`+shelf.ID+`","typeId":"`+typ.ID+`","usable":true}`)
+
+	valid := `"storageId":"` + shelf.ID + `","typeId":"` + typ.ID + `"`
 
 	tests := []struct {
 		name, method, path, body string
 		status                   int
 		code                     string
 	}{
-		{"create in unknown storage", http.MethodPost, "/api/generic-storage-items", `{"storageId":"` + missing + `","name":"x"}`, http.StatusUnprocessableEntity, "validation_failed"},
-		{"create with bad storage id", http.MethodPost, "/api/generic-storage-items", `{"storageId":"nope","name":"x"}`, http.StatusUnprocessableEntity, "validation_failed"},
-		{"create without name", http.MethodPost, "/api/generic-storage-items", `{"storageId":"` + shelf.ID + `","name":""}`, http.StatusUnprocessableEntity, "validation_failed"},
-		{"get unknown", http.MethodGet, "/api/generic-storage-items/" + missing, "", http.StatusNotFound, "storage_item_not_found"},
-		{"get malformed id", http.MethodGet, "/api/generic-storage-items/nope", "", http.StatusNotFound, "storage_item_not_found"},
-		{"list unknown storage", http.MethodGet, "/api/storages/" + missing + "/generic-storage-items", "", http.StatusNotFound, "storage_not_found"},
-		{"bad recursive flag", http.MethodGet, "/api/storages/" + shelf.ID + "/generic-storage-items?recursive=yes", "", http.StatusUnprocessableEntity, "validation_failed"},
-		{"bad deleted flag", http.MethodGet, "/api/generic-storage-items?deleted=1", "", http.StatusUnprocessableEntity, "validation_failed"},
+		{"taken asset tag", http.MethodPost, "/api/storage-items", `{"assetTag":"a-1","name":"x","usable":true,` + valid + `}`, http.StatusConflict, "asset_tag_taken"},
+		{"missing usable", http.MethodPost, "/api/storage-items", `{"assetTag":"B","name":"x",` + valid + `}`, http.StatusUnprocessableEntity, "validation_failed"},
+		{"bad type id", http.MethodPost, "/api/storage-items", `{"assetTag":"B","name":"x","usable":true,"storageId":"` + shelf.ID + `","typeId":"nope"}`, http.StatusUnprocessableEntity, "validation_failed"},
+		{"bad module id", http.MethodPost, "/api/storage-items", `{"assetTag":"B","name":"x","usable":true,` + valid + `,"modules":[{"id":"nope","kind":"hardware","hardware":{}}]}`, http.StatusUnprocessableEntity, "validation_failed"},
+		{"unknown item", http.MethodGet, "/api/storage-items/0190d2a4-7f3e-7c4b-9e3a-2b1c0d9e8f7a", "", http.StatusNotFound, "storage_item_not_found"},
+		{"unknown storage", http.MethodGet, "/api/storages/0190d2a4-7f3e-7c4b-9e3a-2b1c0d9e8f7a/storage-items", "", http.StatusNotFound, "storage_not_found"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			r := env.do(t, c, tt.method, tt.path, tt.body)
-			if r.status != tt.status || r.errorCode(t) != tt.code {
-				t.Fatalf("%s %s = %d %s, want %d %s", tt.method, tt.path, r.status, r.body, tt.status, tt.code)
-			}
-		})
+		r := env.do(t, c, tt.method, tt.path, tt.body)
+		if r.status != tt.status || r.errorCode(t) != tt.code {
+			t.Errorf("%s: %d %s, want %d %s", tt.name, r.status, r.body, tt.status, tt.code)
+		}
 	}
 }

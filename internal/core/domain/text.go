@@ -11,6 +11,8 @@ const (
 	MaxDescriptionBytes = 256 << 10
 	maxTitleRunes       = 200
 	maxProjectNameRunes = 100
+	// maxShortTextRunes bounds short optional texts such as a model name.
+	maxShortTextRunes = 100
 )
 
 // checkRequiredText trims s and records required/too_long for field.
@@ -31,6 +33,16 @@ func checkRequiredText(f fieldErrors, field, s string, maxRunes int) string {
 func checkDescription(f fieldErrors, field, s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > MaxDescriptionBytes {
+		f.add(field, FieldTooLong)
+	}
+
+	return s
+}
+
+// checkOptionalText trims s and records too_long for field.
+func checkOptionalText(f fieldErrors, field, s string, maxRunes int) string {
+	s = strings.TrimSpace(s)
+	if utf8.RuneCountInString(s) > maxRunes {
 		f.add(field, FieldTooLong)
 	}
 

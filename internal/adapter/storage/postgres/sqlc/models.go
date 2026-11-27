@@ -72,6 +72,11 @@ type ApiKey struct {
 	RevokedAt  *time.Time
 }
 
+type AssetTagCounter struct {
+	Prefix string
+	Value  int64
+}
+
 type Attachment struct {
 	ID         uuid.UUID
 	IssueID    uuid.UUID
@@ -132,18 +137,37 @@ type IssueTag struct {
 	TagID   uuid.UUID
 }
 
-type NetworkDevice struct {
-	ItemID       uuid.UUID
-	Role         string
-	Hostname     string
+type ItemType struct {
+	ID        uuid.UUID
+	ParentID  pgtype.UUID
+	Name      string
+	TagPrefix string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+}
+
+type ItemTypeModuleDefault struct {
+	ItemTypeID   uuid.UUID
+	Module       string
+	DefaultCount int32
+}
+
+type ModuleHardware struct {
+	ModuleID     uuid.UUID
 	Manufacturer string
 	Model        string
 	SerialNumber string
 }
 
-type NetworkInterface struct {
-	ItemID      uuid.UUID
-	Position    int32
+type ModuleNetworkHost struct {
+	ModuleID uuid.UUID
+	Role     string
+	Hostname string
+}
+
+type ModuleNetworkInterface struct {
+	ModuleID    uuid.UUID
 	Name        string
 	Mac         net.HardwareAddr
 	Type        string
@@ -158,6 +182,15 @@ type NetworkInterface struct {
 	Ipv6Address *netip.Prefix
 	Ipv6Gateway *netip.Addr
 	Ipv6Dns     []netip.Addr
+}
+
+type ModulePurchase struct {
+	ModuleID      uuid.UUID
+	Supplier      string
+	InvoiceNumber string
+	PriceCents    pgtype.Int8
+	Currency      string
+	WarrantyEnd   *time.Time
 }
 
 type Project struct {
@@ -187,14 +220,28 @@ type Storage struct {
 }
 
 type StorageItem struct {
-	ID          uuid.UUID
-	StorageID   uuid.UUID
-	Kind        string
-	Name        string
-	Description string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
+	ID                    uuid.UUID
+	AssetTag              string
+	StorageID             uuid.UUID
+	ItemTypeID            uuid.UUID
+	Name                  string
+	Description           string
+	Usable                bool
+	OrderDate             *time.Time
+	CommissionedAt        *time.Time
+	DecommissionedAt      *time.Time
+	DecommissioningReason string
+	ResponsibleID         pgtype.UUID
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+}
+
+type StorageItemModule struct {
+	ID        uuid.UUID
+	ItemID    uuid.UUID
+	Module    string
+	IsPrimary bool
 }
 
 type Tag struct {

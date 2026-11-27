@@ -158,17 +158,16 @@ func TestAuth_SecureCookies(t *testing.T) {
 	store := memory.NewStore()
 
 	h, err := httpapi.NewHandler(httpapi.Config{
-		Auth:                service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{callback: "https://trax.example/auth/callback"}),
-		Projects:            service.NewProjectService(service.Repositories{Tx: store}),
-		Issues:              service.NewIssueService(service.Repositories{Tx: store}),
-		Tags:                service.NewTagService(service.Repositories{Tx: store}),
-		Comments:            service.NewCommentService(service.Repositories{Tx: store}),
-		Attachments:         service.NewAttachmentService(service.Repositories{Tx: store}),
-		Storages:            service.NewStorageService(service.Repositories{Tx: store}),
-		GenericStorageItems: service.NewGenericStorageItemService(service.Repositories{Tx: store}),
-		NetworkDevices:      service.NewNetworkDeviceService(service.Repositories{Tx: store}),
-		StorageItems:        service.NewStorageItemLookupService(service.Repositories{Tx: store}),
-		Users:               service.NewUserService(service.Repositories{Tx: store}),
+		Auth:         service.NewAuthService(service.Repositories{Tx: store}, &fakeIDP{callback: "https://trax.example/auth/callback"}),
+		Projects:     service.NewProjectService(service.Repositories{Tx: store}),
+		Issues:       service.NewIssueService(service.Repositories{Tx: store}),
+		Tags:         service.NewTagService(service.Repositories{Tx: store}),
+		Comments:     service.NewCommentService(service.Repositories{Tx: store}),
+		Attachments:  service.NewAttachmentService(service.Repositories{Tx: store}),
+		Storages:     service.NewStorageService(service.Repositories{Tx: store}),
+		ItemTypes:    service.NewItemTypeService(service.Repositories{Tx: store}),
+		StorageItems: service.NewStorageItemService(service.Repositories{Tx: store}),
+		Users:        service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
 		Audit:           service.NewAuditService(service.Repositories{Tx: store}, 0),

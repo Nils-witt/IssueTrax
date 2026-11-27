@@ -54,26 +54,32 @@ tags:
   - name: comments
   - name: attachments
   - name: storages
-  - name: generic-storage-items
+  - name: item-types
     description: |
-      Plain items kept in a storage, described by name and description.
-      Deleting an item only marks it deleted (`deletedAt`); deleted items are
-      hidden from lists unless `deleted=true`, cannot be changed, and can be
-      restored.
-  - name: network-devices
-    description: |
-      Network devices kept in a storage: a role (router, switch or client),
-      optional hostname, manufacturer, model and serial number, exactly one
-      primary interface and any number of secondary interfaces. Like generic
-      items, deleting only marks a device deleted (`deletedAt`).
-
-      Validation errors name nested fields by path, e.g.
-      `primaryInterface.mac` or `secondaryInterfaces[1].ipv4.dnsServers[0]`.
+      A tree of item types. Every storage item has a type. A type names the
+      modules (with a count) new items start with; children inherit their
+      ancestors' defaults (the deepest count wins, a single module is
+      defaulted once) and the nearest asset tag prefix. Everyone may read
+      types; only admins may change them (`admin_required`). Deleting a type
+      only marks it deleted: its children and items keep working, but it
+      cannot get new or moved-in children or be given to items, and its name
+      is free again among its siblings.
   - name: storage-items
     description: |
-      Storage items of every kind (generic items, network devices) by their
-      shared fields, e.g. to link them to issues, and the issues linking
-      them.
+      Things kept in a storage. Every item has an asset tag (unique ignoring
+      case, deleted items included, never changed), a name, a storage, a
+      type and a `usable` flag, plus optional order, commissioning and
+      decommissioning dates (in that order), a decommissioning reason and a
+      responsible person (no service accounts). All other fields come from
+      modules, which are added and removed per item: `hardware`,
+      `networkHost` and `purchase` at most once, `network_interface` any
+      number of times with at most one primary. Modules keep their `id`
+      across updates when it is sent back. Deleting an item only marks it
+      deleted (`deletedAt`); deleted items are hidden from lists unless
+      `deleted=true`, cannot be changed, and can be restored.
+
+      Validation errors name nested fields by path, e.g.
+      `modules[1].networkInterface.ipv4.dnsServers[0]`.
   - name: users
   - name: service-accounts
   - name: audit
@@ -806,21 +812,197 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
 
-  /api/storages/{id}/generic-storage-items:
+  /api/item-types:
+    get:
+      tags: [item-types]
+      summary: List or search item types
+      description: |
+        Without `q`, the children of `parent` (the roots without it) — the
+        tree is loaded level by level. With `q`, types of the whole tree whose
+        name contains it, each with its `path`. Ordered by name (A→Z,
+        ignoring case), then ID.
+      parameters:
+        - name: parent
+          in: query
+          schema: { type: string, format: uuid }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: includeDeleted
+          in: query
+          description: Also list deleted types.
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of types (`ItemTypeView`s when searching).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemTypePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [item-types]
+      summary: Create an item type (admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateItemType" }
+      responses:
+        "201":
+          description: The new type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemTypeView" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: "`item_type_name_taken` (a live sibling has the name) or `item_type_deleted` (the parent is deleted)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/item-types/{id}:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string, format: uuid }
     get:
-      tags: [generic-storage-items]
-      summary: List the generic items in a storage
-      description: Ordered by name (A→Z, ignoring case), then ID.
+      tags: [item-types]
+      summary: Get an item type with what it inherits
+      description: Deleted types are returned too.
+      responses:
+        "200":
+          description: The type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemTypeView" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [item-types]
+      summary: Rename, move, re-prefix or change the defaults of a type (admins only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateItemType" }
+      responses:
+        "200":
+          description: The updated type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemTypeView" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`item_type_name_taken`, `item_type_cycle` (moved into its own subtree) or `item_type_deleted` (the type or the new parent is deleted)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [item-types]
+      summary: Delete an item type (admins only)
+      description: Only marks the type deleted; its children and items keep it.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`item_type_deleted`: the type already is deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/item-types/{id}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [item-types]
+      summary: Restore a deleted item type (admins only)
+      responses:
+        "200":
+          description: The restored type.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ItemTypeView" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`item_type_not_deleted`, or `item_type_name_taken` when a live sibling took the name meanwhile."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/item-types/{id}/next-asset-tag:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [item-types]
+      summary: Propose the asset tag for a new item of the type
+      description: |
+        The effective prefix of the type (or the server's default prefix)
+        followed by the next number of that prefix's counter, at least five
+        digits, skipping tags in use (`NET-00042`). Nothing is reserved: two
+        clients may get the same proposal, and the second create fails with
+        `asset_tag_taken`. Creating an item with exactly this tag advances
+        the counter; other tags leave it alone.
+      responses:
+        "200":
+          description: The proposal.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [assetTag]
+                properties:
+                  assetTag: { type: string, example: NET-00042 }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`item_type_deleted`: the type is deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/storages/{id}/storage-items:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [storage-items]
+      summary: List the items in a storage
+      description: Ordered by name (A→Z, ignoring case), then ID. Takes the filters of the search.
       parameters:
         - name: recursive
           in: query
           description: Also include items kept anywhere below the storage.
           schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/StorageItemQuery"
+        - $ref: "#/components/parameters/StorageItemType"
+        - $ref: "#/components/parameters/StorageItemIncludeSubtypes"
+        - $ref: "#/components/parameters/StorageItemUsable"
+        - $ref: "#/components/parameters/StorageItemResponsible"
+        - $ref: "#/components/parameters/StorageItemDecommissioned"
         - $ref: "#/components/parameters/StorageItemDeleted"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -829,21 +1011,23 @@ paths:
           description: One page of items.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItemPage" }
+              schema: { $ref: "#/components/schemas/StorageItemPage" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/Validation" }
 
-  /api/generic-storage-items:
+  /api/storage-items:
     get:
-      tags: [generic-storage-items]
-      summary: Search generic items across all storages
+      tags: [storage-items]
+      summary: Search items across all storages
       description: Ordered by name (A→Z, ignoring case), then ID.
       parameters:
-        - name: q
-          in: query
-          description: Keep items whose name or description contains this text, ignoring case.
-          schema: { type: string }
+        - $ref: "#/components/parameters/StorageItemQuery"
+        - $ref: "#/components/parameters/StorageItemType"
+        - $ref: "#/components/parameters/StorageItemIncludeSubtypes"
+        - $ref: "#/components/parameters/StorageItemUsable"
+        - $ref: "#/components/parameters/StorageItemResponsible"
+        - $ref: "#/components/parameters/StorageItemDecommissioned"
         - $ref: "#/components/parameters/StorageItemDeleted"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
@@ -852,74 +1036,84 @@ paths:
           description: One page of items.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItemPage" }
+              schema: { $ref: "#/components/schemas/StorageItemPage" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "422": { $ref: "#/components/responses/Validation" }
     post:
-      tags: [generic-storage-items]
-      summary: Create a generic item
-      description: An unknown `storageId` yields `422` with field code `invalid` on `storageId`.
+      tags: [storage-items]
+      summary: Create an item
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CreateGenericStorageItem" }
+            schema: { $ref: "#/components/schemas/CreateStorageItem" }
       responses:
         "201":
-          description: Created.
+          description: The new item.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+              schema: { $ref: "#/components/schemas/StorageItem" }
         "400": { $ref: "#/components/responses/InvalidJSON" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
+        "409":
+          description: "`asset_tag_taken` or `item_type_deleted` (the type is deleted)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
 
-  /api/generic-storage-items/{id}:
+  /api/storage-items/{id}:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string, format: uuid }
     get:
-      tags: [generic-storage-items]
-      summary: Get a generic item
-      description: Deleted items are returned too, with `deletedAt` set.
+      tags: [storage-items]
+      summary: Get an item
+      description: Deleted items are returned too.
       responses:
         "200":
           description: The item.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+              schema: { $ref: "#/components/schemas/StorageItem" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
-      tags: [generic-storage-items]
-      summary: Edit or move a generic item
+      tags: [storage-items]
+      summary: Edit, move or retype an item
       description: |
-        Partial update; absent fields stay unchanged. `storageId` moves the
-        item; an unknown storage yields `422` on `storageId`.
+        Absent fields stay unchanged; null clears a date or the responsible
+        person. `modules` replaces all module instances: send an instance's
+        `id` to keep it (its kind cannot change), leave it out for a new one;
+        instances not sent are removed. The asset tag cannot change.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/UpdateGenericStorageItem" }
+            schema: { $ref: "#/components/schemas/UpdateStorageItem" }
       responses:
         "200":
-          description: Updated.
+          description: The updated item.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+              schema: { $ref: "#/components/schemas/StorageItem" }
         "400": { $ref: "#/components/responses/InvalidJSON" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/StorageItemDeleted" }
+        "409":
+          description: "`storage_item_deleted`, or `item_type_deleted` when retyping to a deleted type."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/Validation" }
     delete:
-      tags: [generic-storage-items]
-      summary: Delete a generic item
-      description: Marks the item deleted; restore it with `POST …/restore`.
+      tags: [storage-items]
+      summary: Delete an item
+      description: Only marks the item deleted; it can be restored.
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Unauthenticated" }
@@ -927,21 +1121,21 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/StorageItemDeleted" }
 
-  /api/generic-storage-items/{id}/restore:
+  /api/storage-items/{id}/restore:
     parameters:
       - name: id
         in: path
         required: true
         schema: { type: string, format: uuid }
     post:
-      tags: [generic-storage-items]
-      summary: Restore a deleted generic item
+      tags: [storage-items]
+      summary: Restore a deleted item
       responses:
         "200":
-          description: Restored.
+          description: The restored item.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GenericStorageItem" }
+              schema: { $ref: "#/components/schemas/StorageItem" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/CrossOrigin" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -951,184 +1145,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
-  /api/storages/{id}/network-devices:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [network-devices]
-      summary: List the network devices in a storage
-      description: Ordered by name (A→Z, ignoring case), then ID.
-      parameters:
-        - name: recursive
-          in: query
-          description: Also include devices kept anywhere below the storage.
-          schema: { type: boolean, default: false }
-        - $ref: "#/components/parameters/StorageItemDeleted"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: One page of devices.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevicePage" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "422": { $ref: "#/components/responses/Validation" }
-
-  /api/network-devices:
-    get:
-      tags: [network-devices]
-      summary: Search network devices across all storages
-      description: Ordered by name (A→Z, ignoring case), then ID.
-      parameters:
-        - name: q
-          in: query
-          description: |
-            Keep devices whose name, description, hostname, serial number or
-            the MAC of any interface contains this text, ignoring case.
-          schema: { type: string }
-        - $ref: "#/components/parameters/StorageItemDeleted"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: One page of devices.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevicePage" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "422": { $ref: "#/components/responses/Validation" }
-    post:
-      tags: [network-devices]
-      summary: Create a network device
-      description: An unknown `storageId` yields `422` with field code `invalid` on `storageId`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateNetworkDevice" }
-      responses:
-        "201":
-          description: Created.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevice" }
-        "400": { $ref: "#/components/responses/InvalidJSON" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CrossOrigin" }
-        "422": { $ref: "#/components/responses/Validation" }
-
-  /api/network-devices/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    get:
-      tags: [network-devices]
-      summary: Get a network device
-      description: Deleted devices are returned too, with `deletedAt` set.
-      responses:
-        "200":
-          description: The device.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevice" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    patch:
-      tags: [network-devices]
-      summary: Edit or move a network device
-      description: |
-        Partial update; absent fields stay unchanged. `storageId` moves the
-        device; an unknown storage yields `422` on `storageId`.
-        `primaryInterface` and `secondaryInterfaces` each replace what is
-        stored; send both with swapped entries to make a secondary interface
-        primary.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/UpdateNetworkDevice" }
-      responses:
-        "200":
-          description: Updated.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevice" }
-        "400": { $ref: "#/components/responses/InvalidJSON" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CrossOrigin" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/StorageItemDeleted" }
-        "422": { $ref: "#/components/responses/Validation" }
-    delete:
-      tags: [network-devices]
-      summary: Delete a network device
-      description: Marks the device deleted; restore it with `POST …/restore`.
-      responses:
-        "204": { description: Deleted. }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CrossOrigin" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/StorageItemDeleted" }
-
-  /api/network-devices/{id}/restore:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      tags: [network-devices]
-      summary: Restore a deleted network device
-      responses:
-        "200":
-          description: Restored.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/NetworkDevice" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/CrossOrigin" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409":
-          description: "`storage_item_not_deleted`: the device is not deleted."
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
-  /api/storage-items:
-    get:
-      tags: [storage-items]
-      summary: Search items of every kind across all storages
-      description: Ordered by name (A→Z, ignoring case), then ID.
-      parameters:
-        - name: q
-          in: query
-          description: Keep items whose name or description contains this text, ignoring case.
-          schema: { type: string }
-        - $ref: "#/components/parameters/StorageItemDeleted"
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Cursor"
-      responses:
-        "200":
-          description: One page of items.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/StorageItemRefPage" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "422": { $ref: "#/components/responses/Validation" }
-
   /api/storage-items/{id}/issues:
     parameters:
       - name: id
         in: path
         required: true
-        description: A storage item of any kind, deleted or not.
+        description: A storage item, deleted or not.
         schema: { type: string, format: uuid }
     get:
       tags: [storage-items]
@@ -1272,6 +1294,39 @@ components:
       in: query
       description: List only deleted items instead of only live ones.
       schema: { type: boolean, default: false }
+    StorageItemQuery:
+      name: q
+      in: query
+      description: |
+        Keep items whose name, description, asset tag, manufacturer, model,
+        serial number, host name or interface MAC contains this text,
+        ignoring case. A MAC in any notation matches exactly.
+      schema: { type: string }
+    StorageItemType:
+      name: typeId
+      in: query
+      description: Keep items of this type.
+      schema: { type: string, format: uuid }
+    StorageItemIncludeSubtypes:
+      name: includeSubtypes
+      in: query
+      description: With `typeId`, also keep items of its descendant types.
+      schema: { type: boolean, default: false }
+    StorageItemUsable:
+      name: usable
+      in: query
+      description: Keep only usable (true) or unusable (false) items.
+      schema: { type: boolean }
+    StorageItemResponsible:
+      name: responsibleId
+      in: query
+      description: Keep items this user is responsible for.
+      schema: { type: string, format: uuid }
+    StorageItemDecommissioned:
+      name: decommissioned
+      in: query
+      description: Keep items with (true) or without (false) a decommissioning date.
+      schema: { type: boolean }
     ProjectKey:
       name: key
       in: path
@@ -1412,14 +1467,14 @@ components:
         - attachment.delete
         - storage.create
         - storage.update
-        - generic_storage_item.create
-        - generic_storage_item.update
-        - generic_storage_item.delete
-        - generic_storage_item.restore
-        - network_device.create
-        - network_device.update
-        - network_device.delete
-        - network_device.restore
+        - storage_item.create
+        - storage_item.update
+        - storage_item.delete
+        - storage_item.restore
+        - item_type.create
+        - item_type.update
+        - item_type.delete
+        - item_type.restore
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -1437,11 +1492,14 @@ components:
         issue. `storages`: a storage was created, renamed or moved (reload
         storages); `project` is empty because storages are global.
         `storageItems`: an item kept in a storage was created, changed,
-        moved, deleted or restored (reload item lists and storages, whose
-        `itemCount` may have changed); `project` is empty.
+        moved, deleted or restored (reload item lists, storages and item
+        types, whose `itemCount` may have changed); `project` is empty.
+        `itemTypes`: an item type was created, changed, moved, deleted or
+        restored (reload item types and items, which show their type's
+        name); `project` is empty.
       properties:
-        type: { type: string, enum: [project, tags, issue, comments, attachments, storages, storageItems] }
-        project: { type: string, example: TRAX, description: Empty for `storages` and `storageItems`. }
+        type: { type: string, enum: [project, tags, issue, comments, attachments, storages, storageItems, itemTypes] }
+        project: { type: string, example: TRAX, description: "Empty for `storages`, `storageItems` and `itemTypes`." }
         issue:
           type: integer
           format: int64
@@ -1451,7 +1509,7 @@ components:
 
     AuditTargetType:
       type: string
-      enum: [user, project, issue, tag, comment, attachment, storage, generic_storage_item, network_device, service_account, api_key]
+      enum: [user, project, issue, tag, comment, attachment, storage, storage_item, item_type, service_account, api_key]
 
     AuditChange:
       type: object
@@ -1756,63 +1814,242 @@ components:
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }
 
-    GenericStorageItem:
+    StorageItemRef:
       type: object
-      required: [id, storageId, name, description, createdAt, updatedAt, deletedAt]
+      description: A storage item as linked from issues.
+      required: [id, assetTag, storageId, name, deleted]
       properties:
         id: { type: string, format: uuid }
+        assetTag: { type: string, example: NET-00042 }
         storageId: { type: string, format: uuid, description: The storage the item is kept in. }
-        name: { type: string, maxLength: 100, example: Cordless drill }
+        name: { type: string, example: Core switch }
+        deleted: { type: boolean }
+
+    ModuleKind:
+      type: string
+      description: "`hardware`, `network_host` and `purchase` occur at most once per item; `network_interface` any number of times."
+      enum: [hardware, network_host, purchase, network_interface]
+
+    ModuleDefault:
+      type: object
+      required: [module, count]
+      additionalProperties: false
+      properties:
+        module: { $ref: "#/components/schemas/ModuleKind" }
+        count: { type: integer, minimum: 1, maximum: 512, description: Always 1 for single modules. }
+
+    ItemTypeRef:
+      type: object
+      required: [id, name, deleted]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Switch }
+        deleted: { type: boolean }
+
+    ItemType:
+      type: object
+      required: [id, parentId, name, tagPrefix, defaults, childCount, itemCount, createdAt, updatedAt, deletedAt]
+      properties:
+        id: { type: string, format: uuid }
+        parentId: { type: [string, "null"], format: uuid, description: Null for a root type. }
+        name: { type: string, maxLength: 100, example: Switch }
+        tagPrefix: { type: string, maxLength: 20, description: "Starts proposed asset tags, separator included (`NET-`); empty inherits it.", example: NET- }
+        defaults:
+          type: array
+          items: { $ref: "#/components/schemas/ModuleDefault" }
+          description: The type's own defaults in display order, without the inherited ones.
+        childCount: { type: integer, format: int64, description: Direct children, deleted ones included. }
+        itemCount: { type: integer, format: int64, description: Live items of exactly this type. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null unless the type is deleted. }
+
+    ItemTypeView:
+      allOf:
+        - $ref: "#/components/schemas/ItemType"
+        - type: object
+          required: [path, effectiveDefaults, effectiveTagPrefix]
+          properties:
+            path:
+              type: array
+              items: { $ref: "#/components/schemas/ItemTypeRef" }
+              description: The ancestors from the root down to the parent.
+            effectiveDefaults:
+              type: array
+              items: { $ref: "#/components/schemas/ModuleDefault" }
+              description: The defaults of the type merged with its ancestors' (the deepest count wins).
+            effectiveTagPrefix: { type: string, description: The prefix proposed asset tags start with. }
+
+    ItemTypePage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ItemType" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    CreateItemType:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parentId: { type: [string, "null"], format: uuid, description: A live type; absent or null creates a root. }
+        tagPrefix: { type: string, maxLength: 20, pattern: "^[A-Za-z0-9._/-]*$" }
+        defaults: { type: array, items: { $ref: "#/components/schemas/ModuleDefault" }, description: Each module at most once. }
+
+    UpdateItemType:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parentId: { type: [string, "null"], format: uuid, description: Moves the type under this live type; null makes it a root. }
+        tagPrefix: { type: string, maxLength: 20, pattern: "^[A-Za-z0-9._/-]*$", description: Empty inherits the prefix. }
+        defaults: { type: array, items: { $ref: "#/components/schemas/ModuleDefault" }, description: Replaces the type's own defaults. }
+
+    Hardware:
+      type: object
+      required: [manufacturer, model, serialNumber]
+      properties:
+        manufacturer: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        serialNumber: { type: string, maxLength: 100 }
+
+    NetworkHost:
+      type: object
+      required: [role, hostname]
+      properties:
+        role: { $ref: "#/components/schemas/NetworkRole" }
+        hostname: { type: string, maxLength: 253, description: RFC 1123 host name; may be empty. }
+
+    Purchase:
+      type: object
+      required: [supplier, invoiceNumber, price, currency, warrantyEnd]
+      properties:
+        supplier: { type: string, maxLength: 100 }
+        invoiceNumber: { type: string, maxLength: 100 }
+        price:
+          type: [string, "null"]
+          pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$"
+          description: Decimal with at most two decimals; responses always have two. Null when unknown.
+          example: "1299.00"
+        currency: { type: string, description: "ISO 4217 code (upper case); required with a price and empty without one.", example: EUR }
+        warrantyEnd: { type: [string, "null"], format: date-time }
+
+    Module:
+      type: object
+      description: |
+        One module instance. Exactly the payload matching `kind` is set:
+        `hardware`, `networkHost`, `purchase` or `networkInterface`.
+        `primary` is only allowed on `network_interface`, for at most one
+        instance per item. In requests, send `id` to keep an existing
+        instance and leave it out for a new one.
+      required: [kind]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ModuleKind" }
+        primary: { type: boolean, default: false }
+        hardware: { $ref: "#/components/schemas/Hardware" }
+        networkHost: { $ref: "#/components/schemas/NetworkHost" }
+        purchase: { $ref: "#/components/schemas/Purchase" }
+        networkInterface: { $ref: "#/components/schemas/NetworkInterface" }
+
+    ModuleInput:
+      type: object
+      required: [kind]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ModuleKind" }
+        primary: { type: boolean, default: false }
+        hardware: { $ref: "#/components/schemas/Hardware" }
+        networkHost: { $ref: "#/components/schemas/NetworkHost" }
+        purchase: { $ref: "#/components/schemas/Purchase" }
+        networkInterface: { $ref: "#/components/schemas/NetworkInterfaceInput" }
+
+    StorageItem:
+      type: object
+      required:
+        - id
+        - assetTag
+        - name
+        - description
+        - storageId
+        - type
+        - usable
+        - orderDate
+        - commissionedAt
+        - decommissionedAt
+        - decommissioningReason
+        - personResponsible
+        - modules
+        - createdAt
+        - updatedAt
+        - deletedAt
+      properties:
+        id: { type: string, format: uuid }
+        assetTag: { type: string, maxLength: 50, example: NET-00042 }
+        name: { type: string, maxLength: 100, example: Core switch }
         description: { type: string, description: Plain text; may be empty. }
+        storageId: { type: string, format: uuid, description: The storage the item is kept in. }
+        type: { $ref: "#/components/schemas/ItemTypeRef" }
+        usable: { type: boolean }
+        orderDate: { type: [string, "null"], format: date-time }
+        commissionedAt: { type: [string, "null"], format: date-time }
+        decommissionedAt: { type: [string, "null"], format: date-time }
+        decommissioningReason: { type: string, maxLength: 1000 }
+        personResponsible:
+          oneOf:
+            - { $ref: "#/components/schemas/User" }
+            - { type: "null" }
+        modules:
+          type: array
+          items: { $ref: "#/components/schemas/Module" }
+          description: "In display order: by kind (hardware, network host, purchase, interfaces), primary first, then by name."
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         deletedAt: { type: [string, "null"], format: date-time, description: Null unless the item is deleted. }
 
-    CreateGenericStorageItem:
+    CreateStorageItem:
       type: object
-      required: [storageId, name]
+      required: [assetTag, name, storageId, typeId, usable]
       additionalProperties: false
+      description: Dates that are set must be in order (order ≤ commissioning ≤ decommissioning); violations are `out_of_order`.
       properties:
-        storageId: { type: string, format: uuid }
+        assetTag: { type: string, minLength: 1, maxLength: 50, pattern: "^[A-Za-z0-9._/-]+$", description: Usually the proposal of `next-asset-tag`. }
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, description: Plain text, at most 256 KiB. }
+        storageId: { type: string, format: uuid }
+        typeId: { type: string, format: uuid, description: A live item type. }
+        usable: { type: boolean }
+        orderDate: { type: [string, "null"], format: date-time }
+        commissionedAt: { type: [string, "null"], format: date-time }
+        decommissionedAt: { type: [string, "null"], format: date-time }
+        decommissioningReason: { type: string, maxLength: 1000 }
+        personResponsibleId: { type: [string, "null"], format: uuid, description: A person; service accounts are rejected. }
+        modules: { type: array, items: { $ref: "#/components/schemas/ModuleInput" } }
 
-    UpdateGenericStorageItem:
+    UpdateStorageItem:
       type: object
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: string, description: Plain text, at most 256 KiB; empty clears it. }
         storageId: { type: string, format: uuid, description: Moves the item to this storage. }
+        typeId: { type: string, format: uuid, description: Retypes the item; the type must be live. Modules stay as sent. }
+        usable: { type: boolean }
+        orderDate: { type: [string, "null"], format: date-time }
+        commissionedAt: { type: [string, "null"], format: date-time }
+        decommissionedAt: { type: [string, "null"], format: date-time }
+        decommissioningReason: { type: string, maxLength: 1000 }
+        personResponsibleId: { type: [string, "null"], format: uuid }
+        modules: { type: array, items: { $ref: "#/components/schemas/ModuleInput" }, description: Replaces all module instances. }
 
-    GenericStorageItemPage:
+    StorageItemPage:
       type: object
       required: [items, total, nextCursor]
       properties:
-        items: { type: array, items: { $ref: "#/components/schemas/GenericStorageItem" } }
-        total: { type: integer, format: int64 }
-        nextCursor: { type: [string, "null"] }
-
-    StorageItemKind:
-      type: string
-      enum: [generic, network_device]
-
-    StorageItemRef:
-      type: object
-      description: The fields every kind of storage item shares.
-      required: [id, kind, storageId, name, deleted]
-      properties:
-        id: { type: string, format: uuid }
-        kind: { $ref: "#/components/schemas/StorageItemKind" }
-        storageId: { type: string, format: uuid, description: The storage the item is kept in. }
-        name: { type: string, example: Cordless drill }
-        deleted: { type: boolean }
-
-    StorageItemRefPage:
-      type: object
-      required: [items, total, nextCursor]
-      properties:
-        items: { type: array, items: { $ref: "#/components/schemas/StorageItemRef" } }
+        items: { type: array, items: { $ref: "#/components/schemas/StorageItem" } }
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }
 
@@ -1862,39 +2099,6 @@ components:
         ipv4: { $ref: "#/components/schemas/IPv4Config" }
         ipv6: { $ref: "#/components/schemas/IPv6Config" }
 
-    NetworkDevice:
-      type: object
-      required:
-        - id
-        - storageId
-        - name
-        - description
-        - role
-        - hostname
-        - manufacturer
-        - model
-        - serialNumber
-        - primaryInterface
-        - secondaryInterfaces
-        - createdAt
-        - updatedAt
-        - deletedAt
-      properties:
-        id: { type: string, format: uuid }
-        storageId: { type: string, format: uuid, description: The storage the device is kept in. }
-        name: { type: string, maxLength: 100, example: Core router }
-        description: { type: string, description: Plain text; may be empty. }
-        role: { $ref: "#/components/schemas/NetworkRole" }
-        hostname: { type: string, description: RFC 1123 host name; may be empty. }
-        manufacturer: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
-        serialNumber: { type: string, maxLength: 100 }
-        primaryInterface: { $ref: "#/components/schemas/NetworkInterface" }
-        secondaryInterfaces: { type: array, items: { $ref: "#/components/schemas/NetworkInterface" } }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        deletedAt: { type: [string, "null"], format: date-time, description: Null unless the device is deleted. }
-
     IPConfigInput:
       type: object
       required: [mode]
@@ -1927,46 +2131,3 @@ components:
           description: Distinct, and not the native VLAN.
         ipv4: { $ref: "#/components/schemas/IPConfigInput" }
         ipv6: { $ref: "#/components/schemas/IPConfigInput" }
-
-    CreateNetworkDevice:
-      type: object
-      required: [storageId, name, role, primaryInterface]
-      additionalProperties: false
-      properties:
-        storageId: { type: string, format: uuid }
-        name: { type: string, minLength: 1, maxLength: 100 }
-        description: { type: string, description: Plain text, at most 256 KiB. }
-        role: { $ref: "#/components/schemas/NetworkRole" }
-        hostname: { type: string, maxLength: 253 }
-        manufacturer: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
-        serialNumber: { type: string, maxLength: 100 }
-        primaryInterface: { $ref: "#/components/schemas/NetworkInterfaceInput" }
-        secondaryInterfaces: { type: array, items: { $ref: "#/components/schemas/NetworkInterfaceInput" } }
-
-    UpdateNetworkDevice:
-      type: object
-      additionalProperties: false
-      properties:
-        name: { type: string, minLength: 1, maxLength: 100 }
-        description: { type: string, description: Plain text, at most 256 KiB; empty clears it. }
-        storageId: { type: string, format: uuid, description: Moves the device to this storage. }
-        role: { $ref: "#/components/schemas/NetworkRole" }
-        hostname: { type: string, maxLength: 253, description: Empty clears it. }
-        manufacturer: { type: string, maxLength: 100 }
-        model: { type: string, maxLength: 100 }
-        serialNumber: { type: string, maxLength: 100 }
-        primaryInterface:
-          $ref: "#/components/schemas/NetworkInterfaceInput"
-        secondaryInterfaces:
-          type: array
-          items: { $ref: "#/components/schemas/NetworkInterfaceInput" }
-          description: Replaces all secondary interfaces; empty removes them.
-
-    NetworkDevicePage:
-      type: object
-      required: [items, total, nextCursor]
-      properties:
-        items: { type: array, items: { $ref: "#/components/schemas/NetworkDevice" } }
-        total: { type: integer, format: int64 }
-        nextCursor: { type: [string, "null"] }

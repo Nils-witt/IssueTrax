@@ -29,8 +29,8 @@ type fixture struct {
 	comments    *service.CommentService
 	attachments *service.AttachmentService
 	storages    *service.StorageService
-	items       *service.GenericStorageItemService
-	devices     *service.NetworkDeviceService
+	itemTypes   *service.ItemTypeService
+	items       *service.StorageItemService
 	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
@@ -65,24 +65,25 @@ func newFixture(t *testing.T) *fixture {
 
 	store := memory.NewStore()
 	repos := service.Repositories{
-		Tx:                  store,
-		Projects:            memory.NewProjectRepository(store),
-		Issues:              memory.NewIssueRepository(store),
-		Tags:                memory.NewTagRepository(store),
-		Comments:            memory.NewCommentRepository(store),
-		Attachments:         memory.NewAttachmentRepository(store),
-		Storages:            memory.NewStorageRepository(store),
-		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
-		NetworkDevices:      memory.NewNetworkDeviceRepository(store),
-		StorageItems:        memory.NewStorageItemRepository(store),
-		Users:               memory.NewUserRepository(store),
-		Sessions:            memory.NewSessionRepository(store),
-		APIKeys:             memory.NewAPIKeyRepository(store),
-		Audit:               memory.NewAuditRepository(store),
+		Tx:               store,
+		Projects:         memory.NewProjectRepository(store),
+		Issues:           memory.NewIssueRepository(store),
+		Tags:             memory.NewTagRepository(store),
+		Comments:         memory.NewCommentRepository(store),
+		Attachments:      memory.NewAttachmentRepository(store),
+		Storages:         memory.NewStorageRepository(store),
+		ItemTypes:        memory.NewItemTypeRepository(store),
+		StorageItems:     memory.NewStorageItemRepository(store),
+		AssetTagCounters: memory.NewAssetTagCounterRepository(store),
+		Users:            memory.NewUserRepository(store),
+		Sessions:         memory.NewSessionRepository(store),
+		APIKeys:          memory.NewAPIKeyRepository(store),
+		Audit:            memory.NewAuditRepository(store),
 	}
 	clock := service.WithClock(func() time.Time { return testNow })
 	changes := &changeRecorder{}
 	notify := service.WithChangeNotifier(changes)
+	prefix := service.WithAssetTagPrefix("INV-")
 
 	return &fixture{
 		repos:       repos,
@@ -92,8 +93,8 @@ func newFixture(t *testing.T) *fixture {
 		comments:    service.NewCommentService(repos, clock, notify),
 		attachments: service.NewAttachmentService(repos, clock, notify),
 		storages:    service.NewStorageService(repos, clock, notify),
-		items:       service.NewGenericStorageItemService(repos, clock, notify),
-		devices:     service.NewNetworkDeviceService(repos, clock, notify),
+		itemTypes:   service.NewItemTypeService(repos, clock, notify, prefix),
+		items:       service.NewStorageItemService(repos, clock, notify, prefix),
 		users:       service.NewUserService(repos),
 		changes:     changes,
 	}

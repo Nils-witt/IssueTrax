@@ -10,7 +10,7 @@ import (
 	"nilswitt.dev/issuetrax/internal/core/port"
 )
 
-// switchName names the network device the link tests use.
+// switchName names an item the link tests use.
 const switchName = "Switch"
 
 func testIssuesStorageItemLinks(t *testing.T, newRepos NewRepositories) {
@@ -20,8 +20,9 @@ func testIssuesStorageItemLinks(t *testing.T, newRepos NewRepositories) {
 	p := project(t, r, "TRAX", "IssueTrax")
 	ada := user(t, r, "ada")
 	st := storage(t, r, nil, "Shelf")
-	drillItem := genericItem(t, r, st, drill, "")
-	sw := networkDevice(t, r, st, switchName)
+	tool := itemType(t, r, "Tool")
+	drillItem := storageItem(t, r, st, tool, drill)
+	sw := storageItem(t, r, st, tool, switchName)
 
 	both := issue(t, r, p, ada, func(i *domain.Issue) {
 		i.StorageItems = []domain.StorageItemID{drillItem.ID, sw.ID}
@@ -83,8 +84,9 @@ func testIssuesListByStorageItem(t *testing.T, newRepos NewRepositories) {
 	other := project(t, r, "OTHER", "Other")
 	ada := user(t, r, "ada")
 	st := storage(t, r, nil, "Shelf")
-	item := genericItem(t, r, st, drill, "")
-	unrelated := genericItem(t, r, st, bits, "")
+	tool := itemType(t, r, "Tool")
+	item := storageItem(t, r, st, tool, drill)
+	unrelated := storageItem(t, r, st, tool, bits)
 
 	link := func(proj domain.Project, at time.Time, status domain.IssueStatus) domain.Issue {
 		return issue(t, r, proj, ada, func(i *domain.Issue) {
@@ -129,67 +131,6 @@ func testIssuesListByStorageItem(t *testing.T, newRepos NewRepositories) {
 
 	if len(none.Items) != 0 || none.Total != 0 {
 		t.Fatalf("unknown item = %+v", none)
-	}
-}
-
-func testStorageItemsAcrossKinds(t *testing.T, newRepos NewRepositories) {
-	t.Helper()
-
-	r := newRepos(t)
-	st := storage(t, r, nil, "Shelf")
-	drillItem := genericItem(t, r, st, drill, "cordless")
-	sw := networkDevice(t, r, st, switchName)
-	gone := genericItem(t, r, st, "Broken drill", "")
-
-	deletedAt := now.Add(time.Minute)
-	gone.DeletedAt, gone.UpdatedAt = &deletedAt, deletedAt
-	must(t, r.GenericStorageItems.Update(t.Context(), gone))
-
-	many, err := r.StorageItems.GetMany(t.Context(), []domain.StorageItemID{sw.ID, drillItem.ID, gone.ID, domain.StorageItemID(newID())})
-	must(t, err)
-
-	byID := map[domain.StorageItemID]domain.StorageItem{}
-	for _, i := range many {
-		byID[i.ID] = i
-	}
-
-	if len(many) != 3 || !equalItemBase(byID[drillItem.ID], drillItem.StorageItem) ||
-		!equalItemBase(byID[sw.ID], sw.StorageItem) || !equalItemBase(byID[gone.ID], gone.StorageItem) {
-		t.Fatalf("GetMany() = %+v", many)
-	}
-
-	search := func(filter port.StorageItemFilter, limit int, cursor string) domain.Page[domain.StorageItem] {
-		t.Helper()
-
-		res, err := r.StorageItems.Search(t.Context(), filter, pageOf(t, limit, cursor))
-		must(t, err)
-
-		return res
-	}
-
-	itemNames := func(items []domain.StorageItem) []string {
-		out := make([]string, 0, len(items))
-		for _, i := range items {
-			out = append(out, i.Name)
-		}
-
-		return out
-	}
-
-	first := search(port.StorageItemFilter{}, 1, "")
-	rest := search(port.StorageItemFilter{}, 5, first.NextCursor)
-
-	if got := append(itemNames(first.Items), itemNames(rest.Items)...); !slices.Equal(got, []string{drill, switchName}) ||
-		first.Total != 2 || rest.NextCursor != "" {
-		t.Fatalf("paginated search = %v (total %d)", got, first.Total)
-	}
-
-	if got := itemNames(search(port.StorageItemFilter{Query: "CORDLESS"}, 0, "").Items); !slices.Equal(got, []string{drill}) {
-		t.Fatalf("query search = %v", got)
-	}
-
-	if got := itemNames(search(port.StorageItemFilter{Query: "drill", Deleted: true}, 0, "").Items); !slices.Equal(got, []string{gone.Name}) {
-		t.Fatalf("deleted search = %v", got)
 	}
 }
 

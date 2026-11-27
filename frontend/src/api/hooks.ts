@@ -11,26 +11,26 @@ import type {
   CreatedApiKey,
   CreateIssueInput,
   CreateProjectInput,
-  CreateGenericStorageItemInput,
-  CreateNetworkDeviceInput,
+  CreateItemTypeInput,
   CreateStorageInput,
-  GenericStorageItem,
-  NetworkDevice,
+  CreateStorageItemInput,
   Issue,
+  ItemType,
+  ItemTypeView,
   Me,
   Page,
   Project,
   ServiceAccount,
   Storage,
+  StorageItem,
   StorageItemFilter,
-  StorageItemRef,
   Tag,
   UpdateIssueInput,
   UpdateTagInput,
   UpdateProjectInput,
-  UpdateGenericStorageItemInput,
-  UpdateNetworkDeviceInput,
+  UpdateItemTypeInput,
   UpdateStorageInput,
+  UpdateStorageItemInput,
   User,
   VersionInfo,
 } from './types';
@@ -60,14 +60,21 @@ export const keys = {
   storageItems: ['storageItems'] as const,
   storageItemsIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'in', storage, filter] as const,
   storageItemSearch: (filter: StorageItemFilter) => ['storageItems', 'search', filter] as const,
-  // Under storageItems, so item invalidation covers network devices too.
-  networkDevicesIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'in', storage, filter] as const,
-  networkDeviceSearch: (filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'search', filter] as const,
-  /** Items of any kind matching q, e.g. to link them to an issue. */
+  storageItem: (id: string) => ['storageItems', 'one', id] as const,
+  /** Items matching q, e.g. to link them to an issue. */
   storageItemLookup: (q: string) => ['storageItems', 'lookup', q] as const,
   /** Prefix of every linked-issues query; under storageItems, so item changes refresh it too. */
   storageItemIssuesAll: ['storageItems', 'issues'] as const,
   storageItemIssues: (id: string) => ['storageItems', 'issues', id] as const,
+  /** Prefix of every item type query. */
+  itemTypes: ['itemTypes'] as const,
+  /** Children of parent; null lists the roots. */
+  itemTypeChildren: (parent: string | null, includeDeleted: boolean) =>
+    ['itemTypes', 'children', parent ?? '', includeDeleted] as const,
+  itemTypeSearch: (q: string) => ['itemTypes', 'search', q] as const,
+  itemType: (id: string) => ['itemTypes', 'one', id] as const,
+  // Under storageItems too, so a new item refreshes the proposal.
+  nextAssetTag: (typeId: string) => ['storageItems', 'nextAssetTag', typeId] as const,
 };
 
 export function useServiceAccounts() {
@@ -407,44 +414,48 @@ export function useStorage(id: string) {
 
 const flag = (on: boolean | undefined) => (on ? 'true' : undefined);
 
-/** The generic items in one storage (or its subtree), paginated by name. */
+/** Query parameters of an item list. */
+function itemParams(filter: StorageItemFilter, cursor: string) {
+  return query({
+    recursive: flag(filter.recursive),
+    deleted: flag(filter.deleted),
+    q: filter.q || undefined,
+    typeId: filter.typeId,
+    includeSubtypes: flag(filter.includeSubtypes),
+    usable: filter.usable === undefined ? undefined : String(filter.usable),
+    responsibleId: filter.responsibleId,
+    decommissioned: filter.decommissioned === undefined ? undefined : String(filter.decommissioned),
+    cursor,
+  });
+}
+
+/** The items in one storage (or its subtree) matching filter, paginated by name. */
 export function useStorageItems(storage: string, filter: StorageItemFilter) {
   return useInfiniteQuery({
     queryKey: keys.storageItemsIn(storage, filter),
     queryFn: ({ pageParam }) =>
-      request<Page<GenericStorageItem>>(
-        'GET',
-        `/api/storages/${encodeURIComponent(storage)}/generic-storage-items${query({
-          recursive: flag(filter.recursive),
-          deleted: flag(filter.deleted),
-          cursor: pageParam,
-        })}`,
-      ),
+      request<Page<StorageItem>>('GET', `/api/storages/${encodeURIComponent(storage)}/storage-items${itemParams(filter, pageParam)}`),
     initialPageParam: '',
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 }
 
-/** Generic items across all storages whose name or description contains filter.q. */
+/** Items across all storages matching filter. */
 export function useStorageItemSearch(filter: StorageItemFilter, enabled = true) {
   return useInfiniteQuery({
     queryKey: keys.storageItemSearch(filter),
-    queryFn: ({ pageParam }) =>
-      request<Page<GenericStorageItem>>(
-        'GET',
-        `/api/generic-storage-items${query({ q: filter.q, deleted: flag(filter.deleted), cursor: pageParam })}`,
-      ),
+    queryFn: ({ pageParam }) => request<Page<StorageItem>>('GET', `/api/storage-items${itemParams(filter, pageParam)}`),
     initialPageParam: '',
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
   });
 }
 
-/** Live (not deleted) items of any kind whose name or description contains q; the first page only. */
+/** Live (not deleted) items matching q; the first page only. */
 export function useStorageItemLookup(q: string) {
   return useQuery({
     queryKey: keys.storageItemLookup(q),
-    queryFn: () => request<Page<StorageItemRef>>('GET', `/api/storage-items${query({ q, limit: '20' })}`),
+    queryFn: () => request<Page<StorageItem>>('GET', `/api/storage-items${query({ q, limit: '20' })}`),
     placeholderData: (prev) => prev,
   });
 }
@@ -460,7 +471,7 @@ export function useStorageItemIssues(id: string) {
   });
 }
 
-/** Item changes also change the storages' item counts. */
+/** Item changes also change the storages' and types' item counts. */
 function useInvalidateStorageItems() {
   const qc = useQueryClient();
 
@@ -468,29 +479,29 @@ function useInvalidateStorageItems() {
     Promise.all([
       qc.invalidateQueries({ queryKey: keys.storageItems }),
       qc.invalidateQueries({ queryKey: keys.storages }),
+      qc.invalidateQueries({ queryKey: keys.itemTypes }),
       // Issues show the names and deletion state of their linked items.
       qc.invalidateQueries({ queryKey: ['issue'] }),
       qc.invalidateQueries({ queryKey: ['issues'] }),
     ]);
 }
 
+const itemPath = (id: string) => `/api/storage-items/${encodeURIComponent(id)}`;
+
 export function useCreateStorageItem() {
   const onSuccess = useInvalidateStorageItems();
 
   return useMutation({
-    mutationFn: (input: CreateGenericStorageItemInput) => request<GenericStorageItem>('POST', '/api/generic-storage-items', input),
+    mutationFn: (input: CreateStorageItemInput) => request<StorageItem>('POST', '/api/storage-items', input),
     onSuccess,
   });
 }
-
-const itemPath = (id: string) => `/api/generic-storage-items/${encodeURIComponent(id)}`;
 
 export function useUpdateStorageItem() {
   const onSuccess = useInvalidateStorageItems();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateGenericStorageItemInput }) =>
-      request<GenericStorageItem>('PATCH', itemPath(id), input),
+    mutationFn: ({ id, input }: { id: string; input: UpdateStorageItemInput }) => request<StorageItem>('PATCH', itemPath(id), input),
     onSuccess,
   });
 }
@@ -504,35 +515,17 @@ export function useDeleteStorageItem() {
 export function useRestoreStorageItem() {
   const onSuccess = useInvalidateStorageItems();
 
-  return useMutation({ mutationFn: (id: string) => request<GenericStorageItem>('POST', `${itemPath(id)}/restore`), onSuccess });
+  return useMutation({ mutationFn: (id: string) => request<StorageItem>('POST', `${itemPath(id)}/restore`), onSuccess });
 }
 
-/** The network devices in one storage (or its subtree), paginated by name. */
-export function useNetworkDevices(storage: string, filter: StorageItemFilter) {
+/** Children of an item type (roots for null), loaded page by page. */
+export function useItemTypeChildren(parent: string | null, includeDeleted: boolean, enabled = true) {
   return useInfiniteQuery({
-    queryKey: keys.networkDevicesIn(storage, filter),
+    queryKey: keys.itemTypeChildren(parent, includeDeleted),
     queryFn: ({ pageParam }) =>
-      request<Page<NetworkDevice>>(
+      request<Page<ItemType>>(
         'GET',
-        `/api/storages/${encodeURIComponent(storage)}/network-devices${query({
-          recursive: flag(filter.recursive),
-          deleted: flag(filter.deleted),
-          cursor: pageParam,
-        })}`,
-      ),
-    initialPageParam: '',
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  });
-}
-
-/** Network devices across all storages whose name, description, hostname, serial number or MAC contains filter.q. */
-export function useNetworkDeviceSearch(filter: StorageItemFilter, enabled = true) {
-  return useInfiniteQuery({
-    queryKey: keys.networkDeviceSearch(filter),
-    queryFn: ({ pageParam }) =>
-      request<Page<NetworkDevice>>(
-        'GET',
-        `/api/network-devices${query({ q: filter.q, deleted: flag(filter.deleted), cursor: pageParam })}`,
+        `/api/item-types${query({ parent: parent ?? undefined, includeDeleted: flag(includeDeleted), cursor: pageParam })}`,
       ),
     initialPageParam: '',
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -540,35 +533,65 @@ export function useNetworkDeviceSearch(filter: StorageItemFilter, enabled = true
   });
 }
 
-export function useCreateNetworkDevice() {
-  const onSuccess = useInvalidateStorageItems();
+/** Live types of the whole tree whose name contains q, with their paths; the first page only. */
+export function useItemTypeSearch(q: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.itemTypeSearch(q),
+    queryFn: () => request<Page<ItemTypeView>>('GET', `/api/item-types${query({ q, limit: '30' })}`),
+    placeholderData: (prev) => prev,
+    enabled: enabled && q !== '',
+  });
+}
+
+export function useItemType(id: string | null) {
+  return useQuery({
+    queryKey: keys.itemType(id ?? ''),
+    queryFn: () => request<ItemTypeView>('GET', `/api/item-types/${encodeURIComponent(id ?? '')}`),
+    enabled: !!id,
+  });
+}
+
+/** The proposed asset tag for a new item of the type; nothing is reserved. */
+export function useNextAssetTag(typeId: string | null) {
+  return useQuery({
+    queryKey: keys.nextAssetTag(typeId ?? ''),
+    queryFn: () => request<{ assetTag: string }>('GET', `/api/item-types/${encodeURIComponent(typeId ?? '')}/next-asset-tag`),
+    enabled: !!typeId,
+  });
+}
+
+/** Type changes rename items' types and change inherited data, so items reload too. */
+function useInvalidateItemTypes() {
+  const qc = useQueryClient();
+
+  return () => Promise.all([qc.invalidateQueries({ queryKey: keys.itemTypes }), qc.invalidateQueries({ queryKey: keys.storageItems })]);
+}
+
+const typePath = (id: string) => `/api/item-types/${encodeURIComponent(id)}`;
+
+export function useCreateItemType() {
+  const onSuccess = useInvalidateItemTypes();
+
+  return useMutation({ mutationFn: (input: CreateItemTypeInput) => request<ItemTypeView>('POST', '/api/item-types', input), onSuccess });
+}
+
+export function useUpdateItemType() {
+  const onSuccess = useInvalidateItemTypes();
 
   return useMutation({
-    mutationFn: (input: CreateNetworkDeviceInput) => request<NetworkDevice>('POST', '/api/network-devices', input),
+    mutationFn: ({ id, input }: { id: string; input: UpdateItemTypeInput }) => request<ItemTypeView>('PATCH', typePath(id), input),
     onSuccess,
   });
 }
 
-const devicePath = (id: string) => `/api/network-devices/${encodeURIComponent(id)}`;
+export function useDeleteItemType() {
+  const onSuccess = useInvalidateItemTypes();
 
-export function useUpdateNetworkDevice() {
-  const onSuccess = useInvalidateStorageItems();
-
-  return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateNetworkDeviceInput }) =>
-      request<NetworkDevice>('PATCH', devicePath(id), input),
-    onSuccess,
-  });
+  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', typePath(id)), onSuccess });
 }
 
-export function useDeleteNetworkDevice() {
-  const onSuccess = useInvalidateStorageItems();
+export function useRestoreItemType() {
+  const onSuccess = useInvalidateItemTypes();
 
-  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', devicePath(id)), onSuccess });
-}
-
-export function useRestoreNetworkDevice() {
-  const onSuccess = useInvalidateStorageItems();
-
-  return useMutation({ mutationFn: (id: string) => request<NetworkDevice>('POST', `${devicePath(id)}/restore`), onSuccess });
+  return useMutation({ mutationFn: (id: string) => request<ItemTypeView>('POST', `${typePath(id)}/restore`), onSuccess });
 }

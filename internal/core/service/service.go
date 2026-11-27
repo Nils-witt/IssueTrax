@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,16 +25,16 @@ type Repositories struct {
 	Attachments port.AttachmentRepository
 	// Storages stores the physical storage location tree.
 	Storages port.StorageRepository
-	// GenericStorageItems stores the generic items kept in storages.
-	GenericStorageItems port.GenericStorageItemRepository
-	// NetworkDevices stores the network devices kept in storages.
-	NetworkDevices port.NetworkDeviceRepository
-	// StorageItems reads the shared fields of items of every kind.
+	// ItemTypes stores the item type tree.
+	ItemTypes port.ItemTypeRepository
+	// StorageItems stores the items kept in storages with their modules.
 	StorageItems port.StorageItemRepository
-	Users        port.UserRepository
-	Sessions     port.SessionRepository
-	APIKeys      port.APIKeyRepository
-	Audit        port.AuditRepository
+	// AssetTagCounters stores the per-prefix counters of proposed asset tags.
+	AssetTagCounters port.AssetTagCounterRepository
+	Users            port.UserRepository
+	Sessions         port.SessionRepository
+	APIKeys          port.APIKeyRepository
+	Audit            port.AuditRepository
 }
 
 // Option customizes a service.
@@ -44,6 +45,9 @@ type options struct {
 	newID      func() uuid.UUID
 	adminGroup string
 	changes    port.ChangeNotifier
+	// assetTagPrefix starts proposed asset tags when no type in the chain
+	// has a prefix.
+	assetTagPrefix string
 }
 
 // WithClock overrides the time source (useful in tests).
@@ -66,6 +70,13 @@ func WithAdminGroup(name string) Option {
 // clients can refresh. Without it, changes are not announced.
 func WithChangeNotifier(n port.ChangeNotifier) Option {
 	return func(o *options) { o.changes = n }
+}
+
+// WithAssetTagPrefix sets the prefix proposed asset tags start with when
+// neither an item's type nor any of its ancestors has one. Without it,
+// such tags are plain numbers.
+func WithAssetTagPrefix(prefix string) Option {
+	return func(o *options) { o.assetTagPrefix = prefix }
 }
 
 // notify announces a committed change. Call it only after the use case's
@@ -173,6 +184,25 @@ func withUsers[T, V any](
 	}
 
 	return views, nil
+}
+
+// requireAdmin fails with domain.ErrAdminRequired unless actor is an admin
+// person (not a service account).
+func requireAdmin(ctx context.Context, repos Repositories, actor domain.UserID) error {
+	user, err := repos.Users.Get(ctx, actor)
+	if err != nil {
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return domain.ErrAdminRequired
+		}
+
+		return fmt.Errorf("get user %s: %w", actor, err)
+	}
+
+	if !user.Admin || user.IsServiceAccount() {
+		return domain.ErrAdminRequired
+	}
+
+	return nil
 }
 
 // unique returns s without duplicates, keeping first occurrences in order.
