@@ -24,6 +24,9 @@ var (
 	ErrForbidden = errors.New("forbidden")
 )
 
+// validationFailedMessage is the message of every validation error.
+const validationFailedMessage = "validation failed"
+
 // Stable error codes. Clients (e.g. the SPA's translations) key off these.
 const (
 	CodeValidationFailed = "validation_failed"
@@ -50,6 +53,13 @@ const (
 	CodeStorageItemNotFound   = "storage_item_not_found"
 	CodeStorageItemDeleted    = "storage_item_deleted"
 	CodeStorageItemNotDeleted = "storage_item_not_deleted"
+	CodeAssetTagTaken         = "asset_tag_taken"
+
+	CodeItemTypeNotFound   = "item_type_not_found"
+	CodeItemTypeDeleted    = "item_type_deleted"
+	CodeItemTypeNotDeleted = "item_type_not_deleted"
+	CodeItemTypeNameTaken  = "item_type_name_taken"
+	CodeItemTypeCycle      = "item_type_cycle"
 
 	CodeServiceAccountNotFound  = "service_account_not_found"
 	CodeServiceAccountNameTaken = "service_account_name_taken"
@@ -68,6 +78,8 @@ const (
 	FieldUnknown    = "unknown"
 	FieldOutOfRange = "out_of_range"
 	FieldImmutable  = "immutable"
+	// FieldOutOfOrder marks a date before one that must come first.
+	FieldOutOfOrder = "out_of_order"
 )
 
 // Error is a classified domain error with a stable machine-readable code.
@@ -122,7 +134,7 @@ var (
 	// ErrStorageParentNotFound is a validation error: the requested parent
 	// storage does not exist.
 	ErrStorageParentNotFound = &Error{
-		kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed",
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
 		Fields: map[string]string{"parentId": FieldInvalid},
 	}
 
@@ -134,8 +146,34 @@ var (
 	// ErrStorageItemStorageNotFound is a validation error: the storage an
 	// item should be kept in does not exist.
 	ErrStorageItemStorageNotFound = &Error{
-		kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed",
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
 		Fields: map[string]string{"storageId": FieldInvalid},
+	}
+
+	ErrAssetTagTaken = &Error{kind: ErrConflict, Code: CodeAssetTagTaken, Message: "the asset tag is already taken"}
+	// ErrStorageItemTypeNotFound is a validation error: the type an item
+	// should have does not exist.
+	ErrStorageItemTypeNotFound = &Error{
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
+		Fields: map[string]string{"typeId": FieldInvalid},
+	}
+	// ErrStorageItemResponsibleInvalid is a validation error: the
+	// responsible user does not exist or is a service account.
+	ErrStorageItemResponsibleInvalid = &Error{
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
+		Fields: map[string]string{"personResponsibleId": FieldInvalid},
+	}
+
+	ErrItemTypeNotFound   = &Error{kind: ErrNotFound, Code: CodeItemTypeNotFound, Message: "item type not found"}
+	ErrItemTypeDeleted    = &Error{kind: ErrConflict, Code: CodeItemTypeDeleted, Message: "the item type is deleted"}
+	ErrItemTypeNotDeleted = &Error{kind: ErrConflict, Code: CodeItemTypeNotDeleted, Message: "the item type is not deleted"}
+	ErrItemTypeNameTaken  = &Error{kind: ErrConflict, Code: CodeItemTypeNameTaken, Message: "an item type with this name already exists here"}
+	ErrItemTypeCycle      = &Error{kind: ErrConflict, Code: CodeItemTypeCycle, Message: "an item type cannot be moved into its own subtree"}
+	// ErrItemTypeParentNotFound is a validation error: the requested parent
+	// type does not exist.
+	ErrItemTypeParentNotFound = &Error{
+		kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage,
+		Fields: map[string]string{"parentId": FieldInvalid},
 	}
 
 	ErrServiceAccountNotFound  = &Error{kind: ErrNotFound, Code: CodeServiceAccountNotFound, Message: "service account not found"}
@@ -151,7 +189,7 @@ var (
 
 // NewValidationError returns an ErrInvalid error for the given field codes.
 func NewValidationError(fields map[string]string) error {
-	return &Error{kind: ErrInvalid, Code: CodeValidationFailed, Message: "validation failed", Fields: fields}
+	return &Error{kind: ErrInvalid, Code: CodeValidationFailed, Message: validationFailedMessage, Fields: fields}
 }
 
 // fieldErrors collects validation failures; the first code per field wins.

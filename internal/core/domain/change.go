@@ -23,6 +23,9 @@ const (
 	// moved, deleted or restored, which also changes storage item counts.
 	// Items are global, so Project is empty.
 	ChangeStorageItems ChangeKind = "storageItems"
+	// ChangeItemTypes: an item type was created, changed, moved, deleted or
+	// restored. Types are global, so Project is empty.
+	ChangeItemTypes ChangeKind = "itemTypes"
 )
 
 // Change announces that data was committed. It carries only what changed,

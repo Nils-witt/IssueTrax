@@ -44,6 +44,16 @@ const (
 	AuditNetworkDeviceDelete  AuditAction = "network_device.delete"
 	AuditNetworkDeviceRestore AuditAction = "network_device.restore"
 
+	AuditStorageItemCreate  AuditAction = "storage_item.create"
+	AuditStorageItemUpdate  AuditAction = "storage_item.update"
+	AuditStorageItemDelete  AuditAction = "storage_item.delete"
+	AuditStorageItemRestore AuditAction = "storage_item.restore"
+
+	AuditItemTypeCreate  AuditAction = "item_type.create"
+	AuditItemTypeUpdate  AuditAction = "item_type.update"
+	AuditItemTypeDelete  AuditAction = "item_type.delete"
+	AuditItemTypeRestore AuditAction = "item_type.restore"
+
 	AuditServiceAccountCreate AuditAction = "service_account.create"
 	AuditAPIKeyCreate         AuditAction = "api_key.create"
 	AuditAPIKeyRevoke         AuditAction = "api_key.revoke" //nolint:gosec // an action name, not a credential
@@ -56,6 +66,8 @@ var AuditActions = []AuditAction{
 	AuditAttachmentCreate, AuditAttachmentDelete, AuditStorageCreate, AuditStorageUpdate,
 	AuditGenericStorageItemCreate, AuditGenericStorageItemUpdate, AuditGenericStorageItemDelete, AuditGenericStorageItemRestore,
 	AuditNetworkDeviceCreate, AuditNetworkDeviceUpdate, AuditNetworkDeviceDelete, AuditNetworkDeviceRestore,
+	AuditStorageItemCreate, AuditStorageItemUpdate, AuditStorageItemDelete, AuditStorageItemRestore,
+	AuditItemTypeCreate, AuditItemTypeUpdate, AuditItemTypeDelete, AuditItemTypeRestore,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
 }
 
@@ -75,6 +87,8 @@ const (
 	AuditTargetGenericStorageItem = "generic_storage_item"
 	// AuditTargetNetworkDevice is a NetworkDevice.
 	AuditTargetNetworkDevice  = "network_device"
+	AuditTargetStorageItem    = "storage_item"
+	AuditTargetItemType       = "item_type"
 	AuditTargetServiceAccount = "service_account"
 	AuditTargetAPIKey         = "api_key"
 )
