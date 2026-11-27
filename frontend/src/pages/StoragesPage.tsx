@@ -67,7 +67,6 @@ type DialogState =
   | { kind: 'rename'; storage: Storage }
   | { kind: 'move'; storage: Storage }
   | { kind: 'createItem'; storage: Storage }
-  | { kind: 'editItem'; item: StorageItem }
   | { kind: 'moveItem'; item: StorageItem };
 
 /** What a storage can do, offered in its menu and overview. */
@@ -235,7 +234,6 @@ export function StoragesPage() {
             <StorageItemDetails
               key={itemId}
               id={itemId}
-              onEdit={(item) => setDialog({ kind: 'editItem', item })}
               onMove={(item) => setDialog({ kind: 'moveItem', item })}
               onSelectStorage={selectStorage}
             />
@@ -255,7 +253,6 @@ export function StoragesPage() {
       {dialog?.kind === 'createItem' && (
         <StorageItemDialog storage={dialog.storage} onClose={close} onSaved={(item) => selectItem(item.id)} />
       )}
-      {dialog?.kind === 'editItem' && <StorageItemDialog item={dialog.item} onClose={close} />}
       {dialog?.kind === 'moveItem' && <MoveItemDialog item={dialog.item} onClose={close} />}
     </Stack>
   );

@@ -43,7 +43,7 @@ const router = createBrowserRouter([
       { path: 'p/:key/issues/new', element: <NewIssuePage /> },
       { path: 'p/:key/issues/:number', element: <IssuePage /> },
       { path: 'p/:key/settings', element: <ProjectSettingsPage /> },
-      { path: 'storages', element: <StoragesPage /> },
+      { path: 'storages', element: <StoragesPage />, handle: { fullWidth: true } },
       { path: 'item-types', element: <ItemTypesPage /> },
       { path: 'manufacturers', element: <ManufacturersPage /> },
       { path: 'service-accounts', element: <ServiceAccountsPage /> },

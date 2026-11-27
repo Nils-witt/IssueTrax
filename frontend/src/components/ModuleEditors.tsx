@@ -38,12 +38,10 @@ interface ModuleCardProps {
   onChange: (next: ModuleForm) => void;
   onRemove: () => void;
   error: unknown;
-  /** Highlights a module the form added on its own (e.g. after a type change). */
-  highlight?: boolean;
 }
 
 /** One module instance with its kind's editor, a primary toggle for multi modules and a remove button. */
-export function ModuleCard({ value, index, onChange, onRemove, error, highlight }: ModuleCardProps) {
+export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCardProps) {
   const { t } = useTranslation();
   const path = `modules[${index}].${payloadField[value.kind]}`;
   const label =
@@ -53,7 +51,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error, highlight 
   const moduleError = fieldErrorText(t, error, `modules[${index}].kind`) ?? fieldErrorText(t, error, `modules[${index}].id`);
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, borderColor: highlight ? 'warning.main' : undefined }}>
+    <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack spacing={2}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>

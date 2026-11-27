@@ -7,7 +7,7 @@ import Select from '@mui/material/Select';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useTranslation } from 'react-i18next';
-import { Link, Outlet } from 'react-router';
+import { Link, Outlet, useMatches } from 'react-router';
 import { signOut } from '../api/client';
 import { useMe, useVersion } from '../api/hooks';
 import { useLiveUpdates } from '../api/live';
@@ -23,6 +23,8 @@ export function Layout() {
   const { t, i18n } = useTranslation();
   const me = useMe();
   useLiveUpdates(me.isSuccess);
+  // Routes opt into using the whole viewport width with `handle: { fullWidth: true }`.
+  const fullWidth = useMatches().some((m) => (m.handle as { fullWidth?: boolean } | undefined)?.fullWidth);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -77,7 +79,7 @@ export function Layout() {
           )}
         </Toolbar>
       </AppBar>
-      <Container component="main" maxWidth="lg" sx={{ pt: 3, pb: 8, flexGrow: 1 }}>
+      <Container component="main" maxWidth={fullWidth ? false : 'lg'} sx={{ pt: 3, pb: 8, flexGrow: 1 }}>
         {me.isPending && <Loading />}
         {me.isError && <ErrorMessage error={me.error} />}
         {me.isSuccess && <Outlet />}
