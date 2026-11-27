@@ -1,3 +1,4 @@
+import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
@@ -33,41 +34,32 @@ import EditIcon from '@mui/icons-material/EditOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
 import InventoryIcon from '@mui/icons-material/Inventory2Outlined';
-import RouterIcon from '@mui/icons-material/RouterOutlined';
 import LinkIcon from '@mui/icons-material/Link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
+import MenuItem from '@mui/material/MenuItem';
 import {
   useCreateStorage,
-  useCreateStorageItem,
-  useDeleteNetworkDevice,
   useDeleteStorageItem,
-  useNetworkDevices,
-  useNetworkDeviceSearch,
-  useRestoreNetworkDevice,
   useRestoreStorageItem,
   useStorage,
   useStorageChildren,
   useStorageItemIssues,
   useStorageItems,
   useStorageItemSearch,
-  useUpdateNetworkDevice,
   useUpdateStorage,
   useUpdateStorageItem,
+  useUsers,
 } from '../api/hooks';
-import type { GenericStorageItem, NetworkDevice, Page, Storage } from '../api/types';
+import type { ItemTypeRef, Page, Storage, StorageItem, StorageItemFilter, User } from '../api/types';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { ItemTypePicker } from '../components/ItemTypePicker';
 import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
 import { fieldErrorText } from '../lib/errors';
-import { NetworkDeviceDialog } from './NetworkDeviceDialog';
-
-/** An item of any kind kept in a storage. */
-type AnyItem = GenericStorageItem | NetworkDevice;
-
-const isDevice = (item: AnyItem): item is NetworkDevice => 'primaryInterface' in item;
+import { StorageItemDialog } from './StorageItemDialog';
 
 /** The dialog currently open on the page, if any. */
 type DialogState =
@@ -75,11 +67,9 @@ type DialogState =
   | { kind: 'rename'; storage: Storage }
   | { kind: 'move'; storage: Storage }
   | { kind: 'createItem'; storage: Storage }
-  | { kind: 'editItem'; item: GenericStorageItem }
-  | { kind: 'createDevice'; storage: Storage }
-  | { kind: 'editDevice'; device: NetworkDevice }
-  | { kind: 'moveItem'; item: AnyItem }
-  | { kind: 'linkedIssues'; item: AnyItem };
+  | { kind: 'editItem'; item: StorageItem }
+  | { kind: 'moveItem'; item: StorageItem }
+  | { kind: 'linkedIssues'; item: StorageItem };
 
 /** What the item panel shows: a storage's items or search results. */
 interface Selection {
@@ -133,10 +123,9 @@ export function StoragesPage() {
 
   const itemDialogs = {
     onCreate: (storage: Storage) => setDialog({ kind: 'createItem', storage }),
-    onCreateDevice: (storage: Storage) => setDialog({ kind: 'createDevice', storage }),
-    onEdit: (item: AnyItem) => setDialog(isDevice(item) ? { kind: 'editDevice', device: item } : { kind: 'editItem', item }),
-    onMove: (item: AnyItem) => setDialog({ kind: 'moveItem', item }),
-    onShowIssues: (item: AnyItem) => setDialog({ kind: 'linkedIssues', item }),
+    onEdit: (item: StorageItem) => setDialog({ kind: 'editItem', item }),
+    onMove: (item: StorageItem) => setDialog({ kind: 'moveItem', item }),
+    onShowIssues: (item: StorageItem) => setDialog({ kind: 'linkedIssues', item }),
   };
 
   const actions = (s: Storage) => (
@@ -212,10 +201,8 @@ export function StoragesPage() {
       {dialog?.kind === 'create' && <NameDialog parent={dialog.parent} onClose={close} />}
       {dialog?.kind === 'rename' && <NameDialog storage={dialog.storage} onClose={close} />}
       {dialog?.kind === 'move' && <MoveDialog storage={dialog.storage} onClose={close} />}
-      {dialog?.kind === 'createItem' && <ItemDialog storage={dialog.storage} onClose={close} />}
-      {dialog?.kind === 'editItem' && <ItemDialog item={dialog.item} onClose={close} />}
-      {dialog?.kind === 'createDevice' && <NetworkDeviceDialog storage={dialog.storage} onClose={close} />}
-      {dialog?.kind === 'editDevice' && <NetworkDeviceDialog device={dialog.device} onClose={close} />}
+      {dialog?.kind === 'createItem' && <StorageItemDialog storage={dialog.storage} onClose={close} />}
+      {dialog?.kind === 'editItem' && <StorageItemDialog item={dialog.item} onClose={close} />}
       {dialog?.kind === 'moveItem' && <MoveItemDialog item={dialog.item} onClose={close} />}
       {dialog?.kind === 'linkedIssues' && <LinkedIssuesDialog item={dialog.item} onClose={close} />}
     </Stack>
@@ -433,22 +420,94 @@ function MoveDialog({ storage, onClose }: { storage: Storage; onClose: () => voi
 
 interface ItemDialogs {
   onCreate: (storage: Storage) => void;
-  onCreateDevice: (storage: Storage) => void;
-  onEdit: (item: AnyItem) => void;
-  onMove: (item: AnyItem) => void;
-  onShowIssues: (item: AnyItem) => void;
+  onEdit: (item: StorageItem) => void;
+  onMove: (item: StorageItem) => void;
+  onShowIssues: (item: StorageItem) => void;
 }
 
 type ItemActions = Pick<ItemDialogs, 'onEdit' | 'onMove' | 'onShowIssues'>;
 
-/** The items kept in one storage, optionally with its subtree or only the deleted ones. */
-function ItemsPanel({ storageId, onCreate, onCreateDevice, ...actions }: { storageId: string } & ItemDialogs) {
+/** The list filters both item panels share, as edited. */
+interface FilterState {
+  type: ItemTypeRef | null;
+  includeSubtypes: boolean;
+  usable: '' | 'true' | 'false';
+  decommissioned: '' | 'true' | 'false';
+  responsible: User | null;
+  deleted: boolean;
+}
+
+const noFilters: FilterState = { type: null, includeSubtypes: true, usable: '', decommissioned: '', responsible: null, deleted: false };
+
+const triState = (v: '' | 'true' | 'false') => (v === '' ? undefined : v === 'true');
+
+function toFilter(f: FilterState): StorageItemFilter {
+  return {
+    typeId: f.type?.id,
+    includeSubtypes: f.type ? f.includeSubtypes : undefined,
+    usable: triState(f.usable),
+    decommissioned: triState(f.decommissioned),
+    responsibleId: f.responsible?.id,
+    deleted: f.deleted,
+  };
+}
+
+/** Filters by type (with subtypes), usable, decommissioning, responsible person and deletion. */
+function ItemFilters({ value, onChange }: { value: FilterState; onChange: (next: FilterState) => void }) {
+  const { t } = useTranslation();
+  const users = useUsers();
+  const people = (users.data ?? []).filter((u) => !u.serviceAccount);
+  const set = <K extends keyof FilterState>(key: K, v: FilterState[K]) => onChange({ ...value, [key]: v });
+
+  const tri = (label: string, key: 'usable' | 'decommissioned') => (
+    <TextField select size="small" label={label} value={value[key]} onChange={(e) => set(key, e.target.value as FilterState[typeof key])} sx={{ minWidth: 140 }}>
+      <MenuItem value="">{t('storageItems.any')}</MenuItem>
+      <MenuItem value="true">{t('storageItems.yes')}</MenuItem>
+      <MenuItem value="false">{t('storageItems.no')}</MenuItem>
+    </TextField>
+  );
+
+  return (
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <ItemTypePicker id="filter-type" label={t('storageItems.filterType')} value={value.type} onChange={(v) => set('type', v)} sx={{ minWidth: 220 }} />
+        {tri(t('storageItems.filterUsable'), 'usable')}
+        {tri(t('storageItems.filterDecommissioned'), 'decommissioned')}
+        <Autocomplete
+          size="small"
+          options={people}
+          value={value.responsible}
+          onChange={(_, u) => set('responsible', u)}
+          getOptionLabel={(u) => u.displayName}
+          getOptionKey={(u) => u.id}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          sx={{ minWidth: 200 }}
+          renderInput={(params) => <TextField {...params} label={t('storageItems.filterResponsible')} />}
+        />
+      </Stack>
+      <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
+        {value.type && (
+          <FormControlLabel
+            control={<Switch size="small" checked={value.includeSubtypes} onChange={(e) => set('includeSubtypes', e.target.checked)} />}
+            label={t('storageItems.includeSubtypes')}
+          />
+        )}
+        <FormControlLabel
+          control={<Switch size="small" checked={value.deleted} onChange={(e) => set('deleted', e.target.checked)} />}
+          label={t('storageItems.showDeleted')}
+        />
+      </Stack>
+    </Stack>
+  );
+}
+
+/** The items kept in one storage, optionally with its subtree, narrowed by the filters. */
+function ItemsPanel({ storageId, onCreate, ...actions }: { storageId: string } & ItemDialogs) {
   const { t } = useTranslation();
   const storage = useStorage(storageId);
   const [recursive, setRecursive] = useState(false);
-  const [deleted, setDeleted] = useState(false);
-  const items = useStorageItems(storageId, { recursive, deleted });
-  const devices = useNetworkDevices(storageId, { recursive, deleted });
+  const [filters, setFilters] = useState(noFilters);
+  const items = useStorageItems(storageId, { ...toFilter(filters), recursive });
 
   if (storage.isPending) return <Loading />;
   if (storage.isError) return <ErrorMessage error={storage.error} />;
@@ -465,32 +524,16 @@ function ItemsPanel({ storageId, onCreate, onCreateDevice, ...actions }: { stora
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => onCreate(st)}>
             {t('storageItems.add')}
           </Button>
-          <Button size="small" variant="outlined" startIcon={<RouterIcon />} onClick={() => onCreateDevice(st)}>
-            {t('networkDevices.add')}
-          </Button>
         </Stack>
-        <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
-          <FormControlLabel
-            control={<Switch size="small" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />}
-            label={t('storageItems.recursive')}
-          />
-          <FormControlLabel
-            control={<Switch size="small" checked={deleted} onChange={(e) => setDeleted(e.target.checked)} />}
-            label={t('storageItems.showDeleted')}
-          />
-        </Stack>
+        <FormControlLabel
+          control={<Switch size="small" checked={recursive} onChange={(e) => setRecursive(e.target.checked)} />}
+          label={t('storageItems.recursive')}
+        />
+        <ItemFilters value={filters} onChange={setFilters} />
         <ItemList
-          title={t('storageItems.genericTitle')}
           query={items}
           showStorage={recursive}
-          emptyText={deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')}
-          {...actions}
-        />
-        <ItemList
-          title={t('networkDevices.title')}
-          query={devices}
-          showStorage={recursive}
-          emptyText={deleted ? t('networkDevices.emptyDeleted') : t('networkDevices.empty')}
+          emptyText={filters.deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')}
           {...actions}
         />
       </Stack>
@@ -498,12 +541,11 @@ function ItemsPanel({ storageId, onCreate, onCreateDevice, ...actions }: { stora
   );
 }
 
-/** Items across all storages matching q. */
+/** Items across all storages matching q and the filters. */
 function SearchPanel({ q, onClear, ...actions }: { q: string; onClear: () => void } & ItemActions) {
   const { t } = useTranslation();
-  const [deleted, setDeleted] = useState(false);
-  const items = useStorageItemSearch({ q, deleted });
-  const devices = useNetworkDeviceSearch({ q, deleted });
+  const [filters, setFilters] = useState(noFilters);
+  const items = useStorageItemSearch({ ...toFilter(filters), q });
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -516,32 +558,16 @@ function SearchPanel({ q, onClear, ...actions }: { q: string; onClear: () => voi
             {t('storageItems.clearSearch')}
           </Button>
         </Stack>
-        <FormControlLabel
-          control={<Switch size="small" checked={deleted} onChange={(e) => setDeleted(e.target.checked)} />}
-          label={t('storageItems.showDeleted')}
-        />
-        <ItemList
-          title={t('storageItems.genericTitle')}
-          query={items}
-          showStorage
-          emptyText={t('storageItems.noMatches')}
-          {...actions}
-        />
-        <ItemList
-          title={t('networkDevices.title')}
-          query={devices}
-          showStorage
-          emptyText={t('networkDevices.noMatches')}
-          {...actions}
-        />
+        <ItemFilters value={filters} onChange={setFilters} />
+        <ItemList query={items} showStorage emptyText={t('storageItems.noMatches')} {...actions} />
       </Stack>
     </Paper>
   );
 }
 
-/** What ItemList needs of an infinite item query of either kind. */
-interface ItemQuery<T extends AnyItem> {
-  data?: { pages: Page<T>[] };
+/** What ItemList needs of an infinite item query. */
+interface ItemQuery {
+  data?: { pages: Page<StorageItem>[] };
   error: unknown;
   isPending: boolean;
   isSuccess: boolean;
@@ -550,37 +576,37 @@ interface ItemQuery<T extends AnyItem> {
   fetchNextPage: () => Promise<unknown>;
 }
 
-function ItemList<T extends AnyItem>({
-  title,
+function ItemList({
   query,
   showStorage,
   emptyText,
   onEdit,
   onMove,
   onShowIssues,
-}: { title: string; query: ItemQuery<T>; showStorage: boolean; emptyText: string } & ItemActions) {
+}: { query: ItemQuery; showStorage: boolean; emptyText: string } & ItemActions) {
   const { t } = useTranslation();
-  const delItem = useDeleteStorageItem();
-  const restoreItem = useRestoreStorageItem();
-  const delDevice = useDeleteNetworkDevice();
-  const restoreDevice = useRestoreNetworkDevice();
+  const del = useDeleteStorageItem();
+  const restore = useRestoreStorageItem();
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
   const total = query.data?.pages[0]?.total ?? 0;
 
-  const del = (item: AnyItem) => (isDevice(item) ? delDevice : delItem);
-  const restore = (item: AnyItem) => (isDevice(item) ? restoreDevice : restoreItem);
-  const busy = (m: { isPending: boolean; variables?: string }, item: AnyItem) => m.isPending && m.variables === item.id;
+  const busy = (m: { isPending: boolean; variables?: string }, item: StorageItem) => m.isPending && m.variables === item.id;
+
+  const issuesButton = (item: StorageItem) => (
+    <Tooltip title={t('storageItems.showLinkedIssues')}>
+      <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
+        <LinkIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
 
   return (
     <>
-      <Typography variant="subtitle2" component="h3" sx={{ pt: 1 }}>
-        {title}
-      </Typography>
       {query.isPending && <Loading />}
-      <ErrorMessage error={query.error ?? delItem.error ?? restoreItem.error ?? delDevice.error ?? restoreDevice.error} />
+      <ErrorMessage error={query.error ?? del.error ?? restore.error} />
       {query.isSuccess && (
         <Typography variant="body2" color="text.secondary">
-          {items.length === 0 ? emptyText : t(isDevice(items[0]!) ? 'networkDevices.count' : 'storageItems.count', { count: total })}
+          {items.length === 0 ? emptyText : t('storageItems.count', { count: total })}
         </Typography>
       )}
       <List dense disablePadding>
@@ -591,17 +617,13 @@ function ItemList<T extends AnyItem>({
             secondaryAction={
               item.deletedAt ? (
                 <Stack direction="row" spacing={0.5}>
-                  <Tooltip title={t('storageItems.showLinkedIssues')}>
-                    <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
-                      <LinkIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {issuesButton(item)}
                   <Tooltip title={t('storageItems.restore')}>
                     <IconButton
                       size="small"
                       aria-label={t('storageItems.restoreNamed', { name: item.name })}
-                      loading={busy(restore(item), item)}
-                      onClick={() => restore(item).mutate(item.id)}
+                      loading={busy(restore, item)}
+                      onClick={() => restore.mutate(item.id)}
                     >
                       <RestoreIcon fontSize="small" />
                     </IconButton>
@@ -609,11 +631,7 @@ function ItemList<T extends AnyItem>({
                 </Stack>
               ) : (
                 <Stack direction="row" spacing={0.5}>
-                  <Tooltip title={t('storageItems.showLinkedIssues')}>
-                    <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
-                      <LinkIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {issuesButton(item)}
                   <Tooltip title={t('storageItems.edit')}>
                     <IconButton size="small" aria-label={t('storageItems.editNamed', { name: item.name })} onClick={() => onEdit(item)}>
                       <EditIcon fontSize="small" />
@@ -628,8 +646,8 @@ function ItemList<T extends AnyItem>({
                     <IconButton
                       size="small"
                       aria-label={t('storageItems.deleteNamed', { name: item.name })}
-                      loading={busy(del(item), item)}
-                      onClick={() => del(item).mutate(item.id)}
+                      loading={busy(del, item)}
+                      onClick={() => del.mutate(item.id)}
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
@@ -641,13 +659,17 @@ function ItemList<T extends AnyItem>({
           >
             <ListItemText
               primary={
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                  <KeyText>{item.assetTag}</KeyText>
                   <span>{item.name}</span>
+                  <Chip size="small" variant="outlined" label={item.type.name} />
+                  {!item.usable && <Chip size="small" color="error" variant="outlined" label={t('storageItems.notUsable')} />}
+                  {item.decommissionedAt && <Chip size="small" variant="outlined" label={t('storageItems.decommissionedBadge')} />}
                   {item.deletedAt && <Chip size="small" color="warning" variant="outlined" label={t('storageItems.deleted')} />}
                   {showStorage && <StorageChip id={item.storageId} />}
                 </Stack>
               }
-              secondary={(isDevice(item) ? deviceSummary(t, item) : item.description) || undefined}
+              secondary={itemSummary(t, item) || undefined}
               slotProps={{ secondary: { sx: { whiteSpace: 'pre-line', overflowWrap: 'anywhere' } } }}
             />
           </ListItem>
@@ -664,20 +686,25 @@ function ItemList<T extends AnyItem>({
   );
 }
 
-/** One line about a device (role, hostname, primary MAC and static addresses), then its description. */
-function deviceSummary(t: ReturnType<typeof useTranslation>['t'], d: NetworkDevice): string {
-  const p = d.primaryInterface;
-  const parts = [t(`networkDevices.roles.${d.role}`), d.hostname, p.mac];
+/** One line about an item (responsible person, model, host, primary MAC, interface count), then its description. */
+function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageItem): string {
+  const parts: string[] = [];
+  const ifaces = item.modules.filter((m) => m.networkInterface);
 
-  for (const c of [p.ipv4, p.ipv6]) {
-    if (c.address !== null) parts.push(`${c.address}/${c.prefixLength}`);
+  if (item.personResponsible) parts.push(item.personResponsible.displayName);
+
+  for (const m of item.modules) {
+    if (m.hardware) parts.push([m.hardware.manufacturer, m.hardware.model].filter(Boolean).join(' '));
+    if (m.networkHost) parts.push([t(`modules.roles.${m.networkHost.role}`), m.networkHost.hostname].filter(Boolean).join(' '));
   }
 
-  if (d.secondaryInterfaces.length > 0) parts.push(t('networkDevices.moreInterfaces', { count: d.secondaryInterfaces.length }));
+  const primary = ifaces.find((m) => m.primary) ?? ifaces[0];
+  if (primary?.networkInterface) parts.push(primary.networkInterface.mac);
+  if (ifaces.length > 1) parts.push(t('modules.moreInterfaces', { count: ifaces.length }));
 
   const line = parts.filter(Boolean).join(' · ');
 
-  return d.description ? `${line}\n${d.description}` : line;
+  return item.description ? `${line}\n${item.description}` : line;
 }
 
 /** The name of the storage an item is kept in. */
@@ -689,83 +716,16 @@ function StorageChip({ id }: { id: string }) {
   return <Chip size="small" variant="outlined" icon={<InventoryIcon />} label={storage.data.name} />;
 }
 
-/** Creates an item in storage, or edits item's name and description. */
-function ItemDialog({ storage, item, onClose }: { storage?: Storage; item?: GenericStorageItem; onClose: () => void }) {
+/** Picks the storage to keep item in. */
+function MoveItemDialog({ item, onClose }: { item: StorageItem; onClose: () => void }) {
   const { t } = useTranslation();
-  const create = useCreateStorageItem();
   const update = useUpdateStorageItem();
-  const mutation = item ? update : create;
-  const [name, setName] = useState(item?.name ?? '');
-  const [description, setDescription] = useState(item?.description ?? '');
-
-  const nameError = fieldErrorText(t, mutation.error, 'name');
-  const descriptionError = fieldErrorText(t, mutation.error, 'description');
-  const storageError = fieldErrorText(t, mutation.error, 'storageId');
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-
-    if (item) update.mutate({ id: item.id, input: { name, description } }, { onSuccess: onClose });
-    else if (storage) create.mutate({ storageId: storage.id, name, description }, { onSuccess: onClose });
-  }
-
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" slotProps={{ paper: { component: 'form', onSubmit: submit } }}>
-      <DialogTitle>
-        {item ? t('storageItems.editTitle', { name: item.name }) : t('storageItems.createTitle', { name: storage?.name ?? '' })}
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField
-            autoFocus
-            required
-            size="small"
-            label={t('storageItems.name')}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            error={!!nameError}
-            helperText={nameError}
-            slotProps={{ htmlInput: { maxLength: 100, autoComplete: 'off' } }}
-          />
-          <TextField
-            multiline
-            minRows={3}
-            size="small"
-            label={t('storageItems.description')}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            error={!!descriptionError}
-            helperText={descriptionError}
-          />
-          <ErrorMessage error={mutation.error && !nameError && !descriptionError && !storageError ? mutation.error : null} />
-          {storageError && <Typography color="error">{t('storageItems.storageGone')}</Typography>}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('app.cancel')}</Button>
-        <Button type="submit" variant="contained" loading={mutation.isPending}>
-          {item ? t('app.save') : t('app.create')}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-/** Picks the storage to keep item (of any kind) in. */
-function MoveItemDialog({ item, onClose }: { item: AnyItem; onClose: () => void }) {
-  const { t } = useTranslation();
-  const updateItem = useUpdateStorageItem();
-  const updateDevice = useUpdateNetworkDevice();
-  const update = isDevice(item) ? updateDevice : updateItem;
   const [selected, setSelected] = useState<string>(item.storageId);
 
   const storageError = fieldErrorText(t, update.error, 'storageId');
 
   function submit() {
-    const input = { id: item.id, input: { storageId: selected } };
-
-    if (isDevice(item)) updateDevice.mutate(input, { onSuccess: onClose });
-    else updateItem.mutate(input, { onSuccess: onClose });
+    update.mutate({ id: item.id, input: { storageId: selected } }, { onSuccess: onClose });
   }
 
   return (
@@ -791,7 +751,7 @@ function MoveItemDialog({ item, onClose }: { item: AnyItem; onClose: () => void 
 }
 
 /** The issues of every project linking item, each opening the issue. */
-function LinkedIssuesDialog({ item, onClose }: { item: AnyItem; onClose: () => void }) {
+function LinkedIssuesDialog({ item, onClose }: { item: StorageItem; onClose: () => void }) {
   const { t } = useTranslation();
   const issues = useStorageItemIssues(item.id);
   const list = issues.data?.pages.flatMap((p) => p.items) ?? [];

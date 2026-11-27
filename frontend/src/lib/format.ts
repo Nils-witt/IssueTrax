@@ -16,3 +16,6 @@ export function formatBytes(bytes: number, language?: string): string {
     maximumFractionDigits: unit === 0 ? 0 : 1,
   }).format(value);
 }
+
+/** A storage item's label: its asset tag and name. */
+export const storageItemLabel = (item: { assetTag: string; name: string }) => `${item.assetTag} ${item.name}`.trim();

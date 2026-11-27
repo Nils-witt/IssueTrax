@@ -11,6 +11,7 @@ import Popover from '@mui/material/Popover';
 import EditIcon from '@mui/icons-material/Edit';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import InventoryIcon from '@mui/icons-material/Inventory2Outlined';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { useIssue, useTags, useUpdateIssue, useUsers } from '../api/hooks';
@@ -26,7 +27,8 @@ import { Loading } from '../components/Loading';
 import { Markdown } from '../components/Markdown';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { TagInput } from '../components/TagInput';
-import { StorageItemKindIcon, StorageItemPicker } from '../components/StorageItemPicker';
+import { StorageItemPicker } from '../components/StorageItemPicker';
+import { storageItemLabel } from '../lib/format';
 import { UserPicker } from '../components/UserPicker';
 import { fieldErrorText } from '../lib/errors';
 import { tagChipSx } from '../lib/tagColor';
@@ -391,8 +393,8 @@ function StorageItemSection({ issue, disabled, error, onSave }: SectionProps) {
               key={item.id}
               size="small"
               variant="outlined"
-              icon={<StorageItemKindIcon item={item} />}
-              label={item.name}
+              icon={<InventoryIcon fontSize="small" />}
+              label={storageItemLabel(item)}
               title={item.deleted ? t('storageItems.deleted') : undefined}
               sx={item.deleted ? { textDecoration: 'line-through', opacity: 0.7 } : undefined}
               component={Link}

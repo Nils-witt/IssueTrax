@@ -44,14 +44,14 @@ export const auditActions = [
   'attachment.delete',
   'storage.create',
   'storage.update',
-  'generic_storage_item.create',
-  'generic_storage_item.update',
-  'generic_storage_item.delete',
-  'generic_storage_item.restore',
-  'network_device.create',
-  'network_device.update',
-  'network_device.delete',
-  'network_device.restore',
+  'storage_item.create',
+  'storage_item.update',
+  'storage_item.delete',
+  'storage_item.restore',
+  'item_type.create',
+  'item_type.update',
+  'item_type.delete',
+  'item_type.restore',
   'service_account.create',
   'api_key.create',
   'api_key.revoke',
@@ -146,20 +146,17 @@ export interface Issue {
   status: IssueStatus;
   tags: Tag[];
   assignees: User[];
-  /** Linked storage items of any kind, deleted ones included. */
+  /** Linked storage items, deleted ones included. */
   storageItems: StorageItemRef[];
   createdBy: User;
   createdAt: string;
   updatedAt: string;
 }
 
-/** The kind of a storage item. */
-export type StorageItemKind = 'generic' | 'network_device';
-
-/** The shared fields of a storage item of any kind, as linked from issues. */
+/** A storage item as linked from issues. */
 export interface StorageItemRef {
   id: string;
-  kind: StorageItemKind;
+  assetTag: string;
   storageId: string;
   name: string;
   deleted: boolean;
@@ -198,7 +195,7 @@ export interface Storage {
   name: string;
   /** Number of direct children. */
   childCount: number;
-  /** Number of items (any kind, not deleted) kept directly in it. */
+  /** Number of items (not deleted) kept directly in it. */
   itemCount: number;
   createdAt: string;
   updatedAt: string;
@@ -213,32 +210,6 @@ export interface UpdateStorageInput {
   name?: string;
   /** Moves the storage; null makes it a root. */
   parentId?: string | null;
-}
-
-/** A plain item kept in a storage. Deleting only sets deletedAt. */
-export interface GenericStorageItem {
-  id: string;
-  storageId: string;
-  name: string;
-  /** Plain text; may be empty. */
-  description: string;
-  createdAt: string;
-  updatedAt: string;
-  /** Null unless the item is deleted. */
-  deletedAt: string | null;
-}
-
-export interface CreateGenericStorageItemInput {
-  storageId: string;
-  name: string;
-  description?: string;
-}
-
-export interface UpdateGenericStorageItemInput {
-  name?: string;
-  description?: string;
-  /** Moves the item to this storage. */
-  storageId?: string;
 }
 
 export type NetworkRole = 'router' | 'switch' | 'client';
@@ -270,24 +241,6 @@ export interface NetworkInterface {
   ipv6: IPConfig<IPv6Mode>;
 }
 
-/** A network device kept in a storage. Deleting only sets deletedAt. */
-export interface NetworkDevice {
-  id: string;
-  storageId: string;
-  name: string;
-  description: string;
-  role: NetworkRole;
-  hostname: string;
-  manufacturer: string;
-  model: string;
-  serialNumber: string;
-  primaryInterface: NetworkInterface;
-  secondaryInterfaces: NetworkInterface[];
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-}
-
 /** Static settings are only allowed (and address and prefix required) when mode is 'static'. */
 export interface IPConfigInput<Mode extends string> {
   mode: Mode;
@@ -309,21 +262,150 @@ export interface NetworkInterfaceInput {
   ipv6: IPConfigInput<IPv6Mode>;
 }
 
-export interface CreateNetworkDeviceInput {
-  storageId: string;
-  name: string;
-  description?: string;
-  role: NetworkRole;
-  hostname?: string;
-  manufacturer?: string;
-  model?: string;
-  serialNumber?: string;
-  primaryInterface: NetworkInterfaceInput;
-  secondaryInterfaces?: NetworkInterfaceInput[];
+/** Module kinds in display order; hardware, network host and purchase occur at most once per item. */
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'network_interface'] as const;
+export type ModuleKind = (typeof moduleKinds)[number];
+
+/** Only network interfaces may occur several times (and be primary). */
+export const isMultiModule = (kind: ModuleKind) => kind === 'network_interface';
+
+/** A module new items of a type start with, count times (always 1 for single modules). */
+export interface ModuleDefault {
+  module: ModuleKind;
+  count: number;
 }
 
-/** Partial update; the interfaces given replace the stored ones, storageId moves the device. */
-export type UpdateNetworkDeviceInput = Partial<CreateNetworkDeviceInput>;
+export interface ItemTypeRef {
+  id: string;
+  name: string;
+  deleted: boolean;
+}
+
+/** An item type; types form a tree through parentId. Deleting only sets deletedAt. */
+export interface ItemType {
+  id: string;
+  /** Null for a root type. */
+  parentId: string | null;
+  name: string;
+  /** Starts proposed asset tags, separator included; empty inherits it. */
+  tagPrefix: string;
+  /** The type's own defaults, without the inherited ones. */
+  defaults: ModuleDefault[];
+  /** Direct children, deleted ones included. */
+  childCount: number;
+  /** Live items of exactly this type. */
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/** An item type with what it inherits. */
+export interface ItemTypeView extends ItemType {
+  /** Ancestors from the root down to the parent. */
+  path: ItemTypeRef[];
+  effectiveDefaults: ModuleDefault[];
+  effectiveTagPrefix: string;
+}
+
+export interface CreateItemTypeInput {
+  name: string;
+  parentId?: string | null;
+  tagPrefix?: string;
+  defaults?: ModuleDefault[];
+}
+
+export interface UpdateItemTypeInput {
+  name?: string;
+  /** Moves the type; null makes it a root. */
+  parentId?: string | null;
+  tagPrefix?: string;
+  /** Replaces the type's own defaults. */
+  defaults?: ModuleDefault[];
+}
+
+export interface Hardware {
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+}
+
+export interface NetworkHost {
+  role: NetworkRole;
+  hostname: string;
+}
+
+export interface Purchase {
+  supplier: string;
+  invoiceNumber: string;
+  /** Decimal with two places ("12.50"); null when unknown. */
+  price: string | null;
+  /** ISO 4217; empty without a price. */
+  currency: string;
+  warrantyEnd: string | null;
+}
+
+/** One module instance; exactly the payload matching kind is set. */
+export interface Module {
+  id: string;
+  kind: ModuleKind;
+  primary: boolean;
+  hardware?: Hardware;
+  networkHost?: NetworkHost;
+  purchase?: Purchase;
+  networkInterface?: NetworkInterface;
+}
+
+/** A module as sent: id keeps an existing instance, leave it out for a new one. */
+export interface ModuleInput {
+  id?: string;
+  kind: ModuleKind;
+  primary?: boolean;
+  hardware?: Hardware;
+  networkHost?: NetworkHost;
+  purchase?: Omit<Purchase, 'price'> & { price: string | null };
+  networkInterface?: NetworkInterfaceInput;
+}
+
+/** A thing kept in a storage. Deleting only sets deletedAt. */
+export interface StorageItem {
+  id: string;
+  /** Unique ignoring case, never changes. */
+  assetTag: string;
+  name: string;
+  description: string;
+  storageId: string;
+  type: ItemTypeRef;
+  usable: boolean;
+  orderDate: string | null;
+  commissionedAt: string | null;
+  decommissionedAt: string | null;
+  decommissioningReason: string;
+  personResponsible: User | null;
+  /** In display order: by kind, primary first, then by name. */
+  modules: Module[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface CreateStorageItemInput {
+  assetTag: string;
+  name: string;
+  description?: string;
+  storageId: string;
+  typeId: string;
+  usable: boolean;
+  orderDate?: string | null;
+  commissionedAt?: string | null;
+  decommissionedAt?: string | null;
+  decommissioningReason?: string;
+  personResponsibleId?: string | null;
+  modules?: ModuleInput[];
+}
+
+/** Partial update; null clears a date or the responsible person, modules replaces all instances. */
+export type UpdateStorageItemInput = Partial<Omit<CreateStorageItemInput, 'assetTag'>>;
 
 /** Narrows an item list. */
 export interface StorageItemFilter {
@@ -331,8 +413,14 @@ export interface StorageItemFilter {
   recursive?: boolean;
   /** Only deleted items instead of only live ones. */
   deleted?: boolean;
-  /** Only when searching: name or description contains this, ignoring case. */
+  /** Name, description, asset tag, hardware fields, host name or MAC contains this, ignoring case. */
   q?: string;
+  typeId?: string;
+  includeSubtypes?: boolean;
+  usable?: boolean;
+  responsibleId?: string;
+  /** With (true) or without (false) a decommissioning date. */
+  decommissioned?: boolean;
 }
 
 export interface Page<T> {
