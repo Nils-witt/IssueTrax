@@ -28,6 +28,7 @@ const payloadField: Record<ModuleKind, string> = {
   hardware: 'hardware',
   network_host: 'networkHost',
   purchase: 'purchase',
+  sim_card: 'simCard',
   network_interface: 'networkInterface',
 };
 
@@ -76,6 +77,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCa
         {value.kind === 'hardware' && <HardwareEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_host' && <NetworkHostEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'purchase' && <PurchaseEditor value={value} onChange={onChange} path={path} error={error} />}
+        {value.kind === 'sim_card' && <SimCardEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_interface' && (
           <InterfaceEditor
             value={value.networkInterface}
@@ -243,6 +245,42 @@ function PurchaseEditor({ value, onChange, path, error }: PayloadEditorProps) {
       </Grid>
       <Grid size={{ xs: 12, sm: 5 }}>
         <PayloadText label={t('modules.warrantyEnd')} type="date" value={value.purchase.warrantyEnd} onChange={set('warrantyEnd')} field={`${path}.warrantyEnd`} error={error} />
+      </Grid>
+    </Grid>
+  );
+}
+
+function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
+  const { t } = useTranslation();
+  const set = (key: keyof ModuleForm['simCard']) => (v: string) => onChange({ ...value, simCard: { ...value.simCard, [key]: v } });
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 3 }}>
+        <PayloadText label={t('modules.provider')} value={value.simCard.provider} onChange={set('provider')} field={`${path}.provider`} error={error} />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 4 }}>
+        <PayloadText
+          label={t('modules.phoneNumber')}
+          type="tel"
+          value={value.simCard.phoneNumber}
+          onChange={set('phoneNumber')}
+          field={`${path}.phoneNumber`}
+          error={error}
+          maxLength={32}
+          placeholder="+49 171 1234567"
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 5 }}>
+        <PayloadText
+          label={t('modules.iccid')}
+          value={value.simCard.iccid}
+          onChange={set('iccid')}
+          field={`${path}.iccid`}
+          error={error}
+          maxLength={40}
+          placeholder="8949 0200 0012 3456 7890"
+        />
       </Grid>
     </Grid>
   );

@@ -210,6 +210,13 @@ type ModulePurchase struct {
 	WarrantyEnd   *time.Time
 }
 
+type ModuleSimCard struct {
+	ModuleID    uuid.UUID
+	Provider    string
+	PhoneNumber string
+	Iccid       string
+}
+
 type Project struct {
 	ID              uuid.UUID
 	Key             string

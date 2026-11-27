@@ -89,6 +89,9 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 		{ID: moduleID(), Kind: domain.ModulePurchase, Purchase: &domain.Purchase{
 			Supplier: "Shop", InvoiceNumber: "R-1", PriceCents: &price, Currency: "EUR", WarrantyEnd: &warranty,
 		}},
+		{ID: moduleID(), Kind: domain.ModuleSimCard, SimCard: &domain.SimCard{
+			Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890",
+		}},
 		{ID: moduleID(), Kind: domain.ModuleNetworkInterface, Primary: true, NetworkInterface: &domain.NetworkInterface{
 			Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, NativeVLAN: 10, TaggedVLANs: []int{20, 30},
 			IPv4: domain.IPConfig{
@@ -167,13 +170,13 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	must(t, r.StorageItems.Update(t.Context(), item))
 
 	// Move the primary flag, edit a payload, drop a module and add one.
-	eth0, wlan0 := item.Modules[3], item.Modules[4]
+	sim, eth0, wlan0 := item.Modules[3], item.Modules[4], item.Modules[5]
 	eth0.Primary, wlan0.Primary = false, true
 	wlan0.NetworkInterface = new(*wlan0.NetworkInterface)
 	wlan0.NetworkInterface.SSID = "Guests"
 	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{SerialNumber: "S48"}}
 
-	item.Modules = []domain.Module{added, item.Modules[1], eth0, wlan0}
+	item.Modules = []domain.Module{added, item.Modules[1], sim, eth0, wlan0}
 	domain.SortModules(item.Modules)
 	must(t, r.StorageItems.Update(t.Context(), item))
 
@@ -184,8 +187,8 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 		t.Fatalf("after module update = %+v\nwant %+v", got.Modules, item.Modules)
 	}
 
-	if got.Modules[2].ID != wlan0.ID || !got.Modules[2].Primary || got.Modules[2].NetworkInterface.SSID != "Guests" {
-		t.Fatalf("primary interface = %+v", got.Modules[2])
+	if got.Modules[3].ID != wlan0.ID || !got.Modules[3].Primary || got.Modules[3].NetworkInterface.SSID != "Guests" {
+		t.Fatalf("primary interface = %+v", got.Modules[3])
 	}
 }
 
@@ -307,6 +310,9 @@ func testStorageItemsSearch(t *testing.T, newRepos NewRepositories) {
 		"s24":               {coreSwitch},
 		"sn-4":              {coreSwitch},
 		"SW1.LAN":           {coreSwitch},
+		"telekom":           {coreSwitch},
+		"+49171":            {coreSwitch},
+		"8949020000":        {coreSwitch},
 		"aa:bb":             {coreSwitch},
 		"AA-BB-CC-00-11-22": {coreSwitch},
 		"0200.0000.0001":    {coreSwitch},

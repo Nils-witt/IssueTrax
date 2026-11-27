@@ -51,6 +51,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                                               OR h.serial_number ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
+                  WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
+                                              OR sc.iccid ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
 `
@@ -316,6 +319,35 @@ func (q *Queries) ListPurchaseModules(ctx context.Context, moduleIds []uuid.UUID
 	return items, nil
 }
 
+const listSimCardModules = `-- name: ListSimCardModules :many
+SELECT module_id, provider, phone_number, iccid FROM module_sim_cards WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListSimCardModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleSimCard, error) {
+	rows, err := q.db.Query(ctx, listSimCardModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleSimCard{}
+	for rows.Next() {
+		var i ModuleSimCard
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Provider,
+			&i.PhoneNumber,
+			&i.Iccid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStorageItemModules = `-- name: ListStorageItemModules :many
 SELECT id, item_id, module, is_primary FROM storage_item_modules WHERE item_id = ANY ($1::uuid[])
 `
@@ -372,6 +404,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                                               OR h.serial_number ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
+                  WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
+                                              OR sc.iccid ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
   AND (NOT $9::boolean OR (lower(i.name), i.id) > ($10::text, $11::uuid))
@@ -633,6 +668,30 @@ func (q *Queries) UpsertPurchaseModule(ctx context.Context, arg UpsertPurchaseMo
 		arg.PriceCents,
 		arg.Currency,
 		arg.WarrantyEnd,
+	)
+	return err
+}
+
+const upsertSimCardModule = `-- name: UpsertSimCardModule :exec
+INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (module_id) DO UPDATE
+SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid
+`
+
+type UpsertSimCardModuleParams struct {
+	ModuleID    uuid.UUID
+	Provider    string
+	PhoneNumber string
+	Iccid       string
+}
+
+func (q *Queries) UpsertSimCardModule(ctx context.Context, arg UpsertSimCardModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertSimCardModule,
+		arg.ModuleID,
+		arg.Provider,
+		arg.PhoneNumber,
+		arg.Iccid,
 	)
 	return err
 }

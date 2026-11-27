@@ -55,6 +55,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                                               OR h.serial_number ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
+                  WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
+                                              OR sc.iccid ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)))
   AND (NOT @has_cursor::boolean OR (lower(i.name), i.id) > (@cursor_name::text, @cursor_id::uuid))
@@ -89,6 +92,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                                               OR h.serial_number ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
+                  WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
+                                              OR sc.iccid ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)));
 
@@ -134,6 +140,15 @@ SET supplier = EXCLUDED.supplier, invoice_number = EXCLUDED.invoice_number, pric
 
 -- name: ListPurchaseModules :many
 SELECT * FROM module_purchases WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertSimCardModule :exec
+INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid)
+VALUES (@module_id, @provider, @phone_number, @iccid)
+ON CONFLICT (module_id) DO UPDATE
+SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid;
+
+-- name: ListSimCardModules :many
+SELECT * FROM module_sim_cards WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (

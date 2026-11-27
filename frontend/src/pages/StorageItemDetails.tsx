@@ -358,6 +358,18 @@ function moduleFields(t: T, m: Module): ReactNode {
     );
   }
 
+  if (m.simCard) {
+    const c = m.simCard;
+
+    return (
+      <>
+        <Field label={t('modules.provider')}>{c.provider}</Field>
+        <Field label={t('modules.phoneNumber')}>{c.phoneNumber && <code>{c.phoneNumber}</code>}</Field>
+        <Field label={t('modules.iccid')}>{c.iccid && <code>{c.iccid}</code>}</Field>
+      </>
+    );
+  }
+
   if (m.networkInterface) {
     const n = m.networkInterface;
 

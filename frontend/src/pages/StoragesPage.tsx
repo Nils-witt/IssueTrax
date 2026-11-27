@@ -809,7 +809,7 @@ function ItemList({
   );
 }
 
-/** One line about an item (responsible person, model, host, primary MAC, interface count), then its description. */
+/** One line about an item (responsible person, model, host, SIM phone number, primary MAC, interface count), then its description. */
 function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageItem): string {
   const parts: string[] = [];
   const ifaces = item.modules.filter((m) => m.networkInterface);
@@ -819,6 +819,7 @@ function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageIte
   for (const m of item.modules) {
     if (m.hardware) parts.push([m.hardware.manufacturer?.name, m.hardware.model?.name].filter(Boolean).join(' '));
     if (m.networkHost) parts.push([t(`modules.roles.${m.networkHost.role}`), m.networkHost.hostname].filter(Boolean).join(' '));
+    if (m.simCard) parts.push(m.simCard.phoneNumber);
   }
 
   const primary = ifaces.find((m) => m.primary) ?? ifaces[0];

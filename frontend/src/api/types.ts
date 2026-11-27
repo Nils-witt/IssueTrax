@@ -262,8 +262,8 @@ export interface NetworkInterfaceInput {
   ipv6: IPConfigInput<IPv6Mode>;
 }
 
-/** Module kinds in display order; hardware, network host and purchase occur at most once per item. */
-export const moduleKinds = ['hardware', 'network_host', 'purchase', 'network_interface'] as const;
+/** Module kinds in display order; all but network interfaces occur at most once per item. */
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'network_interface'] as const;
 export type ModuleKind = (typeof moduleKinds)[number];
 
 /** Only network interfaces may occur several times (and be primary). */
@@ -382,6 +382,13 @@ export interface Purchase {
   warrantyEnd: string | null;
 }
 
+/** A SIM card; every field may be empty. Phone number and ICCID come back without separators. */
+export interface SimCard {
+  provider: string;
+  phoneNumber: string;
+  iccid: string;
+}
+
 /** One module instance; exactly the payload matching kind is set. */
 export interface Module {
   id: string;
@@ -390,6 +397,7 @@ export interface Module {
   hardware?: Hardware;
   networkHost?: NetworkHost;
   purchase?: Purchase;
+  simCard?: SimCard;
   networkInterface?: NetworkInterface;
 }
 
@@ -401,6 +409,7 @@ export interface ModuleInput {
   hardware?: HardwareInput;
   networkHost?: NetworkHost;
   purchase?: Omit<Purchase, 'price'> & { price: string | null };
+  simCard?: SimCard;
   networkInterface?: NetworkInterfaceInput;
 }
 

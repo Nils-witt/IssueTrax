@@ -13,6 +13,7 @@ import {
   type NetworkInterfaceInput,
   type NetworkInterfaceType,
   type NetworkRole,
+  type SimCard,
 } from '../api/types';
 
 /** One IP family as edited: numbers stay text until submit. */
@@ -62,6 +63,7 @@ export interface ModuleForm {
   hardware: HardwareForm;
   networkHost: { role: NetworkRole; hostname: string };
   purchase: PurchaseForm;
+  simCard: SimCard;
   networkInterface: InterfaceForm;
 }
 
@@ -118,6 +120,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
       currency: p?.currency ?? '',
       warrantyEnd: p?.warrantyEnd ? p.warrantyEnd.slice(0, 10) : '',
     },
+    simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '' },
     networkInterface: interfaceForm(stored?.networkInterface),
   };
 }
@@ -184,6 +187,8 @@ export function moduleInput(f: ModuleForm): ModuleInput {
           warrantyEnd: dateInput(f.purchase.warrantyEnd),
         },
       };
+    case 'sim_card':
+      return { ...base, simCard: f.simCard };
     case 'network_interface':
       return { ...base, networkInterface: interfaceInput(f.networkInterface) };
   }

@@ -82,7 +82,7 @@ tags:
       decommissioning dates (in that order), a decommissioning reason and a
       responsible person (no service accounts). All other fields come from
       modules, which are added and removed per item: `hardware`,
-      `networkHost` and `purchase` at most once, `network_interface` any
+      `networkHost`, `purchase` and `simCard` at most once, `network_interface` any
       number of times with at most one primary. Modules keep their `id`
       across updates when it is sent back. Deleting an item only marks it
       deleted (`deletedAt`); deleted items are hidden from lists unless
@@ -2104,8 +2104,8 @@ components:
 
     ModuleKind:
       type: string
-      description: "`hardware`, `network_host` and `purchase` occur at most once per item; `network_interface` any number of times."
-      enum: [hardware, network_host, purchase, network_interface]
+      description: "`hardware`, `network_host`, `purchase` and `sim_card` occur at most once per item; `network_interface` any number of times."
+      enum: [hardware, network_host, purchase, sim_card, network_interface]
 
     ModuleDefault:
       type: object
@@ -2279,11 +2279,31 @@ components:
         currency: { type: string, description: "ISO 4217 code (upper case); required with a price and empty without one.", example: EUR }
         warrantyEnd: { type: [string, "null"], format: date-time }
 
+    SimCard:
+      type: object
+      required: [provider, phoneNumber, iccid]
+      description: |
+        A SIM card placed in the device. Every field may be empty. Spaces,
+        hyphens, slashes, dots and parentheses are removed from `phoneNumber`
+        and `iccid` before validation and are not returned.
+      properties:
+        provider: { type: string, maxLength: 100, example: Telekom }
+        phoneNumber:
+          type: string
+          pattern: "^(\\+?[0-9]{3,15})?$"
+          description: Optional "+" and 3 to 15 digits.
+          example: "+491711234567"
+        iccid:
+          type: string
+          pattern: "^(89[0-9]{16,20})?$"
+          description: ITU-T E.118 ICCID, 18 to 22 digits starting with 89; the check digit is not verified.
+          example: "89490200001234567890"
+
     Module:
       type: object
       description: |
         One module instance. Exactly the payload matching `kind` is set:
-        `hardware`, `networkHost`, `purchase` or `networkInterface`.
+        `hardware`, `networkHost`, `purchase`, `simCard` or `networkInterface`.
         `primary` is only allowed on `network_interface`, for at most one
         instance per item. In requests, send `id` to keep an existing
         instance and leave it out for a new one.
@@ -2295,6 +2315,7 @@ components:
         hardware: { $ref: "#/components/schemas/Hardware" }
         networkHost: { $ref: "#/components/schemas/NetworkHost" }
         purchase: { $ref: "#/components/schemas/Purchase" }
+        simCard: { $ref: "#/components/schemas/SimCard" }
         networkInterface: { $ref: "#/components/schemas/NetworkInterface" }
 
     ModuleInput:
@@ -2308,6 +2329,7 @@ components:
         hardware: { $ref: "#/components/schemas/Hardware" }
         networkHost: { $ref: "#/components/schemas/NetworkHost" }
         purchase: { $ref: "#/components/schemas/Purchase" }
+        simCard: { $ref: "#/components/schemas/SimCard" }
         networkInterface: { $ref: "#/components/schemas/NetworkInterfaceInput" }
 
     StorageItem:

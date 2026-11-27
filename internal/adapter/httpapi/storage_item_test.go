@@ -17,10 +17,17 @@ type moduleBodyJSON struct {
 	Primary          bool            `json:"primary"`
 	Hardware         json.RawMessage `json:"hardware"`
 	Purchase         *purchaseJSON   `json:"purchase"`
+	SimCard          *simCardJSON    `json:"simCard"`
 	NetworkInterface *struct {
 		Name string `json:"name"`
 		MAC  string `json:"mac"`
 	} `json:"networkInterface"`
+}
+
+type simCardJSON struct {
+	Provider    string `json:"provider"`
+	PhoneNumber string `json:"phoneNumber"`
+	ICCID       string `json:"iccid"`
 }
 
 type purchaseJSON struct {
@@ -76,11 +83,12 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 		`","usable":true,"personResponsibleId":"`+me+`","modules":[`+
 		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
 		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
+		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890"}},`+
 		`{"kind":"hardware","hardware":{"serialNumber":"S24"}}]}`)
 
 	wantCreatedItem(t, item, me)
 
-	eth := item.Modules[2]
+	eth := item.Modules[3]
 
 	r := env.do(t, c, http.MethodPatch, "/api/storage-items/"+item.ID, `{"usable":false,"personResponsibleId":null,`+
 		`"decommissionedAt":"2026-05-01T00:00:00Z","decommissioningReason":"broken","modules":[`+
@@ -111,13 +119,19 @@ func wantCreatedItem(t *testing.T, item storageItemJSON, me string) {
 	t.Helper()
 
 	if item.AssetTag != "NET-00001" || item.Type.Name != "Switch" || item.PersonResponsible == nil ||
-		item.PersonResponsible.ID != me || len(item.Modules) != 3 || item.Modules[0].Kind != "hardware" {
+		item.PersonResponsible.ID != me || len(item.Modules) != 4 || item.Modules[0].Kind != "hardware" {
 		t.Fatalf("created = %+v", item)
 	}
 
 	if p := item.Modules[1].Purchase; p == nil || *p.Price != "12.50" || p.Currency != "EUR" ||
-		item.Modules[2].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
+		item.Modules[3].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
 		t.Fatalf("created modules = %+v", item.Modules)
+	}
+
+	if sc := item.Modules[2].SimCard; sc == nil || *sc != (simCardJSON{
+		Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890",
+	}) {
+		t.Fatalf("created sim card = %+v", item.Modules[2])
 	}
 }
 

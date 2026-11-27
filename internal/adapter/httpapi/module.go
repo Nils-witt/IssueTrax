@@ -56,6 +56,14 @@ type purchaseJSON struct {
 	WarrantyEnd *time.Time `json:"warrantyEnd"`
 }
 
+// simCardJSON is a SIM card; phoneNumber and iccid come back without
+// separators.
+type simCardJSON struct {
+	Provider    string `json:"provider"`
+	PhoneNumber string `json:"phoneNumber"`
+	ICCID       string `json:"iccid"`
+}
+
 // moduleJSON is one module instance. Exactly the payload matching kind is
 // set. On requests, id names an instance to keep; leave it out for a new one.
 type moduleJSON struct {
@@ -65,6 +73,7 @@ type moduleJSON struct {
 	Hardware         *hardwareJSON         `json:"hardware,omitempty"`
 	NetworkHost      *networkHostJSON      `json:"networkHost,omitempty"`
 	Purchase         *purchaseJSON         `json:"purchase,omitempty"`
+	SimCard          *simCardJSON          `json:"simCard,omitempty"`
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
 
@@ -87,6 +96,9 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 		if p.PriceCents != nil {
 			resp.Purchase.Price = new(domain.FormatPrice(*p.PriceCents))
 		}
+	case m.SimCard != nil:
+		c := m.SimCard
+		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
 	case m.NetworkInterface != nil:
 		resp.NetworkInterface = new(toNetworkInterfaceJSON(*m.NetworkInterface))
 	}
@@ -195,6 +207,10 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 				Supplier: pu.Supplier, InvoiceNumber: pu.InvoiceNumber, Price: deref(pu.Price), Currency: pu.Currency,
 				WarrantyEnd: pu.WarrantyEnd,
 			}
+		}
+
+		if c := m.SimCard; c != nil {
+			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
 		}
 
 		if n := m.NetworkInterface; n != nil {

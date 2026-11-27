@@ -139,6 +139,10 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 			ModuleID: id, Supplier: p.Supplier, InvoiceNumber: p.InvoiceNumber, PriceCents: price, Currency: p.Currency,
 			WarrantyEnd: p.WarrantyEnd,
 		})
+	case m.SimCard != nil:
+		return q.UpsertSimCardModule(ctx, sqlc.UpsertSimCardModuleParams{
+			ModuleID: id, Provider: m.SimCard.Provider, PhoneNumber: m.SimCard.PhoneNumber, Iccid: m.SimCard.ICCID,
+		})
 	case m.NetworkInterface != nil:
 		return storeInterface(ctx, q, id, *m.NetworkInterface)
 	}
@@ -433,6 +437,17 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 		}
 
 		out[p.ModuleID] = domain.Module{Purchase: &purchase}
+	}
+
+	sims, err := q.ListSimCardModules(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("select sim card modules: %w", err)
+	}
+
+	for _, c := range sims {
+		out[c.ModuleID] = domain.Module{SimCard: &domain.SimCard{
+			Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.Iccid,
+		}}
 	}
 
 	ifaces, err := q.ListNetworkInterfaceModules(ctx, ids)
