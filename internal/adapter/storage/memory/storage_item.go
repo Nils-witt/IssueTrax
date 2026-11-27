@@ -183,7 +183,7 @@ func (s *Store) matchesQuery(item domain.StorageItem, query, mac string, isMAC b
 		case m.NetworkHost != nil:
 			fields = append(fields, m.NetworkHost.Hostname)
 		case m.SimCard != nil:
-			fields = append(fields, m.SimCard.Provider, m.SimCard.PhoneNumber, m.SimCard.ICCID)
+			fields = append(fields, m.SimCard.Provider, m.SimCard.PhoneNumber, m.SimCard.ICCID, m.SimCard.IMSI)
 		case m.WWAN != nil:
 			fields = append(fields, m.WWAN.IMEI, m.WWAN.APN)
 		case m.OperatingSystem != nil:

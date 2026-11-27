@@ -56,12 +56,13 @@ type purchaseJSON struct {
 	WarrantyEnd *time.Time `json:"warrantyEnd"`
 }
 
-// simCardJSON is a SIM card; phoneNumber and iccid come back without
+// simCardJSON is a SIM card; phoneNumber, iccid and imsi come back without
 // separators.
 type simCardJSON struct {
 	Provider    string `json:"provider"`
 	PhoneNumber string `json:"phoneNumber"`
 	ICCID       string `json:"iccid"`
+	IMSI        string `json:"imsi"`
 }
 
 // wwanJSON is a mobile (cellular) connection; imei comes back without
@@ -117,7 +118,7 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 		}
 	case m.SimCard != nil:
 		c := m.SimCard
-		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID, IMSI: c.IMSI}
 	case m.WWAN != nil:
 		resp.WWAN = toWWANJSON(*m.WWAN, v)
 	case m.OperatingSystem != nil:
@@ -233,7 +234,7 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 		}
 
 		if c := m.SimCard; c != nil {
-			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID, IMSI: c.IMSI}
 		}
 
 		if w := m.WWAN; w != nil {

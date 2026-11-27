@@ -261,10 +261,10 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
 
   return (
     <Grid container spacing={2}>
-      <Grid size={{ xs: 12, sm: 3 }}>
+      <Grid size={{ xs: 12, sm: 6 }}>
         <PayloadText label={t('modules.provider')} value={value.simCard.provider} onChange={set('provider')} field={`${path}.provider`} error={error} />
       </Grid>
-      <Grid size={{ xs: 12, sm: 4 }}>
+      <Grid size={{ xs: 12, sm: 6 }}>
         <PayloadText
           label={t('modules.phoneNumber')}
           type="tel"
@@ -276,7 +276,7 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
           placeholder="+49 171 1234567"
         />
       </Grid>
-      <Grid size={{ xs: 12, sm: 5 }}>
+      <Grid size={{ xs: 12, sm: 6 }}>
         <PayloadText
           label={t('modules.iccid')}
           value={value.simCard.iccid}
@@ -285,6 +285,17 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
           error={error}
           maxLength={40}
           placeholder="8949 0200 0012 3456 7890"
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <PayloadText
+          label={t('modules.imsi')}
+          value={value.simCard.imsi}
+          onChange={set('imsi')}
+          field={`${path}.imsi`}
+          error={error}
+          maxLength={32}
+          placeholder="262 01 1234567890"
         />
       </Grid>
     </Grid>

@@ -124,7 +124,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
       currency: p?.currency ?? '',
       warrantyEnd: p?.warrantyEnd ? p.warrantyEnd.slice(0, 10) : '',
     },
-    simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '' },
+    simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '', imsi: '' },
     wwan: stored?.wwan ?? { imei: '', apn: '', technology: '', simCardItemId: null, simCardItem: null },
     operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
     networkInterface: interfaceForm(stored?.networkInterface),

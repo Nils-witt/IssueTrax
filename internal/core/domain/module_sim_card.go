@@ -13,22 +13,27 @@ var (
 	// the telecom industry prefix 89. The Luhn check digit is not verified
 	// because cards print it inconsistently.
 	iccidPattern = regexp.MustCompile(`^89[0-9]{16,20}$`)
-	// numberSeparators are removed from phone numbers and ICCIDs.
+	// imsiPattern is an IMSI (ITU-T E.212): at most 15 digits, made of a
+	// 3-digit country code, a 2 or 3-digit network code and the subscriber
+	// number.
+	imsiPattern = regexp.MustCompile(`^[0-9]{6,15}$`)
+	// numberSeparators are removed from phone numbers, ICCIDs and IMSIs.
 	numberSeparators = strings.NewReplacer(" ", "", "-", "", "/", "", "(", "", ")", "", ".", "")
 )
 
 // SimCard is a SIM card placed in a device: the payload of a ModuleSimCard
-// module. Every field may be empty. PhoneNumber and ICCID are kept without
-// separators.
+// module. Every field may be empty. PhoneNumber, ICCID and IMSI are kept
+// without separators.
 type SimCard struct {
 	Provider    string
 	PhoneNumber string
 	ICCID       string
+	IMSI        string
 }
 
 // String describes c in one line, for the audit log.
 func (c SimCard) String() string {
-	return strings.Join([]string{c.Provider, c.PhoneNumber, c.ICCID}, " / ")
+	return strings.Join([]string{c.Provider, c.PhoneNumber, c.ICCID, c.IMSI}, " / ")
 }
 
 // SimCardParams is unvalidated input for a SIM card module.
@@ -36,6 +41,7 @@ type SimCardParams struct {
 	Provider    string
 	PhoneNumber string
 	ICCID       string
+	IMSI        string
 }
 
 func checkSimCard(f fieldErrors, field string, p SimCardParams) SimCard {
@@ -43,6 +49,7 @@ func checkSimCard(f fieldErrors, field string, p SimCardParams) SimCard {
 		Provider:    checkOptionalText(f, field+".provider", p.Provider, maxShortTextRunes),
 		PhoneNumber: checkNumber(f, field+".phoneNumber", p.PhoneNumber, phoneNumberPattern),
 		ICCID:       checkNumber(f, field+".iccid", p.ICCID, iccidPattern),
+		IMSI:        checkNumber(f, field+".imsi", p.IMSI, imsiPattern),
 	}
 }
 

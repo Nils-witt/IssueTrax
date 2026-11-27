@@ -421,6 +421,7 @@ export const en = {
     provider: 'Provider',
     phoneNumber: 'Phone number',
     iccid: 'ICCID',
+    imsi: 'IMSI',
     imei: 'IMEI',
     apn: 'APN',
     technology: 'Technology',

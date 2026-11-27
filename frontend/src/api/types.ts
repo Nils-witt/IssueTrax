@@ -382,11 +382,12 @@ export interface Purchase {
   warrantyEnd: string | null;
 }
 
-/** A SIM card; every field may be empty. Phone number and ICCID come back without separators. */
+/** A SIM card; every field may be empty. Phone number, ICCID and IMSI come back without separators. */
 export interface SimCard {
   provider: string;
   phoneNumber: string;
   iccid: string;
+  imsi: string;
 }
 
 /** Mobile network generations a WWAN modem connects with; empty means unknown. */

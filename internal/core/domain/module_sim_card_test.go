@@ -20,8 +20,9 @@ func TestSimCardModule(t *testing.T) {
 			name: "all fields, separators removed",
 			params: domain.SimCardParams{
 				Provider: " Telekom ", PhoneNumber: " +49 (171) 123-4567 ", ICCID: "8949 0200 0012 3456 7890",
+				IMSI: "262 01 123456789-0",
 			},
-			want: domain.SimCard{Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890"},
+			want: domain.SimCard{Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890", IMSI: "262011234567890"},
 		},
 		{name: "empty", params: domain.SimCardParams{}, want: domain.SimCard{}},
 		{
@@ -48,6 +49,16 @@ func TestSimCardModule(t *testing.T) {
 			name:   "iccid too short",
 			params: domain.SimCardParams{ICCID: "8949020000123456"},
 			errs:   map[string]string{"modules[0].simCard.iccid": domain.FieldInvalid},
+		},
+		{
+			name:   "imsi with letters",
+			params: domain.SimCardParams{IMSI: "26201ABC"},
+			errs:   map[string]string{"modules[0].simCard.imsi": domain.FieldInvalid},
+		},
+		{
+			name:   "imsi too long",
+			params: domain.SimCardParams{IMSI: strings.Repeat("1", 16)},
+			errs:   map[string]string{"modules[0].simCard.imsi": domain.FieldInvalid},
 		},
 		{
 			name:   "provider too long",

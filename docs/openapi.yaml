@@ -2281,11 +2281,11 @@ components:
 
     SimCard:
       type: object
-      required: [provider, phoneNumber, iccid]
+      required: [provider, phoneNumber, iccid, imsi]
       description: |
         A SIM card placed in the device. Every field may be empty. Spaces,
-        hyphens, slashes, dots and parentheses are removed from `phoneNumber`
-        and `iccid` before validation and are not returned.
+        hyphens, slashes, dots and parentheses are removed from `phoneNumber`,
+        `iccid` and `imsi` before validation and are not returned.
       properties:
         provider: { type: string, maxLength: 100, example: Telekom }
         phoneNumber:
@@ -2298,6 +2298,11 @@ components:
           pattern: "^(89[0-9]{16,20})?$"
           description: ITU-T E.118 ICCID, 18 to 22 digits starting with 89; the check digit is not verified.
           example: "89490200001234567890"
+        imsi:
+          type: string
+          pattern: "^([0-9]{6,15})?$"
+          description: ITU-T E.212 IMSI, 6 to 15 digits (country code, network code, subscriber number).
+          example: "262011234567890"
 
     WWAN:
       type: object

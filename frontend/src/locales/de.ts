@@ -421,6 +421,7 @@ export const de: Messages = {
     provider: 'Anbieter',
     phoneNumber: 'Rufnummer',
     iccid: 'ICCID',
+    imsi: 'IMSI',
     imei: 'IMEI',
     apn: 'APN',
     technology: 'Technologie',

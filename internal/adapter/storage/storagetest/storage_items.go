@@ -90,7 +90,7 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 			Supplier: "Shop", InvoiceNumber: "R-1", PriceCents: &price, Currency: "EUR", WarrantyEnd: &warranty,
 		}},
 		{ID: moduleID(), Kind: domain.ModuleSimCard, SimCard: &domain.SimCard{
-			Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890",
+			Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890", IMSI: "262011234567890",
 		}},
 		{ID: moduleID(), Kind: domain.ModuleWWAN, WWAN: &domain.WWAN{
 			IMEI: "490154203237518", APN: "internet.telekom", Technology: domain.WWAN5G,

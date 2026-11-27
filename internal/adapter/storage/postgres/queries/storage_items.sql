@@ -57,7 +57,7 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
-                                              OR sc.iccid ILIKE @pattern::text))
+                                              OR sc.iccid ILIKE @pattern::text OR sc.imsi ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
                   WHERE m.item_id = i.id AND (w.imei ILIKE @pattern::text OR w.apn ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
@@ -98,7 +98,7 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                   WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE @pattern::text OR sc.phone_number ILIKE @pattern::text
-                                              OR sc.iccid ILIKE @pattern::text))
+                                              OR sc.iccid ILIKE @pattern::text OR sc.imsi ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
                   WHERE m.item_id = i.id AND (w.imei ILIKE @pattern::text OR w.apn ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
@@ -150,10 +150,11 @@ SET supplier = EXCLUDED.supplier, invoice_number = EXCLUDED.invoice_number, pric
 SELECT * FROM module_purchases WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertSimCardModule :exec
-INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid)
-VALUES (@module_id, @provider, @phone_number, @iccid)
+INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid, imsi)
+VALUES (@module_id, @provider, @phone_number, @iccid, @imsi)
 ON CONFLICT (module_id) DO UPDATE
-SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid;
+SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid,
+    imsi = EXCLUDED.imsi;
 
 -- name: ListSimCardModules :many
 SELECT * FROM module_sim_cards WHERE module_id = ANY (@module_ids::uuid[]);

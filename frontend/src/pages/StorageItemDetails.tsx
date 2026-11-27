@@ -367,6 +367,7 @@ function moduleFields(t: T, m: Module): ReactNode {
         <Field label={t('modules.provider')}>{c.provider}</Field>
         <Field label={t('modules.phoneNumber')}>{c.phoneNumber && <code>{c.phoneNumber}</code>}</Field>
         <Field label={t('modules.iccid')}>{c.iccid && <code>{c.iccid}</code>}</Field>
+        <Field label={t('modules.imsi')}>{c.imsi && <code>{c.imsi}</code>}</Field>
       </>
     );
   }

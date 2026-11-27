@@ -53,7 +53,7 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
-                                              OR sc.iccid ILIKE $7::text))
+                                              OR sc.iccid ILIKE $7::text OR sc.imsi ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
                   WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
@@ -348,7 +348,7 @@ func (q *Queries) ListPurchaseModules(ctx context.Context, moduleIds []uuid.UUID
 }
 
 const listSimCardModules = `-- name: ListSimCardModules :many
-SELECT module_id, provider, phone_number, iccid FROM module_sim_cards WHERE module_id = ANY ($1::uuid[])
+SELECT module_id, provider, phone_number, iccid, imsi FROM module_sim_cards WHERE module_id = ANY ($1::uuid[])
 `
 
 func (q *Queries) ListSimCardModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleSimCard, error) {
@@ -365,6 +365,7 @@ func (q *Queries) ListSimCardModules(ctx context.Context, moduleIds []uuid.UUID)
 			&i.Provider,
 			&i.PhoneNumber,
 			&i.Iccid,
+			&i.Imsi,
 		); err != nil {
 			return nil, err
 		}
@@ -434,7 +435,7 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                   WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
-                                              OR sc.iccid ILIKE $7::text))
+                                              OR sc.iccid ILIKE $7::text OR sc.imsi ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
                   WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
@@ -753,10 +754,11 @@ func (q *Queries) UpsertPurchaseModule(ctx context.Context, arg UpsertPurchaseMo
 }
 
 const upsertSimCardModule = `-- name: UpsertSimCardModule :exec
-INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid)
-VALUES ($1, $2, $3, $4)
+INSERT INTO module_sim_cards (module_id, provider, phone_number, iccid, imsi)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (module_id) DO UPDATE
-SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid
+SET provider = EXCLUDED.provider, phone_number = EXCLUDED.phone_number, iccid = EXCLUDED.iccid,
+    imsi = EXCLUDED.imsi
 `
 
 type UpsertSimCardModuleParams struct {
@@ -764,6 +766,7 @@ type UpsertSimCardModuleParams struct {
 	Provider    string
 	PhoneNumber string
 	Iccid       string
+	Imsi        string
 }
 
 func (q *Queries) UpsertSimCardModule(ctx context.Context, arg UpsertSimCardModuleParams) error {
@@ -772,6 +775,7 @@ func (q *Queries) UpsertSimCardModule(ctx context.Context, arg UpsertSimCardModu
 		arg.Provider,
 		arg.PhoneNumber,
 		arg.Iccid,
+		arg.Imsi,
 	)
 	return err
 }

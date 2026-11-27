@@ -33,6 +33,7 @@ type simCardJSON struct {
 	Provider    string `json:"provider"`
 	PhoneNumber string `json:"phoneNumber"`
 	ICCID       string `json:"iccid"`
+	IMSI        string `json:"imsi"`
 }
 
 type wwanJSON struct {
@@ -99,7 +100,7 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 		`","usable":true,"personResponsibleId":"`+me+`","modules":[`+
 		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
 		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
-		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890"}},`+
+		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890","imsi":"262 01 1234567890"}},`+
 		`{"kind":"wwan","wwan":{"imei":"49-015420-323751-8","apn":"internet.telekom","technology":"5g"}},`+
 		`{"kind":"operating_system","operatingSystem":{"name":" Debian ","version":"12"}},`+
 		`{"kind":"hardware","hardware":{"serialNumber":"S24"}}]}`)
@@ -155,7 +156,7 @@ func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 	t.Helper()
 
 	if sc := item.Modules[2].SimCard; sc == nil || *sc != (simCardJSON{
-		Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890",
+		Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890", IMSI: "262011234567890",
 	}) {
 		t.Fatalf("created sim card = %+v", item.Modules[2])
 	}
@@ -254,7 +255,7 @@ func TestStorageItems_WWANSimCardItem(t *testing.T) {
 	base := `"storageId":"` + shelf.ID + `","typeId":"` + typ.ID + `","usable":true`
 
 	sim := env.createStorageItem(t, c, `{"assetTag":"SIM-1","name":"SIM 1",`+base+
-		`,"modules":[{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"","iccid":""}}]}`)
+		`,"modules":[{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"","iccid":"","imsi":""}}]}`)
 
 	router := env.createStorageItem(t, c, `{"assetTag":"R-1","name":"LTE router",`+base+
 		`,"modules":[{"kind":"wwan","wwan":{"imei":"","apn":"internet","technology":"4g","simCardItemId":"`+sim.ID+`"}}]}`)

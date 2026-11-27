@@ -142,6 +142,7 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 	case m.SimCard != nil:
 		return q.UpsertSimCardModule(ctx, sqlc.UpsertSimCardModuleParams{
 			ModuleID: id, Provider: m.SimCard.Provider, PhoneNumber: m.SimCard.PhoneNumber, Iccid: m.SimCard.ICCID,
+			Imsi: m.SimCard.IMSI,
 		})
 	case m.WWAN != nil:
 		return q.UpsertWwanModule(ctx, sqlc.UpsertWwanModuleParams{
@@ -445,7 +446,7 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 	sims, err := q.ListSimCardModules(ctx, ids)
 	if err := collectPayloads(out, "sim card", sims, err, func(c sqlc.ModuleSimCard) (uuid.UUID, domain.Module) {
 		return c.ModuleID, domain.Module{SimCard: &domain.SimCard{
-			Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.Iccid,
+			Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.Iccid, IMSI: c.Imsi,
 		}}
 	}); err != nil {
 		return nil, err

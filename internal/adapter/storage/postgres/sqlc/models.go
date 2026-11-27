@@ -221,6 +221,7 @@ type ModuleSimCard struct {
 	Provider    string
 	PhoneNumber string
 	Iccid       string
+	Imsi        string
 }
 
 type ModuleWwan struct {
