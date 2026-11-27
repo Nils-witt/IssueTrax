@@ -54,6 +54,8 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
                                               OR sc.iccid ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
+                  WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
@@ -433,6 +435,8 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sim_cards sc ON sc.module_id = m.id
                   WHERE m.item_id = i.id AND (sc.provider ILIKE $7::text OR sc.phone_number ILIKE $7::text
                                               OR sc.iccid ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_wwans w ON w.module_id = m.id
+                  WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
@@ -504,6 +508,35 @@ func (q *Queries) ListStorageItems(ctx context.Context, arg ListStorageItemsPara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWwanModules = `-- name: ListWwanModules :many
+SELECT module_id, imei, apn, technology FROM module_wwans WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListWwanModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleWwan, error) {
+	rows, err := q.db.Query(ctx, listWwanModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleWwan{}
+	for rows.Next() {
+		var i ModuleWwan
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Imei,
+			&i.Apn,
+			&i.Technology,
 		); err != nil {
 			return nil, err
 		}
@@ -768,4 +801,28 @@ func (q *Queries) UpsertStorageItemModule(ctx context.Context, arg UpsertStorage
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertWwanModule = `-- name: UpsertWwanModule :exec
+INSERT INTO module_wwans (module_id, imei, apn, technology)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (module_id) DO UPDATE
+SET imei = EXCLUDED.imei, apn = EXCLUDED.apn, technology = EXCLUDED.technology
+`
+
+type UpsertWwanModuleParams struct {
+	ModuleID   uuid.UUID
+	Imei       string
+	Apn        string
+	Technology string
+}
+
+func (q *Queries) UpsertWwanModule(ctx context.Context, arg UpsertWwanModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertWwanModule,
+		arg.ModuleID,
+		arg.Imei,
+		arg.Apn,
+		arg.Technology,
+	)
+	return err
 }

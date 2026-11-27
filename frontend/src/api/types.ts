@@ -263,7 +263,7 @@ export interface NetworkInterfaceInput {
 }
 
 /** Module kinds in display order; all but network interfaces occur at most once per item. */
-export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'operating_system', 'network_interface'] as const;
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'wwan', 'operating_system', 'network_interface'] as const;
 export type ModuleKind = (typeof moduleKinds)[number];
 
 /** Only network interfaces may occur several times (and be primary). */
@@ -389,6 +389,17 @@ export interface SimCard {
   iccid: string;
 }
 
+/** Mobile network generations a WWAN modem connects with; empty means unknown. */
+export const wwanTechnologies = ['2g', '3g', '4g', '5g'] as const;
+export type WWANTechnology = (typeof wwanTechnologies)[number];
+
+/** A mobile (cellular) connection; every field may be empty. The IMEI comes back without separators. */
+export interface WWAN {
+  imei: string;
+  apn: string;
+  technology: WWANTechnology | '';
+}
+
 /** The operating system installed on a device; both fields may be empty. */
 export interface OperatingSystem {
   name: string;
@@ -404,6 +415,7 @@ export interface Module {
   networkHost?: NetworkHost;
   purchase?: Purchase;
   simCard?: SimCard;
+  wwan?: WWAN;
   operatingSystem?: OperatingSystem;
   networkInterface?: NetworkInterface;
 }
@@ -417,6 +429,7 @@ export interface ModuleInput {
   networkHost?: NetworkHost;
   purchase?: Omit<Purchase, 'price'> & { price: string | null };
   simCard?: SimCard;
+  wwan?: WWAN;
   operatingSystem?: OperatingSystem;
   networkInterface?: NetworkInterfaceInput;
 }

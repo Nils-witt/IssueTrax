@@ -92,6 +92,9 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 		{ID: moduleID(), Kind: domain.ModuleSimCard, SimCard: &domain.SimCard{
 			Provider: "Telekom", PhoneNumber: "+491711234567", ICCID: "89490200001234567890",
 		}},
+		{ID: moduleID(), Kind: domain.ModuleWWAN, WWAN: &domain.WWAN{
+			IMEI: "490154203237518", APN: "internet.telekom", Technology: domain.WWAN5G,
+		}},
 		{ID: moduleID(), Kind: domain.ModuleOperatingSystem, OperatingSystem: &domain.OperatingSystem{
 			Name: "Cisco IOS XE", Version: "17.9.4a",
 		}},
@@ -173,13 +176,15 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	must(t, r.StorageItems.Update(t.Context(), item))
 
 	// Move the primary flag, edit a payload, drop a module and add one.
-	sim, opsys, eth0, wlan0 := item.Modules[3], item.Modules[4], item.Modules[5], item.Modules[6]
+	sim, wwan, opsys := item.Modules[3], item.Modules[4], item.Modules[5]
+	eth0, wlan0 := item.Modules[6], item.Modules[7]
 	eth0.Primary, wlan0.Primary = false, true
+	wwan.WWAN = &domain.WWAN{IMEI: wwan.WWAN.IMEI, APN: "iot.1nce.net", Technology: domain.WWAN4G}
 	wlan0.NetworkInterface = new(*wlan0.NetworkInterface)
 	wlan0.NetworkInterface.SSID = "Guests"
 	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{SerialNumber: "S48"}}
 
-	item.Modules = []domain.Module{added, item.Modules[1], sim, opsys, eth0, wlan0}
+	item.Modules = []domain.Module{added, item.Modules[1], sim, wwan, opsys, eth0, wlan0}
 	domain.SortModules(item.Modules)
 	must(t, r.StorageItems.Update(t.Context(), item))
 
@@ -190,8 +195,8 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 		t.Fatalf("after module update = %+v\nwant %+v", got.Modules, item.Modules)
 	}
 
-	if got.Modules[4].ID != wlan0.ID || !got.Modules[4].Primary || got.Modules[4].NetworkInterface.SSID != "Guests" {
-		t.Fatalf("primary interface = %+v", got.Modules[4])
+	if got.Modules[5].ID != wlan0.ID || !got.Modules[5].Primary || got.Modules[5].NetworkInterface.SSID != "Guests" {
+		t.Fatalf("primary interface = %+v", got.Modules[5])
 	}
 }
 
@@ -316,6 +321,7 @@ func testStorageItemsSearch(t *testing.T, newRepos NewRepositories) {
 		"telekom":           {coreSwitch},
 		"+49171":            {coreSwitch},
 		"8949020000":        {coreSwitch},
+		"49015420":          {coreSwitch},
 		"ios xe":            {coreSwitch},
 		"17.9.4":            {coreSwitch},
 		"aa:bb":             {coreSwitch},

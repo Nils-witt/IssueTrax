@@ -370,6 +370,18 @@ function moduleFields(t: T, m: Module): ReactNode {
     );
   }
 
+  if (m.wwan) {
+    const w = m.wwan;
+
+    return (
+      <>
+        <Field label={t('modules.imei')}>{w.imei && <code>{w.imei}</code>}</Field>
+        <Field label={t('modules.apn')}>{w.apn && <code>{w.apn}</code>}</Field>
+        <Field label={t('modules.technology')}>{w.technology.toUpperCase()}</Field>
+      </>
+    );
+  }
+
   if (m.operatingSystem) {
     const o = m.operatingSystem;
 

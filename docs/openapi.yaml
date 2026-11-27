@@ -82,7 +82,7 @@ tags:
       decommissioning dates (in that order), a decommissioning reason and a
       responsible person (no service accounts). All other fields come from
       modules, which are added and removed per item: `hardware`,
-      `networkHost`, `purchase`, `simCard` and `operatingSystem` at most once, `network_interface` any
+      `networkHost`, `purchase`, `simCard`, `wwan` and `operatingSystem` at most once, `network_interface` any
       number of times with at most one primary. Modules keep their `id`
       across updates when it is sent back. Deleting an item only marks it
       deleted (`deletedAt`); deleted items are hidden from lists unless
@@ -2104,8 +2104,8 @@ components:
 
     ModuleKind:
       type: string
-      description: "`hardware`, `network_host`, `purchase`, `sim_card` and `operating_system` occur at most once per item; `network_interface` any number of times."
-      enum: [hardware, network_host, purchase, sim_card, operating_system, network_interface]
+      description: "`hardware`, `network_host`, `purchase`, `sim_card`, `wwan` and `operating_system` occur at most once per item; `network_interface` any number of times."
+      enum: [hardware, network_host, purchase, sim_card, wwan, operating_system, network_interface]
 
     ModuleDefault:
       type: object
@@ -2299,6 +2299,26 @@ components:
           description: ITU-T E.118 ICCID, 18 to 22 digits starting with 89; the check digit is not verified.
           example: "89490200001234567890"
 
+    WWAN:
+      type: object
+      required: [imei, apn, technology]
+      description: |
+        The device's mobile (cellular) connection. Every field may be empty.
+        Spaces, hyphens, slashes, dots and parentheses are removed from
+        `imei` before validation and are not returned.
+      properties:
+        imei:
+          type: string
+          pattern: "^([0-9]{15})?$"
+          description: 3GPP TS 23.003 IMEI, 15 digits whose last digit is a valid Luhn check digit.
+          example: "490154203237518"
+        apn: { type: string, maxLength: 100, example: internet.telekom }
+        technology:
+          type: string
+          enum: ["", 2g, 3g, 4g, 5g]
+          description: Mobile network generation; empty when unknown.
+          example: 5g
+
     OperatingSystem:
       type: object
       required: [name, version]
@@ -2311,7 +2331,7 @@ components:
       type: object
       description: |
         One module instance. Exactly the payload matching `kind` is set:
-        `hardware`, `networkHost`, `purchase`, `simCard`, `operatingSystem` or `networkInterface`.
+        `hardware`, `networkHost`, `purchase`, `simCard`, `wwan`, `operatingSystem` or `networkInterface`.
         `primary` is only allowed on `network_interface`, for at most one
         instance per item. In requests, send `id` to keep an existing
         instance and leave it out for a new one.
@@ -2324,6 +2344,7 @@ components:
         networkHost: { $ref: "#/components/schemas/NetworkHost" }
         purchase: { $ref: "#/components/schemas/Purchase" }
         simCard: { $ref: "#/components/schemas/SimCard" }
+        wwan: { $ref: "#/components/schemas/WWAN" }
         operatingSystem: { $ref: "#/components/schemas/OperatingSystem" }
         networkInterface: { $ref: "#/components/schemas/NetworkInterface" }
 
@@ -2339,6 +2360,7 @@ components:
         networkHost: { $ref: "#/components/schemas/NetworkHost" }
         purchase: { $ref: "#/components/schemas/Purchase" }
         simCard: { $ref: "#/components/schemas/SimCard" }
+        wwan: { $ref: "#/components/schemas/WWAN" }
         operatingSystem: { $ref: "#/components/schemas/OperatingSystem" }
         networkInterface: { $ref: "#/components/schemas/NetworkInterfaceInput" }
 

@@ -13,7 +13,7 @@ import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/DeleteOutlined';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole } from '../api/types';
+import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type WWANTechnology, wwanTechnologies } from '../api/types';
 import { fieldErrorText, fieldErrorTextUnder } from '../lib/errors';
 import { CatalogPicker } from './CatalogPicker';
 import type { InterfaceForm, IPForm, ModuleForm, PurchaseForm } from '../lib/moduleForm';
@@ -29,6 +29,7 @@ const payloadField: Record<ModuleKind, string> = {
   network_host: 'networkHost',
   purchase: 'purchase',
   sim_card: 'simCard',
+  wwan: 'wwan',
   operating_system: 'operatingSystem',
   network_interface: 'networkInterface',
 };
@@ -79,6 +80,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCa
         {value.kind === 'network_host' && <NetworkHostEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'purchase' && <PurchaseEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'sim_card' && <SimCardEditor value={value} onChange={onChange} path={path} error={error} />}
+        {value.kind === 'wwan' && <WWANEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'operating_system' && <OperatingSystemEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_interface' && (
           <InterfaceEditor
@@ -283,6 +285,52 @@ function SimCardEditor({ value, onChange, path, error }: PayloadEditorProps) {
           maxLength={40}
           placeholder="8949 0200 0012 3456 7890"
         />
+      </Grid>
+    </Grid>
+  );
+}
+
+function WWANEditor({ value, onChange, path, error }: PayloadEditorProps) {
+  const { t } = useTranslation();
+  const set = (key: keyof ModuleForm['wwan']) => (v: string) => onChange({ ...value, wwan: { ...value.wwan, [key]: v } });
+  const technologyError = fieldErrorText(t, error, `${path}.technology`);
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 5 }}>
+        <PayloadText
+          label={t('modules.imei')}
+          value={value.wwan.imei}
+          onChange={set('imei')}
+          field={`${path}.imei`}
+          error={error}
+          maxLength={32}
+          placeholder="49 015420 323751 8"
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 4 }}>
+        <PayloadText label={t('modules.apn')} value={value.wwan.apn} onChange={set('apn')} field={`${path}.apn`} error={error} placeholder="internet" />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 3 }}>
+        <TextField
+          select
+          fullWidth
+          size="small"
+          label={t('modules.technology')}
+          value={value.wwan.technology}
+          onChange={(e) => onChange({ ...value, wwan: { ...value.wwan, technology: e.target.value as WWANTechnology | '' } })}
+          error={!!technologyError}
+          helperText={technologyError}
+        >
+          <MenuItem value="">
+            <em>{t('modules.technologyUnknown')}</em>
+          </MenuItem>
+          {wwanTechnologies.map((tech) => (
+            <MenuItem key={tech} value={tech}>
+              {tech.toUpperCase()}
+            </MenuItem>
+          ))}
+        </TextField>
       </Grid>
     </Grid>
   );

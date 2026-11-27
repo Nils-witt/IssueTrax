@@ -15,6 +15,7 @@ import {
   type NetworkRole,
   type OperatingSystem,
   type SimCard,
+  type WWAN,
 } from '../api/types';
 
 /** One IP family as edited: numbers stay text until submit. */
@@ -65,6 +66,7 @@ export interface ModuleForm {
   networkHost: { role: NetworkRole; hostname: string };
   purchase: PurchaseForm;
   simCard: SimCard;
+  wwan: WWAN;
   operatingSystem: OperatingSystem;
   networkInterface: InterfaceForm;
 }
@@ -123,6 +125,7 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
       warrantyEnd: p?.warrantyEnd ? p.warrantyEnd.slice(0, 10) : '',
     },
     simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '' },
+    wwan: stored?.wwan ?? { imei: '', apn: '', technology: '' },
     operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
     networkInterface: interfaceForm(stored?.networkInterface),
   };
@@ -192,6 +195,8 @@ export function moduleInput(f: ModuleForm): ModuleInput {
       };
     case 'sim_card':
       return { ...base, simCard: f.simCard };
+    case 'wwan':
+      return { ...base, wwan: f.wwan };
     case 'operating_system':
       return { ...base, operatingSystem: f.operatingSystem };
     case 'network_interface':

@@ -143,6 +143,10 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 		return q.UpsertSimCardModule(ctx, sqlc.UpsertSimCardModuleParams{
 			ModuleID: id, Provider: m.SimCard.Provider, PhoneNumber: m.SimCard.PhoneNumber, Iccid: m.SimCard.ICCID,
 		})
+	case m.WWAN != nil:
+		return q.UpsertWwanModule(ctx, sqlc.UpsertWwanModuleParams{
+			ModuleID: id, Imei: m.WWAN.IMEI, Apn: m.WWAN.APN, Technology: string(m.WWAN.Technology),
+		})
 	case m.OperatingSystem != nil:
 		return q.UpsertOperatingSystemModule(ctx, sqlc.UpsertOperatingSystemModuleParams{
 			ModuleID: id, Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version,
@@ -441,6 +445,15 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 	if err := collectPayloads(out, "sim card", sims, err, func(c sqlc.ModuleSimCard) (uuid.UUID, domain.Module) {
 		return c.ModuleID, domain.Module{SimCard: &domain.SimCard{
 			Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.Iccid,
+		}}
+	}); err != nil {
+		return nil, err
+	}
+
+	wwans, err := q.ListWwanModules(ctx, ids)
+	if err := collectPayloads(out, "wwan", wwans, err, func(w sqlc.ModuleWwan) (uuid.UUID, domain.Module) {
+		return w.ModuleID, domain.Module{WWAN: &domain.WWAN{
+			IMEI: w.Imei, APN: w.Apn, Technology: domain.WWANTechnology(w.Technology),
 		}}
 	}); err != nil {
 		return nil, err

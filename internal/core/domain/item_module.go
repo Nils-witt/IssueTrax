@@ -26,13 +26,15 @@ const (
 	ModuleNetworkHost      ModuleKind = "network_host"
 	ModulePurchase         ModuleKind = "purchase"
 	ModuleSimCard          ModuleKind = "sim_card"
+	ModuleWWAN             ModuleKind = "wwan"
 	ModuleOperatingSystem  ModuleKind = "operating_system"
 	ModuleNetworkInterface ModuleKind = "network_interface"
 )
 
 // ModuleKinds lists every module kind in display order.
 var ModuleKinds = []ModuleKind{
-	ModuleHardware, ModuleNetworkHost, ModulePurchase, ModuleSimCard, ModuleOperatingSystem, ModuleNetworkInterface,
+	ModuleHardware, ModuleNetworkHost, ModulePurchase, ModuleSimCard, ModuleWWAN, ModuleOperatingSystem,
+	ModuleNetworkInterface,
 }
 
 // Valid reports whether k is a known module kind.
@@ -58,6 +60,7 @@ type Module struct {
 	NetworkHost      *NetworkHost
 	Purchase         *Purchase
 	SimCard          *SimCard
+	WWAN             *WWAN
 	OperatingSystem  *OperatingSystem
 	NetworkInterface *NetworkInterface
 }
@@ -69,6 +72,7 @@ func (m Module) Equal(o Module) bool {
 		equalPtr(m.NetworkHost, o.NetworkHost, func(a, b NetworkHost) bool { return a == b }) &&
 		equalPtr(m.Purchase, o.Purchase, Purchase.Equal) &&
 		equalPtr(m.SimCard, o.SimCard, func(a, b SimCard) bool { return a == b }) &&
+		equalPtr(m.WWAN, o.WWAN, func(a, b WWAN) bool { return a == b }) &&
 		equalPtr(m.OperatingSystem, o.OperatingSystem, func(a, b OperatingSystem) bool { return a == b }) &&
 		equalPtr(m.NetworkInterface, o.NetworkInterface, NetworkInterface.Equal)
 }
@@ -86,6 +90,8 @@ func (m Module) String() string {
 		payload = m.Purchase.String()
 	case m.SimCard != nil:
 		payload = m.SimCard.String()
+	case m.WWAN != nil:
+		payload = m.WWAN.String()
 	case m.OperatingSystem != nil:
 		payload = m.OperatingSystem.String()
 	case m.NetworkInterface != nil:
@@ -121,6 +127,7 @@ type ModuleParams struct {
 	NetworkHost      *NetworkHostParams
 	Purchase         *PurchaseParams
 	SimCard          *SimCardParams
+	WWAN             *WWANParams
 	OperatingSystem  *OperatingSystemParams
 	NetworkInterface *NetworkInterfaceParams
 }
@@ -227,6 +234,7 @@ func checkModule(f fieldErrors, field string, p ModuleParams) (Module, bool) {
 	set := map[ModuleKind]bool{
 		ModuleHardware: p.Hardware != nil, ModuleNetworkHost: p.NetworkHost != nil,
 		ModulePurchase: p.Purchase != nil, ModuleSimCard: p.SimCard != nil,
+		ModuleWWAN:             p.WWAN != nil,
 		ModuleOperatingSystem:  p.OperatingSystem != nil,
 		ModuleNetworkInterface: p.NetworkInterface != nil,
 	}
@@ -259,6 +267,8 @@ func checkPayload(f fieldErrors, at string, p ModuleParams, m *Module) {
 		m.Purchase = new(checkPurchase(f, at, *p.Purchase))
 	case ModuleSimCard:
 		m.SimCard = new(checkSimCard(f, at, *p.SimCard))
+	case ModuleWWAN:
+		m.WWAN = new(checkWWAN(f, at, *p.WWAN))
 	case ModuleOperatingSystem:
 		m.OperatingSystem = new(checkOperatingSystem(f, at, *p.OperatingSystem))
 	case ModuleNetworkInterface:
@@ -277,6 +287,8 @@ func (k ModuleKind) payloadField() string {
 		return "purchase"
 	case ModuleSimCard:
 		return "simCard"
+	case ModuleWWAN:
+		return "wwan"
 	case ModuleOperatingSystem:
 		return "operatingSystem"
 	case ModuleNetworkInterface:

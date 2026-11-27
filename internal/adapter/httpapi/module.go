@@ -64,6 +64,14 @@ type simCardJSON struct {
 	ICCID       string `json:"iccid"`
 }
 
+// wwanJSON is a mobile (cellular) connection; imei comes back without
+// separators.
+type wwanJSON struct {
+	IMEI       string `json:"imei"`
+	APN        string `json:"apn"`
+	Technology string `json:"technology"`
+}
+
 // operatingSystemJSON is the operating system installed on a device.
 type operatingSystemJSON struct {
 	Name    string `json:"name"`
@@ -80,6 +88,7 @@ type moduleJSON struct {
 	NetworkHost      *networkHostJSON      `json:"networkHost,omitempty"`
 	Purchase         *purchaseJSON         `json:"purchase,omitempty"`
 	SimCard          *simCardJSON          `json:"simCard,omitempty"`
+	WWAN             *wwanJSON             `json:"wwan,omitempty"`
 	OperatingSystem  *operatingSystemJSON  `json:"operatingSystem,omitempty"`
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
@@ -106,6 +115,9 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 	case m.SimCard != nil:
 		c := m.SimCard
 		resp.SimCard = &simCardJSON{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+	case m.WWAN != nil:
+		w := m.WWAN
+		resp.WWAN = &wwanJSON{IMEI: w.IMEI, APN: w.APN, Technology: string(w.Technology)}
 	case m.OperatingSystem != nil:
 		resp.OperatingSystem = &operatingSystemJSON{Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version}
 	case m.NetworkInterface != nil:
@@ -220,6 +232,10 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 
 		if c := m.SimCard; c != nil {
 			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID}
+		}
+
+		if w := m.WWAN; w != nil {
+			p.WWAN = &domain.WWANParams{IMEI: w.IMEI, APN: w.APN, Technology: domain.WWANTechnology(w.Technology)}
 		}
 
 		if o := m.OperatingSystem; o != nil {

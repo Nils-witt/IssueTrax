@@ -18,6 +18,7 @@ type moduleBodyJSON struct {
 	Hardware        json.RawMessage `json:"hardware"`
 	Purchase        *purchaseJSON   `json:"purchase"`
 	SimCard         *simCardJSON    `json:"simCard"`
+	WWAN            *wwanJSON       `json:"wwan"`
 	OperatingSystem *struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
@@ -32,6 +33,12 @@ type simCardJSON struct {
 	Provider    string `json:"provider"`
 	PhoneNumber string `json:"phoneNumber"`
 	ICCID       string `json:"iccid"`
+}
+
+type wwanJSON struct {
+	IMEI       string `json:"imei"`
+	APN        string `json:"apn"`
+	Technology string `json:"technology"`
 }
 
 type purchaseJSON struct {
@@ -88,12 +95,13 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 		`{"kind":"network_interface","primary":true,"networkInterface":`+ethJSON+`},`+
 		`{"kind":"purchase","purchase":{"price":"12.5","currency":"eur","supplier":"Shop"}},`+
 		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890"}},`+
+		`{"kind":"wwan","wwan":{"imei":"49-015420-323751-8","apn":"internet.telekom","technology":"5g"}},`+
 		`{"kind":"operating_system","operatingSystem":{"name":" Debian ","version":"12"}},`+
 		`{"kind":"hardware","hardware":{"serialNumber":"S24"}}]}`)
 
 	wantCreatedItem(t, item, me)
 
-	eth := item.Modules[4]
+	eth := item.Modules[5]
 
 	r := env.do(t, c, http.MethodPatch, "/api/storage-items/"+item.ID, `{"usable":false,"personResponsibleId":null,`+
 		`"decommissionedAt":"2026-05-01T00:00:00Z","decommissioningReason":"broken","modules":[`+
@@ -124,19 +132,19 @@ func wantCreatedItem(t *testing.T, item storageItemJSON, me string) {
 	t.Helper()
 
 	if item.AssetTag != "NET-00001" || item.Type.Name != "Switch" || item.PersonResponsible == nil ||
-		item.PersonResponsible.ID != me || len(item.Modules) != 5 || item.Modules[0].Kind != "hardware" {
+		item.PersonResponsible.ID != me || len(item.Modules) != 6 || item.Modules[0].Kind != "hardware" {
 		t.Fatalf("created = %+v", item)
 	}
 
 	if p := item.Modules[1].Purchase; p == nil || *p.Price != "12.50" || p.Currency != "EUR" ||
-		item.Modules[4].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
+		item.Modules[5].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
 		t.Fatalf("created modules = %+v", item.Modules)
 	}
 
 	wantCreatedPayloads(t, item)
 }
 
-// wantCreatedPayloads checks the SIM card and operating system payloads of
+// wantCreatedPayloads checks the SIM card, WWAN and operating system payloads of
 // the item created in TestStorageItems_CreateGetUpdate.
 func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 	t.Helper()
@@ -147,8 +155,12 @@ func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 		t.Fatalf("created sim card = %+v", item.Modules[2])
 	}
 
-	if sys := item.Modules[3].OperatingSystem; sys == nil || sys.Name != "Debian" || sys.Version != "12" {
-		t.Fatalf("created operating system = %+v", item.Modules[3])
+	if w := item.Modules[3].WWAN; w == nil || *w != (wwanJSON{IMEI: "490154203237518", APN: "internet.telekom", Technology: "5g"}) {
+		t.Fatalf("created wwan = %+v", item.Modules[3])
+	}
+
+	if sys := item.Modules[4].OperatingSystem; sys == nil || sys.Name != "Debian" || sys.Version != "12" {
+		t.Fatalf("created operating system = %+v", item.Modules[4])
 	}
 }
 
