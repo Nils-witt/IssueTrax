@@ -57,3 +57,24 @@ SELECT count(*) FROM storage_items
 WHERE kind = @kind
   AND (deleted_at IS NOT NULL) = @deleted::boolean
   AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text);
+
+-- name: GetStorageItemsByIDs :many
+-- Items of any kind, deleted ones included.
+SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
+FROM storage_items
+WHERE id = ANY (@ids::uuid[]);
+
+-- name: SearchAllStorageItems :many
+-- Like SearchStorageItems, across all kinds.
+SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
+FROM storage_items
+WHERE (deleted_at IS NOT NULL) = @deleted::boolean
+  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text)
+  AND (NOT @has_cursor::boolean OR (lower(name), id) > (@cursor_name::text, @cursor_id::uuid))
+ORDER BY lower(name), id
+LIMIT @row_limit;
+
+-- name: CountSearchAllStorageItems :one
+SELECT count(*) FROM storage_items
+WHERE (deleted_at IS NOT NULL) = @deleted::boolean
+  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text);

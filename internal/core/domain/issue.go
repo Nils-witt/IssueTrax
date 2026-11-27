@@ -44,9 +44,11 @@ type Issue struct {
 	Status      IssueStatus
 	Assignees   []UserID
 	Tags        []TagID
-	CreatedBy   UserID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// StorageItems are the storage items (of any kind) the issue concerns.
+	StorageItems []StorageItemID
+	CreatedBy    UserID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Key returns the readable identifier, e.g. "TRAX-42".
@@ -62,11 +64,12 @@ type NewIssueParams struct {
 	Title       string
 	Description string
 	// Status defaults to StatusOpen when empty.
-	Status    IssueStatus
-	Assignees []UserID
-	Tags      []TagID
-	CreatedBy UserID
-	Now       time.Time
+	Status       IssueStatus
+	Assignees    []UserID
+	Tags         []TagID
+	StorageItems []StorageItemID
+	CreatedBy    UserID
+	Now          time.Time
 }
 
 // NewIssue validates p and builds an Issue.
@@ -83,17 +86,18 @@ func NewIssue(p NewIssueParams) (Issue, error) {
 	}
 
 	issue := Issue{
-		ID:          p.ID,
-		ProjectID:   p.ProjectID,
-		Number:      p.Number,
-		Title:       checkRequiredText(f, "title", p.Title, maxTitleRunes),
-		Description: checkDescription(f, "description", p.Description),
-		Status:      status,
-		Assignees:   dedupe(p.Assignees),
-		Tags:        dedupe(p.Tags),
-		CreatedBy:   p.CreatedBy,
-		CreatedAt:   p.Now,
-		UpdatedAt:   p.Now,
+		ID:           p.ID,
+		ProjectID:    p.ProjectID,
+		Number:       p.Number,
+		Title:        checkRequiredText(f, "title", p.Title, maxTitleRunes),
+		Description:  checkDescription(f, "description", p.Description),
+		Status:       status,
+		Assignees:    dedupe(p.Assignees),
+		Tags:         dedupe(p.Tags),
+		StorageItems: dedupe(p.StorageItems),
+		CreatedBy:    p.CreatedBy,
+		CreatedAt:    p.Now,
+		UpdatedAt:    p.Now,
 	}
 
 	if err := f.err(); err != nil {
@@ -103,19 +107,20 @@ func NewIssue(p NewIssueParams) (Issue, error) {
 	return issue, nil
 }
 
-// IssueChanges lists the mutable issue fields; nil means unchanged. Tags and
-// Assignees replace the whole set when non-nil.
+// IssueChanges lists the mutable issue fields; nil means unchanged. Tags,
+// Assignees and StorageItems replace the whole set when non-nil.
 type IssueChanges struct {
-	Title       *string
-	Description *string
-	Status      *IssueStatus
-	Tags        *[]TagID
-	Assignees   *[]UserID
+	Title        *string
+	Description  *string
+	Status       *IssueStatus
+	Tags         *[]TagID
+	Assignees    *[]UserID
+	StorageItems *[]StorageItemID
 }
 
 // StatusOnly reports whether c changes nothing but (possibly) the status.
 func (c IssueChanges) StatusOnly() bool {
-	return c.Title == nil && c.Description == nil && c.Tags == nil && c.Assignees == nil
+	return c.Title == nil && c.Description == nil && c.Tags == nil && c.Assignees == nil && c.StorageItems == nil
 }
 
 // CheckEditable returns ErrArchived when i is archived and a change would
@@ -165,6 +170,11 @@ func (i *Issue) Apply(c IssueChanges, now time.Time) error {
 
 	if c.Assignees != nil {
 		next.Assignees = dedupe(*c.Assignees)
+		changed = true
+	}
+
+	if c.StorageItems != nil {
+		next.StorageItems = dedupe(*c.StorageItems)
 		changed = true
 	}
 

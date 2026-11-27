@@ -74,6 +74,7 @@ func newFixture(t *testing.T) *fixture {
 		Storages:            memory.NewStorageRepository(store),
 		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
 		NetworkDevices:      memory.NewNetworkDeviceRepository(store),
+		StorageItems:        memory.NewStorageItemRepository(store),
 		Users:               memory.NewUserRepository(store),
 		Sessions:            memory.NewSessionRepository(store),
 		APIKeys:             memory.NewAPIKeyRepository(store),

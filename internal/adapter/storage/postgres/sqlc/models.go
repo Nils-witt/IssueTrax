@@ -122,6 +122,11 @@ type IssueAssignee struct {
 	UserID  uuid.UUID
 }
 
+type IssueStorageItem struct {
+	IssueID       uuid.UUID
+	StorageItemID uuid.UUID
+}
+
 type IssueTag struct {
 	IssueID uuid.UUID
 	TagID   uuid.UUID

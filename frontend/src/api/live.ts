@@ -38,6 +38,7 @@ function applyChange(qc: QueryClient, ev: ChangeEvent): void {
       invalidate(keys.issues(key));
       invalidate(keys.tags(key)); // updates may create tags
       if (ev.issue) invalidate(keys.issue(key, ev.issue));
+      invalidate(keys.storageItemIssuesAll); // storage item links may have changed
       break;
     case 'comments':
       if (ev.issue) invalidate(keys.comments(key, ev.issue));
@@ -51,6 +52,9 @@ function applyChange(qc: QueryClient, ev: ChangeEvent): void {
     case 'storageItems':
       invalidate(keys.storageItems);
       invalidate(keys.storages); // item counts
+      // Issues of every project show their linked items' names and deletion state.
+      invalidate(['issue']);
+      invalidate(['issues']);
       break;
   }
 

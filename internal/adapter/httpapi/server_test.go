@@ -27,6 +27,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		Storages:            service.NewStorageService(service.Repositories{Tx: store}),
 		GenericStorageItems: service.NewGenericStorageItemService(service.Repositories{Tx: store}),
 		NetworkDevices:      service.NewNetworkDeviceService(service.Repositories{Tx: store}),
+		StorageItems:        service.NewStorageItemLookupService(service.Repositories{Tx: store}),
 		Users:               service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),
@@ -52,6 +53,7 @@ func TestNewHandler_RejectsBadConfig(t *testing.T) {
 		"no storages":        func(c *httpapi.Config) { c.Storages = nil },
 		"no storage items":   func(c *httpapi.Config) { c.GenericStorageItems = nil },
 		"no network devices": func(c *httpapi.Config) { c.NetworkDevices = nil },
+		"no storage lookup":  func(c *httpapi.Config) { c.StorageItems = nil },
 		"no change feed":     func(c *httpapi.Config) { c.Changes = nil },
 	}
 

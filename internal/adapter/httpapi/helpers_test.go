@@ -71,6 +71,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Storages:            memory.NewStorageRepository(store),
 		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
 		NetworkDevices:      memory.NewNetworkDeviceRepository(store),
+		StorageItems:        memory.NewStorageItemRepository(store),
 		Users:               memory.NewUserRepository(store),
 		Sessions:            memory.NewSessionRepository(store),
 		APIKeys:             memory.NewAPIKeyRepository(store),
@@ -93,6 +94,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Storages:            service.NewStorageService(repos, notify),
 		GenericStorageItems: service.NewGenericStorageItemService(repos, notify),
 		NetworkDevices:      service.NewNetworkDeviceService(repos, notify),
+		StorageItems:        service.NewStorageItemLookupService(repos),
 		Users:               service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),

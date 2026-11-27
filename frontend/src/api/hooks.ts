@@ -23,6 +23,7 @@ import type {
   ServiceAccount,
   Storage,
   StorageItemFilter,
+  StorageItemRef,
   Tag,
   UpdateIssueInput,
   UpdateTagInput,
@@ -62,6 +63,11 @@ export const keys = {
   // Under storageItems, so item invalidation covers network devices too.
   networkDevicesIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'in', storage, filter] as const,
   networkDeviceSearch: (filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'search', filter] as const,
+  /** Items of any kind matching q, e.g. to link them to an issue. */
+  storageItemLookup: (q: string) => ['storageItems', 'lookup', q] as const,
+  /** Prefix of every linked-issues query; under storageItems, so item changes refresh it too. */
+  storageItemIssuesAll: ['storageItems', 'issues'] as const,
+  storageItemIssues: (id: string) => ['storageItems', 'issues', id] as const,
 };
 
 export function useServiceAccounts() {
@@ -203,6 +209,7 @@ function useIssueSaved(key: string) {
     return Promise.all([
       qc.invalidateQueries({ queryKey: keys.issues(key) }),
       qc.invalidateQueries({ queryKey: keys.tags(key) }), // new tags may have been created
+      qc.invalidateQueries({ queryKey: keys.storageItemIssuesAll }), // links may have changed
     ]);
   };
 }
@@ -433,11 +440,38 @@ export function useStorageItemSearch(filter: StorageItemFilter, enabled = true) 
   });
 }
 
+/** Live (not deleted) items of any kind whose name or description contains q; the first page only. */
+export function useStorageItemLookup(q: string) {
+  return useQuery({
+    queryKey: keys.storageItemLookup(q),
+    queryFn: () => request<Page<StorageItemRef>>('GET', `/api/storage-items${query({ q, limit: '20' })}`),
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** The issues of every project linking a storage item, newest first. */
+export function useStorageItemIssues(id: string) {
+  return useInfiniteQuery({
+    queryKey: keys.storageItemIssues(id),
+    queryFn: ({ pageParam }) =>
+      request<Page<Issue>>('GET', `/api/storage-items/${encodeURIComponent(id)}/issues${query({ cursor: pageParam })}`),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+}
+
 /** Item changes also change the storages' item counts. */
 function useInvalidateStorageItems() {
   const qc = useQueryClient();
 
-  return () => Promise.all([qc.invalidateQueries({ queryKey: keys.storageItems }), qc.invalidateQueries({ queryKey: keys.storages })]);
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: keys.storageItems }),
+      qc.invalidateQueries({ queryKey: keys.storages }),
+      // Issues show the names and deletion state of their linked items.
+      qc.invalidateQueries({ queryKey: ['issue'] }),
+      qc.invalidateQueries({ queryKey: ['issues'] }),
+    ]);
 }
 
 export function useCreateStorageItem() {

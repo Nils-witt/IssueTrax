@@ -148,6 +148,12 @@ func TestIssue_Apply(t *testing.T) {
 			wantErr: domain.ErrArchived,
 		},
 		{
+			name:    "archived rejects status plus storage items",
+			status:  domain.StatusArchived,
+			changes: domain.IssueChanges{Status: new(domain.StatusOpen), StorageItems: &[]domain.StorageItemID{}},
+			wantErr: domain.ErrArchived,
+		},
+		{
 			name:       "invalid status",
 			status:     domain.StatusOpen,
 			changes:    domain.IssueChanges{Status: new(domain.IssueStatus("done")), Title: new("x")},
@@ -189,6 +195,30 @@ func TestIssue_Apply(t *testing.T) {
 
 			tt.check(t, issue)
 		})
+	}
+}
+
+func TestIssue_ApplyStorageItems(t *testing.T) {
+	t.Parallel()
+
+	later := testNow.Add(time.Hour)
+	item := domain.StorageItemID(uuid.New())
+
+	issue, err := domain.NewIssue(domain.NewIssueParams{Title: "Old", StorageItems: []domain.StorageItemID{item, item}, Now: testNow})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(issue.StorageItems, []domain.StorageItemID{item}) {
+		t.Fatalf("NewIssue() storage items = %v", issue.StorageItems)
+	}
+
+	if err := issue.Apply(domain.IssueChanges{StorageItems: &[]domain.StorageItemID{}}, later); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(issue.StorageItems) != 0 || !issue.UpdatedAt.Equal(later) {
+		t.Fatalf("Apply() = %+v", issue)
 	}
 }
 

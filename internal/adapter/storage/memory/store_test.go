@@ -26,6 +26,7 @@ func TestContract(t *testing.T) {
 			Storages:            memory.NewStorageRepository(s),
 			GenericStorageItems: memory.NewGenericStorageItemRepository(s),
 			NetworkDevices:      memory.NewNetworkDeviceRepository(s),
+			StorageItems:        memory.NewStorageItemRepository(s),
 			Users:               memory.NewUserRepository(s),
 			Sessions:            memory.NewSessionRepository(s),
 			APIKeys:             memory.NewAPIKeyRepository(s),

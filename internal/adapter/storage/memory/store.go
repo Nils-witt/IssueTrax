@@ -122,6 +122,7 @@ func (d data) clone() data {
 func cloneIssue(i domain.Issue) domain.Issue {
 	i.Tags = slices.Clone(i.Tags)
 	i.Assignees = slices.Clone(i.Assignees)
+	i.StorageItems = slices.Clone(i.StorageItems)
 
 	return i
 }

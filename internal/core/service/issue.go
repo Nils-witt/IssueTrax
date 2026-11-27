@@ -51,22 +51,28 @@ func (s *IssueService) Create(
 			return err
 		}
 
+		items, err := s.resolveStorageItems(ctx, in.StorageItems, nil)
+		if err != nil {
+			return err
+		}
+
 		number, err := s.repos.Projects.AllocateIssueNumber(ctx, project.ID)
 		if err != nil {
 			return fmt.Errorf("allocate issue number in %q: %w", project.Key, err)
 		}
 
 		issue, err := domain.NewIssue(domain.NewIssueParams{
-			ID:          domain.IssueID(s.opts.newID()),
-			ProjectID:   project.ID,
-			Number:      number,
-			Title:       in.Title,
-			Description: in.Description,
-			Status:      in.Status,
-			Assignees:   assignees,
-			Tags:        tags,
-			CreatedBy:   actor,
-			Now:         s.opts.now(),
+			ID:           domain.IssueID(s.opts.newID()),
+			ProjectID:    project.ID,
+			Number:       number,
+			Title:        in.Title,
+			Description:  in.Description,
+			Status:       in.Status,
+			Assignees:    assignees,
+			Tags:         tags,
+			StorageItems: items,
+			CreatedBy:    actor,
+			Now:          s.opts.now(),
 		})
 		if err != nil {
 			return err
@@ -86,6 +92,7 @@ func (s *IssueService) Create(
 		changes.InitialText("description", issue.Description)
 		changes.InitialList("tags", tagNames(view.Tags))
 		changes.InitialList("assignees", userNames(view.Assignees))
+		changes.InitialList("storageItems", storageItemNames(view.StorageItems))
 
 		return record(ctx, s.repos, s.opts, issueEvent(actor, domain.AuditIssueCreate, project, issue, changes))
 	})
@@ -199,7 +206,7 @@ func (s *IssueService) Update(
 // archived check runs first so an archived issue never creates tags.
 func (s *IssueService) changes(ctx context.Context, issue domain.Issue, in port.UpdateIssueInput) (domain.IssueChanges, error) {
 	changes := domain.IssueChanges{Title: in.Title, Description: in.Description, Status: in.Status}
-	statusOnly := in.Title == nil && in.Description == nil && in.Tags == nil && in.Assignees == nil
+	statusOnly := in.Title == nil && in.Description == nil && in.Tags == nil && in.Assignees == nil && in.StorageItems == nil
 
 	if err := issue.CheckEditable(statusOnly); err != nil {
 		return domain.IssueChanges{}, err
@@ -221,6 +228,15 @@ func (s *IssueService) changes(ctx context.Context, issue domain.Issue, in port.
 		}
 
 		changes.Assignees = &assignees
+	}
+
+	if in.StorageItems != nil {
+		items, err := s.resolveStorageItems(ctx, *in.StorageItems, issue.StorageItems)
+		if err != nil {
+			return domain.IssueChanges{}, err
+		}
+
+		changes.StorageItems = &items
 	}
 
 	return changes, nil
@@ -293,6 +309,77 @@ func (s *IssueService) resolveAssignees(ctx context.Context, ids []domain.UserID
 	return ids, nil
 }
 
+// resolveStorageItems deduplicates ids and checks every item exists. Items
+// not in linked (the issue's current links) must not be deleted, so a
+// deleted item can stay linked but cannot be linked anew.
+func (s *IssueService) resolveStorageItems(
+	ctx context.Context, ids, linked []domain.StorageItemID,
+) ([]domain.StorageItemID, error) {
+	ids = unique(ids)
+	if len(ids) == 0 {
+		return ids, nil
+	}
+
+	items, err := s.repos.StorageItems.GetMany(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get storage items: %w", err)
+	}
+
+	if len(items) != len(ids) {
+		return nil, domain.NewValidationError(map[string]string{"storageItems": domain.FieldUnknown})
+	}
+
+	for _, item := range items {
+		if item.IsDeleted() && !slices.Contains(linked, item.ID) {
+			return nil, domain.NewValidationError(map[string]string{"storageItems": domain.FieldUnknown})
+		}
+	}
+
+	return ids, nil
+}
+
+// ListByStorageItem returns one page of the issues linking item, across
+// all projects and statuses, newest first.
+func (s *IssueService) ListByStorageItem(
+	ctx context.Context, item domain.StorageItemID, page domain.PageRequest,
+) (domain.Page[port.IssueView], error) {
+	found, err := s.repos.StorageItems.GetMany(ctx, []domain.StorageItemID{item})
+	if err != nil {
+		return domain.Page[port.IssueView]{}, fmt.Errorf("get storage item %s: %w", item, err)
+	}
+
+	if len(found) == 0 {
+		return domain.Page[port.IssueView]{}, fmt.Errorf("get storage item %s: %w", item, domain.ErrStorageItemNotFound)
+	}
+
+	issues, err := s.repos.Issues.ListByStorageItem(ctx, item, page)
+	if err != nil {
+		return domain.Page[port.IssueView]{}, fmt.Errorf("list issues linking storage item %s: %w", item, err)
+	}
+
+	projectIDs := make([]domain.ProjectID, 0, len(issues.Items))
+	for _, i := range issues.Items {
+		projectIDs = append(projectIDs, i.ProjectID)
+	}
+
+	projects, err := s.repos.Projects.GetMany(ctx, unique(projectIDs))
+	if err != nil {
+		return domain.Page[port.IssueView]{}, fmt.Errorf("get issue projects: %w", err)
+	}
+
+	byID := make(map[domain.ProjectID]domain.Project, len(projects))
+	for _, p := range projects {
+		byID[p.ID] = p
+	}
+
+	views, err := s.viewsIn(ctx, func(id domain.ProjectID) domain.Project { return byID[id] }, issues.Items)
+	if err != nil {
+		return domain.Page[port.IssueView]{}, err
+	}
+
+	return domain.Page[port.IssueView]{Items: views, Total: issues.Total, NextCursor: issues.NextCursor}, nil
+}
+
 func (s *IssueService) view(ctx context.Context, project domain.Project, issue domain.Issue) (port.IssueView, error) {
 	views, err := s.views(ctx, project, []domain.Issue{issue})
 	if err != nil {
@@ -302,17 +389,28 @@ func (s *IssueService) view(ctx context.Context, project domain.Project, issue d
 	return views[0], nil
 }
 
-// views resolves tags and users for issues with one lookup each.
+// views resolves tags, users and storage items for issues of project with
+// one lookup each.
 func (s *IssueService) views(ctx context.Context, project domain.Project, issues []domain.Issue) ([]port.IssueView, error) {
+	return s.viewsIn(ctx, func(domain.ProjectID) domain.Project { return project }, issues)
+}
+
+// viewsIn is views for issues of possibly different projects; projectOf
+// returns the project of an issue.
+func (s *IssueService) viewsIn(
+	ctx context.Context, projectOf func(domain.ProjectID) domain.Project, issues []domain.Issue,
+) ([]port.IssueView, error) {
 	var (
 		tagIDs  []domain.TagID
 		userIDs []domain.UserID
+		itemIDs []domain.StorageItemID
 	)
 
 	for _, i := range issues {
 		tagIDs = append(tagIDs, i.Tags...)
 		userIDs = append(userIDs, i.Assignees...)
 		userIDs = append(userIDs, i.CreatedBy)
+		itemIDs = append(itemIDs, i.StorageItems...)
 	}
 
 	tags, err := s.repos.Tags.GetMany(ctx, unique(tagIDs))
@@ -325,15 +423,14 @@ func (s *IssueService) views(ctx context.Context, project domain.Project, issues
 		return nil, fmt.Errorf("get issue users: %w", err)
 	}
 
-	tagByID := make(map[domain.TagID]domain.Tag, len(tags))
-	for _, t := range tags {
-		tagByID[t.ID] = t
+	items, err := s.storageItems(ctx, unique(itemIDs))
+	if err != nil {
+		return nil, err
 	}
 
-	userByID := make(map[domain.UserID]domain.User, len(users))
-	for _, u := range users {
-		userByID[u.ID] = u
-	}
+	tagByID := indexBy(tags, func(t domain.Tag) domain.TagID { return t.ID })
+	userByID := indexBy(users, func(u domain.User) domain.UserID { return u.ID })
+	itemByID := indexBy(items, func(i domain.StorageItem) domain.StorageItemID { return i.ID })
 
 	user := func(id domain.UserID) domain.User {
 		if u, ok := userByID[id]; ok {
@@ -347,33 +444,68 @@ func (s *IssueService) views(ctx context.Context, project domain.Project, issues
 
 	for _, i := range issues {
 		v := port.IssueView{
-			Issue:      i,
-			ProjectKey: project.Key,
-			Tags:       make([]domain.Tag, 0, len(i.Tags)),
-			Assignees:  make([]domain.User, 0, len(i.Assignees)),
-			CreatedBy:  user(i.CreatedBy),
-		}
-
-		for _, id := range i.Tags {
-			if t, ok := tagByID[id]; ok {
-				v.Tags = append(v.Tags, t)
-			}
+			Issue:        i,
+			ProjectKey:   projectOf(i.ProjectID).Key,
+			Tags:         pick(i.Tags, tagByID),
+			Assignees:    make([]domain.User, 0, len(i.Assignees)),
+			StorageItems: pick(i.StorageItems, itemByID),
+			CreatedBy:    user(i.CreatedBy),
 		}
 
 		for _, id := range i.Assignees {
 			v.Assignees = append(v.Assignees, user(id))
 		}
 
-		// Present tags and assignees alphabetically, independent of storage order.
+		// Present relations alphabetically, independent of storage order.
 		slices.SortFunc(v.Tags, func(a, b domain.Tag) int { return cmp.Compare(a.Name, b.Name) })
 		slices.SortFunc(v.Assignees, func(a, b domain.User) int {
 			return cmp.Or(cmp.Compare(strings.ToLower(a.DisplayName), strings.ToLower(b.DisplayName)), cmp.Compare(a.ID.String(), b.ID.String()))
+		})
+		slices.SortFunc(v.StorageItems, func(a, b domain.StorageItem) int {
+			return cmp.Or(cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), cmp.Compare(a.ID.String(), b.ID.String()))
 		})
 
 		views = append(views, v)
 	}
 
 	return views, nil
+}
+
+// indexBy maps each value to its key.
+func indexBy[K comparable, V any](values []V, key func(V) K) map[K]V {
+	m := make(map[K]V, len(values))
+	for _, v := range values {
+		m[key(v)] = v
+	}
+
+	return m
+}
+
+// pick returns the values of ids found in m, in ids order; missing ones are skipped.
+func pick[K comparable, V any](ids []K, m map[K]V) []V {
+	out := make([]V, 0, len(ids))
+
+	for _, id := range ids {
+		if v, ok := m[id]; ok {
+			out = append(out, v)
+		}
+	}
+
+	return out
+}
+
+// storageItems loads the storage items with ids; none are loaded for none.
+func (s *IssueService) storageItems(ctx context.Context, ids []domain.StorageItemID) ([]domain.StorageItem, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	items, err := s.repos.StorageItems.GetMany(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get issue storage items: %w", err)
+	}
+
+	return items, nil
 }
 
 // normalizeFilter validates f and fills in defaults: statuses default to all
@@ -401,6 +533,10 @@ func normalizeFilter(f port.IssueFilter) (port.IssueFilter, error) {
 		fields["assigneeMode"] = domain.FieldInvalid
 	}
 
+	if f.StorageItemMode, ok = normalizeMode(f.StorageItemMode); !ok {
+		fields["storageItemMode"] = domain.FieldInvalid
+	}
+
 	f.Query = strings.TrimSpace(f.Query)
 	if utf8.RuneCountInString(f.Query) > maxQueryRunes {
 		fields["q"] = domain.FieldTooLong
@@ -413,6 +549,7 @@ func normalizeFilter(f port.IssueFilter) (port.IssueFilter, error) {
 	f.Statuses = unique(f.Statuses)
 	f.TagIDs = unique(f.TagIDs)
 	f.AssigneeIDs = unique(f.AssigneeIDs)
+	f.StorageItemIDs = unique(f.StorageItemIDs)
 
 	return f, nil
 }
@@ -436,6 +573,7 @@ func issueDiff(before, after port.IssueView) domain.AuditChanges {
 	changes.Text("description", before.Issue.Description, after.Issue.Description)
 	changes.List("tags", tagNames(before.Tags), tagNames(after.Tags))
 	changes.List("assignees", userNames(before.Assignees), userNames(after.Assignees))
+	changes.List("storageItems", storageItemNames(before.StorageItems), storageItemNames(after.StorageItems))
 
 	return changes
 }
@@ -462,6 +600,15 @@ func userNames(users []domain.User) []string {
 	names := make([]string, 0, len(users))
 	for _, u := range users {
 		names = append(names, u.DisplayName)
+	}
+
+	return names
+}
+
+func storageItemNames(items []domain.StorageItem) []string {
+	names := make([]string, 0, len(items))
+	for _, i := range items {
+		names = append(names, i.Name)
 	}
 
 	return names

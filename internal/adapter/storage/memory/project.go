@@ -129,6 +129,22 @@ func (r *ProjectRepository) AllocateIssueNumber(_ context.Context, project domai
 	return n, nil
 }
 
+// GetMany returns the known projects among ids.
+func (r *ProjectRepository) GetMany(_ context.Context, ids []domain.ProjectID) ([]domain.Project, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	projects := make([]domain.Project, 0, len(ids))
+
+	for _, id := range ids {
+		if p, ok := r.s.data.projects[id]; ok {
+			projects = append(projects, p)
+		}
+	}
+
+	return projects, nil
+}
+
 // sameName mirrors the Postgres unique index on lower(name); Unicode case
 // folding (strings.EqualFold) would treat more names as equal.
 func sameName(a, b string) bool {

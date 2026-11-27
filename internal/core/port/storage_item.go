@@ -80,3 +80,21 @@ type GenericStorageItemRepository interface {
 	Create(ctx context.Context, item domain.GenericStorageItem) error
 	Update(ctx context.Context, item domain.GenericStorageItem) error
 }
+
+// StorageItemLookupService is the driving port for finding storage items
+// of any kind, e.g. to link them to issues. Search matches name and
+// description (Query and Deleted apply) and orders by lower(name), then ID.
+type StorageItemLookupService interface {
+	Search(ctx context.Context, filter StorageItemFilter, page domain.PageRequest) (domain.Page[domain.StorageItem], error)
+}
+
+// StorageItemRepository is the kind-agnostic driven port for reading the
+// shared fields of storage items of every kind.
+//
+// GetMany returns the known items among ids, deleted ones included, in no
+// particular order and skips unknown ones. Search behaves like
+// StorageItemReader.Search across all kinds.
+type StorageItemRepository interface {
+	GetMany(ctx context.Context, ids []domain.StorageItemID) ([]domain.StorageItem, error)
+	Search(ctx context.Context, filter StorageItemFilter, page domain.PageRequest) (domain.Page[domain.StorageItem], error)
+}

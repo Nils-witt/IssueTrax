@@ -69,6 +69,11 @@ tags:
 
       Validation errors name nested fields by path, e.g.
       `primaryInterface.mac` or `secondaryInterfaces[1].ipv4.dnsServers[0]`.
+  - name: storage-items
+    description: |
+      Storage items of every kind (generic items, network devices) by their
+      shared fields, e.g. to link them to issues, and the issues linking
+      them.
   - name: users
   - name: service-accounts
   - name: audit
@@ -423,6 +428,16 @@ paths:
           in: query
           description: "`all` (default) or `any`, as for tags."
           schema: { $ref: "#/components/schemas/MatchMode" }
+        - name: storageItem
+          in: query
+          description: IDs of linked storage items of any kind; repeat for several.
+          schema: { type: array, items: { type: string, format: uuid } }
+          style: form
+          explode: true
+        - name: storageItemMode
+          in: query
+          description: "`all` (default) or `any`, as for tags."
+          schema: { $ref: "#/components/schemas/MatchMode" }
         - name: q
           in: query
           description: Case-insensitive substring searched in title and description (max 200 characters).
@@ -488,8 +503,8 @@ paths:
       tags: [issues]
       summary: Update an issue
       description: |
-        Partial update: absent fields stay unchanged; `tags` and `assignees`
-        replace the whole set. An archived issue accepts only a request that
+        Partial update: absent fields stay unchanged; `tags`, `assignees`
+        and `storageItems` replace the whole set. An archived issue accepts only a request that
         changes nothing but `status` (unarchive first, then edit); anything
         else yields `409` with code `issue_archived`.
       requestBody:
@@ -1086,6 +1101,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/storage-items:
+    get:
+      tags: [storage-items]
+      summary: Search items of every kind across all storages
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - name: q
+          in: query
+          description: Keep items whose name or description contains this text, ignoring case.
+          schema: { type: string }
+        - $ref: "#/components/parameters/StorageItemDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of items.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageItemRefPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/storage-items/{id}/issues:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: A storage item of any kind, deleted or not.
+        schema: { type: string, format: uuid }
+    get:
+      tags: [storage-items]
+      summary: List the issues linking an item
+      description: Issues of every project and status, newest (created last) first.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of issues.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IssuePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
   /api/service-accounts:
     get:
       tags: [service-accounts]
@@ -1397,7 +1458,7 @@ components:
       description: |
         One changed field. `old` is absent for fields set on creation.
         Long text (descriptions, comment bodies) is `redacted`: only the
-        fact that it changed is recorded. Lists (tags, assignees) are
+        fact that it changed is recorded. Lists (tags, assignees, storage items by name) are
         comma-separated and sorted.
       properties:
         old: { type: string }
@@ -1544,7 +1605,7 @@ components:
 
     Issue:
       type: object
-      required: [id, key, number, projectKey, title, description, status, tags, assignees, createdBy, createdAt, updatedAt]
+      required: [id, key, number, projectKey, title, description, status, tags, assignees, storageItems, createdBy, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         key: { type: string, example: TRAX-42 }
@@ -1561,6 +1622,10 @@ components:
           type: array
           description: Ordered by display name.
           items: { $ref: "#/components/schemas/User" }
+        storageItems:
+          type: array
+          description: Linked storage items of any kind, deleted ones included; ordered by name (ignoring case).
+          items: { $ref: "#/components/schemas/StorageItemRef" }
         createdBy: { $ref: "#/components/schemas/User" }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -1614,6 +1679,12 @@ components:
           type: array
           description: User IDs of users who have signed in before.
           items: { type: string, format: uuid }
+        storageItems:
+          type: array
+          description: |
+            IDs of storage items of any kind to link. Unknown or deleted items
+            yield `422` with field code `unknown` on `storageItems`.
+          items: { type: string, format: uuid }
 
     UpdateIssue:
       type: object
@@ -1625,6 +1696,13 @@ components:
         tags: { $ref: "#/components/schemas/TagNames" }
         assignees:
           type: array
+          items: { type: string, format: uuid }
+        storageItems:
+          type: array
+          description: |
+            IDs of storage items to link. Items already linked stay allowed
+            after they were deleted; newly linked ones must exist and not be
+            deleted (else `422`, field code `unknown`).
           items: { type: string, format: uuid }
 
     ProjectPage:
@@ -1712,6 +1790,29 @@ components:
       required: [items, total, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/GenericStorageItem" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    StorageItemKind:
+      type: string
+      enum: [generic, network_device]
+
+    StorageItemRef:
+      type: object
+      description: The fields every kind of storage item shares.
+      required: [id, kind, storageId, name, deleted]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/StorageItemKind" }
+        storageId: { type: string, format: uuid, description: The storage the item is kept in. }
+        name: { type: string, example: Cordless drill }
+        deleted: { type: boolean }
+
+    StorageItemRefPage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/StorageItemRef" } }
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }
 

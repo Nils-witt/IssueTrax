@@ -35,11 +35,13 @@ type ProjectService interface {
 // domain.ErrProjectNameTaken. GetByKey returns domain.ErrProjectNotFound.
 // List orders by lower(name), then ID. AllocateIssueNumber returns the next
 // per-project issue number and must run inside a transaction so the number
-// is released again if the issue is not created.
+// is released again if the issue is not created. GetMany returns the known
+// projects among ids in no particular order and skips unknown ones.
 type ProjectRepository interface {
 	Create(ctx context.Context, project domain.Project) error
 	Update(ctx context.Context, project domain.Project) error
 	GetByKey(ctx context.Context, key domain.ProjectKey) (domain.Project, error)
+	GetMany(ctx context.Context, ids []domain.ProjectID) ([]domain.Project, error)
 	List(ctx context.Context, page domain.PageRequest) (domain.Page[domain.Project], error)
 	AllocateIssueNumber(ctx context.Context, project domain.ProjectID) (int64, error)
 }

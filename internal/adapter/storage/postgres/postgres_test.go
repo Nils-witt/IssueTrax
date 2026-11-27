@@ -132,6 +132,7 @@ func repositories(db *postgres.DB) service.Repositories {
 		Storages:            postgres.NewStorageRepository(db),
 		GenericStorageItems: postgres.NewGenericStorageItemRepository(db),
 		NetworkDevices:      postgres.NewNetworkDeviceRepository(db),
+		StorageItems:        postgres.NewStorageItemRepository(db),
 		Users:               postgres.NewUserRepository(db),
 		Sessions:            postgres.NewSessionRepository(db),
 		APIKeys:             postgres.NewAPIKeyRepository(db),

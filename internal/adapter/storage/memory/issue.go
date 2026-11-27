@@ -99,12 +99,58 @@ func (r *IssueRepository) List(
 	return result, nil
 }
 
+// ListByStorageItem returns one page of the issues of any project linking
+// item, newest (created last) first.
+func (r *IssueRepository) ListByStorageItem(
+	_ context.Context, item domain.StorageItemID, page domain.PageRequest,
+) (domain.Page[domain.Issue], error) {
+	cursor, hasCursor, err := domain.DecodeCursor[domain.LinkedIssueCursor](page.Cursor)
+	if err != nil {
+		return domain.Page[domain.Issue]{}, err
+	}
+
+	r.s.mu.RLock()
+
+	var matching []domain.Issue
+
+	for _, i := range r.s.data.issues {
+		if slices.Contains(i.StorageItems, item) {
+			matching = append(matching, cloneIssue(i))
+		}
+	}
+
+	r.s.mu.RUnlock()
+
+	newestFirst := func(a, b domain.Issue) int {
+		return cmp.Or(b.CreatedAt.Compare(a.CreatedAt), cmp.Compare(b.ID.String(), a.ID.String()))
+	}
+	slices.SortFunc(matching, newestFirst)
+
+	after := matching
+	if hasCursor {
+		after = slices.DeleteFunc(slices.Clone(matching), func(i domain.Issue) bool {
+			return cmp.Or(cursor.At.Compare(i.CreatedAt), cmp.Compare(cursor.ID, i.ID.String())) <= 0
+		})
+	}
+
+	items, more := paginate(after, page.Limit)
+	result := domain.Page[domain.Issue]{Items: append([]domain.Issue{}, items...), Total: int64(len(matching))}
+
+	if more {
+		last := items[len(items)-1]
+		result.NextCursor = domain.EncodeCursor(domain.LinkedIssueCursor{At: last.CreatedAt, ID: last.ID.String()})
+	}
+
+	return result, nil
+}
+
 func matches(i domain.Issue, f port.IssueFilter) bool {
 	if len(f.Statuses) > 0 && !slices.Contains(f.Statuses, i.Status) {
 		return false
 	}
 
-	if !matchSet(i.Tags, f.TagIDs, f.TagMode) || !matchSet(i.Assignees, f.AssigneeIDs, f.AssigneeMode) {
+	if !matchSet(i.Tags, f.TagIDs, f.TagMode) || !matchSet(i.Assignees, f.AssigneeIDs, f.AssigneeMode) ||
+		!matchSet(i.StorageItems, f.StorageItemIDs, f.StorageItemMode) {
 		return false
 	}
 

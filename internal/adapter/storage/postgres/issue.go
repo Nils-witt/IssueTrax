@@ -23,7 +23,7 @@ type IssueRepository struct{ db *DB }
 // NewIssueRepository returns an IssueRepository on db.
 func NewIssueRepository(db *DB) *IssueRepository { return &IssueRepository{db: db} }
 
-// Create inserts issue with its tags and assignees.
+// Create inserts issue with its tags, assignees and storage item links.
 func (r *IssueRepository) Create(ctx context.Context, issue domain.Issue) error {
 	return r.db.WithinTx(ctx, func(ctx context.Context) error {
 		err := r.db.queries(ctx).CreateIssue(ctx, sqlc.CreateIssueParams{
@@ -45,7 +45,8 @@ func (r *IssueRepository) Create(ctx context.Context, issue domain.Issue) error 
 	})
 }
 
-// Update stores the mutable fields of issue and replaces its tags and assignees.
+// Update stores the mutable fields of issue and replaces its tags,
+// assignees and storage item links.
 func (r *IssueRepository) Update(ctx context.Context, issue domain.Issue) error {
 	return r.db.WithinTx(ctx, func(ctx context.Context) error {
 		q := r.db.queries(ctx)
@@ -73,6 +74,10 @@ func (r *IssueRepository) Update(ctx context.Context, issue domain.Issue) error 
 			return fmt.Errorf("delete issue assignees: %w", err)
 		}
 
+		if err := q.DeleteIssueStorageItems(ctx, uuid.UUID(issue.ID)); err != nil {
+			return fmt.Errorf("delete issue storage items: %w", err)
+		}
+
 		return r.insertRelations(ctx, issue)
 	})
 }
@@ -91,6 +96,15 @@ func (r *IssueRepository) insertRelations(ctx context.Context, issue domain.Issu
 		err := q.InsertIssueAssignees(ctx, sqlc.InsertIssueAssigneesParams{IssueID: uuid.UUID(issue.ID), UserIds: uuids(issue.Assignees)})
 		if err != nil {
 			return fmt.Errorf("insert issue assignees: %w", err)
+		}
+	}
+
+	if len(issue.StorageItems) > 0 {
+		err := q.InsertIssueStorageItems(ctx, sqlc.InsertIssueStorageItemsParams{
+			IssueID: uuid.UUID(issue.ID), StorageItemIds: uuids(issue.StorageItems),
+		})
+		if err != nil {
+			return fmt.Errorf("insert issue storage items: %w", err)
 		}
 	}
 
@@ -160,15 +174,17 @@ func (r *IssueRepository) List(
 	}
 
 	params := sqlc.ListIssuesParams{
-		ProjectID:    uuid.UUID(project),
-		Statuses:     statuses,
-		TagIds:       uuids(filter.TagIDs),
-		TagsAll:      filter.TagMode != port.MatchAny,
-		AssigneeIds:  uuids(filter.AssigneeIDs),
-		AssigneesAll: filter.AssigneeMode != port.MatchAny,
-		Pattern:      containsPattern(filter.Query),
-		BeforeNumber: cursor.Number,
-		RowLimit:     pageLimit(page.Limit),
+		ProjectID:       uuid.UUID(project),
+		Statuses:        statuses,
+		TagIds:          uuids(filter.TagIDs),
+		TagsAll:         filter.TagMode != port.MatchAny,
+		AssigneeIds:     uuids(filter.AssigneeIDs),
+		AssigneesAll:    filter.AssigneeMode != port.MatchAny,
+		StorageItemIds:  uuids(filter.StorageItemIDs),
+		StorageItemsAll: filter.StorageItemMode != port.MatchAny,
+		Pattern:         containsPattern(filter.Query),
+		BeforeNumber:    cursor.Number,
+		RowLimit:        pageLimit(page.Limit),
 	}
 
 	var result domain.Page[domain.Issue]
@@ -182,13 +198,15 @@ func (r *IssueRepository) List(
 		}
 
 		result.Total, err = q.CountIssues(ctx, sqlc.CountIssuesParams{
-			ProjectID:    params.ProjectID,
-			Statuses:     params.Statuses,
-			TagIds:       params.TagIds,
-			TagsAll:      params.TagsAll,
-			AssigneeIds:  params.AssigneeIds,
-			AssigneesAll: params.AssigneesAll,
-			Pattern:      params.Pattern,
+			ProjectID:       params.ProjectID,
+			Statuses:        params.Statuses,
+			TagIds:          params.TagIds,
+			TagsAll:         params.TagsAll,
+			AssigneeIds:     params.AssigneeIds,
+			AssigneesAll:    params.AssigneesAll,
+			StorageItemIds:  params.StorageItemIds,
+			StorageItemsAll: params.StorageItemsAll,
+			Pattern:         params.Pattern,
 		})
 		if err != nil {
 			return fmt.Errorf("count issues: %w", err)
@@ -214,8 +232,64 @@ func (r *IssueRepository) List(
 	return result, nil
 }
 
-// withRelations converts rows and loads their tags and assignees with one
-// query each.
+// ListByStorageItem returns one page of the issues of any project linking
+// item, newest first.
+func (r *IssueRepository) ListByStorageItem(
+	ctx context.Context, item domain.StorageItemID, page domain.PageRequest,
+) (domain.Page[domain.Issue], error) {
+	cursor, has, err := domain.DecodeCursor[domain.LinkedIssueCursor](page.Cursor)
+	if err != nil {
+		return domain.Page[domain.Issue]{}, err
+	}
+
+	params := sqlc.ListIssuesByStorageItemParams{StorageItemID: uuid.UUID(item), HasCursor: has, RowLimit: pageLimit(page.Limit)}
+
+	if has {
+		id, err := uuid.Parse(cursor.ID)
+		if err != nil {
+			return domain.Page[domain.Issue]{}, domain.NewValidationError(map[string]string{cursorField: domain.FieldInvalid})
+		}
+
+		params.CursorAt, params.CursorID = cursor.At, id
+	}
+
+	var result domain.Page[domain.Issue]
+
+	err = r.db.readTx(ctx, func(ctx context.Context) error {
+		q := r.db.queries(ctx)
+
+		rows, err := q.ListIssuesByStorageItem(ctx, params)
+		if err != nil {
+			return fmt.Errorf("select issues by storage item: %w", err)
+		}
+
+		if result.Total, err = q.CountIssuesByStorageItem(ctx, params.StorageItemID); err != nil {
+			return fmt.Errorf("count issues by storage item: %w", err)
+		}
+
+		more := len(rows) > page.Limit
+		rows = rows[:min(len(rows), page.Limit)]
+
+		if result.Items, err = r.withRelations(ctx, rows); err != nil {
+			return err
+		}
+
+		if more {
+			last := rows[len(rows)-1]
+			result.NextCursor = domain.EncodeCursor(domain.LinkedIssueCursor{At: last.CreatedAt.UTC(), ID: last.ID.String()})
+		}
+
+		return nil
+	})
+	if err != nil {
+		return domain.Page[domain.Issue]{}, err
+	}
+
+	return result, nil
+}
+
+// withRelations converts rows and loads their tags, assignees and storage
+// item links with one query each.
 func (r *IssueRepository) withRelations(ctx context.Context, rows []sqlc.Issue) ([]domain.Issue, error) {
 	issues := make([]domain.Issue, 0, len(rows))
 	if len(rows) == 0 {
@@ -239,6 +313,11 @@ func (r *IssueRepository) withRelations(ctx context.Context, rows []sqlc.Issue) 
 		return nil, fmt.Errorf("select issue assignees: %w", err)
 	}
 
+	itemRows, err := q.ListIssueStorageItems(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("select issue storage items: %w", err)
+	}
+
 	tags := map[uuid.UUID][]domain.TagID{}
 	for _, t := range tagRows {
 		tags[t.IssueID] = append(tags[t.IssueID], domain.TagID(t.TagID))
@@ -249,19 +328,25 @@ func (r *IssueRepository) withRelations(ctx context.Context, rows []sqlc.Issue) 
 		assignees[a.IssueID] = append(assignees[a.IssueID], domain.UserID(a.UserID))
 	}
 
+	items := map[uuid.UUID][]domain.StorageItemID{}
+	for _, it := range itemRows {
+		items[it.IssueID] = append(items[it.IssueID], domain.StorageItemID(it.StorageItemID))
+	}
+
 	for _, row := range rows {
 		issues = append(issues, domain.Issue{
-			ID:          domain.IssueID(row.ID),
-			ProjectID:   domain.ProjectID(row.ProjectID),
-			Number:      row.Number,
-			Title:       row.Title,
-			Description: row.Description,
-			Status:      domain.IssueStatus(row.Status),
-			Tags:        nonNil(tags[row.ID]),
-			Assignees:   nonNil(assignees[row.ID]),
-			CreatedBy:   domain.UserID(row.CreatedBy),
-			CreatedAt:   row.CreatedAt.UTC(),
-			UpdatedAt:   row.UpdatedAt.UTC(),
+			ID:           domain.IssueID(row.ID),
+			ProjectID:    domain.ProjectID(row.ProjectID),
+			Number:       row.Number,
+			Title:        row.Title,
+			Description:  row.Description,
+			Status:       domain.IssueStatus(row.Status),
+			Tags:         nonNil(tags[row.ID]),
+			Assignees:    nonNil(assignees[row.ID]),
+			StorageItems: nonNil(items[row.ID]),
+			CreatedBy:    domain.UserID(row.CreatedBy),
+			CreatedAt:    row.CreatedAt.UTC(),
+			UpdatedAt:    row.UpdatedAt.UTC(),
 		})
 	}
 

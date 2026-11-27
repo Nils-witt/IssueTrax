@@ -146,9 +146,23 @@ export interface Issue {
   status: IssueStatus;
   tags: Tag[];
   assignees: User[];
+  /** Linked storage items of any kind, deleted ones included. */
+  storageItems: StorageItemRef[];
   createdBy: User;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The kind of a storage item. */
+export type StorageItemKind = 'generic' | 'network_device';
+
+/** The shared fields of a storage item of any kind, as linked from issues. */
+export interface StorageItemRef {
+  id: string;
+  kind: StorageItemKind;
+  storageId: string;
+  name: string;
+  deleted: boolean;
 }
 
 export interface Comment {
@@ -344,6 +358,8 @@ export interface CreateIssueInput {
   status?: IssueStatus;
   tags?: string[];
   assignees?: string[];
+  /** IDs of storage items to link; they must not be deleted. */
+  storageItems?: string[];
 }
 
 export type UpdateIssueInput = Partial<CreateIssueInput>;

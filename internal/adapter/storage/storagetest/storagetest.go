@@ -32,10 +32,13 @@ var contract = []struct {
 	{name: "Projects/update", run: testProjectsUpdate},
 	{name: "Projects/list", run: testProjectsList},
 	{name: "Projects/allocate issue numbers", run: testProjectsAllocateIssueNumbers},
+	{name: "Projects/get many", run: testProjectsGetMany},
 	{name: "Issues/create, get and update", run: testIssuesCreateGetAndUpdate},
 	{name: "Issues/not found", run: testIssuesNotFound},
 	{name: "Issues/list filters", run: testIssuesListFilters},
 	{name: "Issues/list pagination", run: testIssuesListPagination},
+	{name: "Issues/storage item links", run: testIssuesStorageItemLinks},
+	{name: "Issues/list by storage item", run: testIssuesListByStorageItem},
 	{name: "Tags/ensure is idempotent per project", run: testTagsEnsureIsIdempotentPerProject},
 	{name: "Tags/lookups", run: testTagsLookups},
 	{name: "Tags/update", run: testTagsUpdate},
@@ -55,6 +58,7 @@ var contract = []struct {
 	{name: "NetworkDevices/kinds are separate", run: testNetworkDevicesKindsAreSeparate},
 	{name: "NetworkDevices/list in storage", run: testNetworkDevicesListInStorage},
 	{name: "NetworkDevices/search", run: testNetworkDevicesSearch},
+	{name: "StorageItems/get many and search across kinds", run: testStorageItemsAcrossKinds},
 	{name: "Users/create, get and update", run: testUsersCreateGetAndUpdate},
 	{name: "Users/list and get many", run: testUsersListAndGetMany},
 	{name: "Users/identity is unique", run: testUsersIdentityIsUnique},
@@ -152,7 +156,7 @@ func issue(t *testing.T, r service.Repositories, p domain.Project, by domain.Use
 
 	i := domain.Issue{
 		ID: domain.IssueID(newID()), ProjectID: p.ID, Number: n, Title: "Issue " + strconv.FormatInt(n, 10),
-		Status: domain.StatusOpen, Tags: []domain.TagID{}, Assignees: []domain.UserID{},
+		Status: domain.StatusOpen, Tags: []domain.TagID{}, Assignees: []domain.UserID{}, StorageItems: []domain.StorageItemID{},
 		CreatedBy: by.ID, CreatedAt: now, UpdatedAt: now,
 	}
 
@@ -169,6 +173,9 @@ func issue(t *testing.T, r service.Repositories, p domain.Project, by domain.Use
 func sorted(i domain.Issue) domain.Issue {
 	i.Tags = slices.SortedFunc(slices.Values(i.Tags), func(a, b domain.TagID) int { return cmp.Compare(a.String(), b.String()) })
 	i.Assignees = slices.SortedFunc(slices.Values(i.Assignees), func(a, b domain.UserID) int { return cmp.Compare(a.String(), b.String()) })
+	i.StorageItems = slices.SortedFunc(slices.Values(i.StorageItems), func(a, b domain.StorageItemID) int {
+		return cmp.Compare(a.String(), b.String())
+	})
 
 	return i
 }
@@ -179,7 +186,7 @@ func equalIssues(a, b domain.Issue) bool {
 	return a.ID == b.ID && a.ProjectID == b.ProjectID && a.Number == b.Number && a.Title == b.Title &&
 		a.Description == b.Description && a.Status == b.Status && a.CreatedBy == b.CreatedBy &&
 		a.CreatedAt.Equal(b.CreatedAt) && a.UpdatedAt.Equal(b.UpdatedAt) &&
-		slices.Equal(a.Tags, b.Tags) && slices.Equal(a.Assignees, b.Assignees)
+		slices.Equal(a.Tags, b.Tags) && slices.Equal(a.Assignees, b.Assignees) && slices.Equal(a.StorageItems, b.StorageItems)
 }
 
 func firstPage(t *testing.T, limit int) domain.PageRequest {

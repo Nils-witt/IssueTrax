@@ -23,17 +23,22 @@ WHERE i.project_id = $1
   AND (cardinality($5::uuid[]) = 0 OR (
         SELECT CASE WHEN $6::boolean THEN count(*) = cardinality($5::uuid[]) ELSE count(*) > 0 END
         FROM issue_assignees ia WHERE ia.issue_id = i.id AND ia.user_id = ANY ($5::uuid[])))
-  AND ($7::text = '' OR i.title ILIKE $7::text OR i.description ILIKE $7::text)
+  AND (cardinality($7::uuid[]) = 0 OR (
+        SELECT CASE WHEN $8::boolean THEN count(*) = cardinality($7::uuid[]) ELSE count(*) > 0 END
+        FROM issue_storage_items isi WHERE isi.issue_id = i.id AND isi.storage_item_id = ANY ($7::uuid[])))
+  AND ($9::text = '' OR i.title ILIKE $9::text OR i.description ILIKE $9::text)
 `
 
 type CountIssuesParams struct {
-	ProjectID    uuid.UUID
-	Statuses     []IssueStatus
-	TagIds       []uuid.UUID
-	TagsAll      bool
-	AssigneeIds  []uuid.UUID
-	AssigneesAll bool
-	Pattern      string
+	ProjectID       uuid.UUID
+	Statuses        []IssueStatus
+	TagIds          []uuid.UUID
+	TagsAll         bool
+	AssigneeIds     []uuid.UUID
+	AssigneesAll    bool
+	StorageItemIds  []uuid.UUID
+	StorageItemsAll bool
+	Pattern         string
 }
 
 func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64, error) {
@@ -44,8 +49,21 @@ func (q *Queries) CountIssues(ctx context.Context, arg CountIssuesParams) (int64
 		arg.TagsAll,
 		arg.AssigneeIds,
 		arg.AssigneesAll,
+		arg.StorageItemIds,
+		arg.StorageItemsAll,
 		arg.Pattern,
 	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countIssuesByStorageItem = `-- name: CountIssuesByStorageItem :one
+SELECT count(*) FROM issue_storage_items WHERE storage_item_id = $1
+`
+
+func (q *Queries) CountIssuesByStorageItem(ctx context.Context, storageItemID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countIssuesByStorageItem, storageItemID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -89,6 +107,15 @@ DELETE FROM issue_assignees WHERE issue_id = $1
 
 func (q *Queries) DeleteIssueAssignees(ctx context.Context, issueID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteIssueAssignees, issueID)
+	return err
+}
+
+const deleteIssueStorageItems = `-- name: DeleteIssueStorageItems :exec
+DELETE FROM issue_storage_items WHERE issue_id = $1
+`
+
+func (q *Queries) DeleteIssueStorageItems(ctx context.Context, issueID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteIssueStorageItems, issueID)
 	return err
 }
 
@@ -174,6 +201,21 @@ func (q *Queries) InsertIssueAssignees(ctx context.Context, arg InsertIssueAssig
 	return err
 }
 
+const insertIssueStorageItems = `-- name: InsertIssueStorageItems :exec
+INSERT INTO issue_storage_items (issue_id, storage_item_id)
+SELECT $1, unnest($2::uuid[])
+`
+
+type InsertIssueStorageItemsParams struct {
+	IssueID        uuid.UUID
+	StorageItemIds []uuid.UUID
+}
+
+func (q *Queries) InsertIssueStorageItems(ctx context.Context, arg InsertIssueStorageItemsParams) error {
+	_, err := q.db.Exec(ctx, insertIssueStorageItems, arg.IssueID, arg.StorageItemIds)
+	return err
+}
+
 const insertIssueTags = `-- name: InsertIssueTags :exec
 INSERT INTO issue_tags (issue_id, tag_id)
 SELECT $1, unnest($2::uuid[])
@@ -203,6 +245,30 @@ func (q *Queries) ListIssueAssignees(ctx context.Context, issueIds []uuid.UUID) 
 	for rows.Next() {
 		var i IssueAssignee
 		if err := rows.Scan(&i.IssueID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIssueStorageItems = `-- name: ListIssueStorageItems :many
+SELECT issue_id, storage_item_id FROM issue_storage_items WHERE issue_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListIssueStorageItems(ctx context.Context, issueIds []uuid.UUID) ([]IssueStorageItem, error) {
+	rows, err := q.db.Query(ctx, listIssueStorageItems, issueIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []IssueStorageItem{}
+	for rows.Next() {
+		var i IssueStorageItem
+		if err := rows.Scan(&i.IssueID, &i.StorageItemID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -249,27 +315,32 @@ WHERE i.project_id = $1
   AND (cardinality($5::uuid[]) = 0 OR (
         SELECT CASE WHEN $6::boolean THEN count(*) = cardinality($5::uuid[]) ELSE count(*) > 0 END
         FROM issue_assignees ia WHERE ia.issue_id = i.id AND ia.user_id = ANY ($5::uuid[])))
-  AND ($7::text = '' OR i.title ILIKE $7::text OR i.description ILIKE $7::text)
-  AND ($8::bigint = 0 OR i.number < $8::bigint)
+  AND (cardinality($7::uuid[]) = 0 OR (
+        SELECT CASE WHEN $8::boolean THEN count(*) = cardinality($7::uuid[]) ELSE count(*) > 0 END
+        FROM issue_storage_items isi WHERE isi.issue_id = i.id AND isi.storage_item_id = ANY ($7::uuid[])))
+  AND ($9::text = '' OR i.title ILIKE $9::text OR i.description ILIKE $9::text)
+  AND ($10::bigint = 0 OR i.number < $10::bigint)
 ORDER BY i.number DESC
-LIMIT $9
+LIMIT $11
 `
 
 type ListIssuesParams struct {
-	ProjectID    uuid.UUID
-	Statuses     []IssueStatus
-	TagIds       []uuid.UUID
-	TagsAll      bool
-	AssigneeIds  []uuid.UUID
-	AssigneesAll bool
-	Pattern      string
-	BeforeNumber int64
-	RowLimit     int32
+	ProjectID       uuid.UUID
+	Statuses        []IssueStatus
+	TagIds          []uuid.UUID
+	TagsAll         bool
+	AssigneeIds     []uuid.UUID
+	AssigneesAll    bool
+	StorageItemIds  []uuid.UUID
+	StorageItemsAll bool
+	Pattern         string
+	BeforeNumber    int64
+	RowLimit        int32
 }
 
 // The filter predicate below is shared verbatim by ListIssues and
 // CountIssues; keep them in sync. Match modes: an issue matches "all" when
-// it carries every requested tag/assignee, "any" when it carries one.
+// it carries every requested tag/assignee/storage item, "any" when it carries one.
 // @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search.
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue, error) {
 	rows, err := q.db.Query(ctx, listIssues,
@@ -279,8 +350,65 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]Issue
 		arg.TagsAll,
 		arg.AssigneeIds,
 		arg.AssigneesAll,
+		arg.StorageItemIds,
+		arg.StorageItemsAll,
 		arg.Pattern,
 		arg.BeforeNumber,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Issue{}
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Number,
+			&i.Title,
+			&i.Description,
+			&i.Status,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIssuesByStorageItem = `-- name: ListIssuesByStorageItem :many
+SELECT i.id, i.project_id, i.number, i.title, i.description, i.status, i.created_by, i.created_at, i.updated_at
+FROM issues i
+JOIN issue_storage_items isi ON isi.issue_id = i.id
+WHERE isi.storage_item_id = $1
+  AND (NOT $2::boolean OR (i.created_at, i.id) < ($3::timestamptz, $4::uuid))
+ORDER BY i.created_at DESC, i.id DESC
+LIMIT $5
+`
+
+type ListIssuesByStorageItemParams struct {
+	StorageItemID uuid.UUID
+	HasCursor     bool
+	CursorAt      time.Time
+	CursorID      uuid.UUID
+	RowLimit      int32
+}
+
+// Issues of every project and status linking @storage_item_id, newest first.
+func (q *Queries) ListIssuesByStorageItem(ctx context.Context, arg ListIssuesByStorageItemParams) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, listIssuesByStorageItem,
+		arg.StorageItemID,
+		arg.HasCursor,
+		arg.CursorAt,
+		arg.CursorID,
 		arg.RowLimit,
 	)
 	if err != nil {

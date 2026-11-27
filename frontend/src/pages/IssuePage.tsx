@@ -26,6 +26,7 @@ import { Loading } from '../components/Loading';
 import { Markdown } from '../components/Markdown';
 import { MarkdownEditor } from '../components/MarkdownEditor';
 import { TagInput } from '../components/TagInput';
+import { StorageItemKindIcon, StorageItemPicker } from '../components/StorageItemPicker';
 import { UserPicker } from '../components/UserPicker';
 import { fieldErrorText } from '../lib/errors';
 import { tagChipSx } from '../lib/tagColor';
@@ -123,6 +124,13 @@ function IssueDetail({ issue }: { issue: Issue }) {
             disabled={archived}
             error={fieldError('assignees')}
             onSave={(ids) => update.mutate({ assignees: ids })}
+          />
+
+          <StorageItemSection
+            issue={issue}
+            disabled={archived}
+            error={fieldError('storageItems')}
+            onSave={(ids) => update.mutate({ storageItems: ids })}
           />
 
           <Typography variant="body2" color="text.secondary">
@@ -343,6 +351,54 @@ function AssigneeSection({ issue, disabled, error, onSave }: SectionProps) {
             <Typography key={a.id} title={a.email}>
               {a.displayName}
             </Typography>
+          ))}
+        </Stack>
+      )}
+    </EditableSection>
+  );
+}
+
+/** The storage items the issue concerns, linking to their storage, edited in a popover. */
+function StorageItemSection({ issue, disabled, error, onSave }: SectionProps) {
+  const { t } = useTranslation();
+
+  return (
+    <EditableSection
+      title={t('issues.storageItems')}
+      editLabel={t('issues.editStorageItems')}
+      saved={issue.storageItems.map((i) => i.id)}
+      disabled={disabled}
+      error={error}
+      onSave={onSave}
+      editor={(value, onChange) => (
+        <StorageItemPicker
+          id="issue-storage-items"
+          size="small"
+          label={t('issues.storageItems')}
+          value={value}
+          onChange={onChange}
+          known={issue.storageItems}
+          autoFocus
+        />
+      )}
+    >
+      {issue.storageItems.length === 0 ? (
+        <Typography color="text.secondary">—</Typography>
+      ) : (
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          {issue.storageItems.map((item) => (
+            <Chip
+              key={item.id}
+              size="small"
+              variant="outlined"
+              icon={<StorageItemKindIcon item={item} />}
+              label={item.name}
+              title={item.deleted ? t('storageItems.deleted') : undefined}
+              sx={item.deleted ? { textDecoration: 'line-through', opacity: 0.7 } : undefined}
+              component={Link}
+              to={`/storages?storage=${encodeURIComponent(item.storageId)}`}
+              clickable
+            />
           ))}
         </Stack>
       )}

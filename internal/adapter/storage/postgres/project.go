@@ -147,6 +147,25 @@ func (r *ProjectRepository) AllocateIssueNumber(ctx context.Context, project dom
 	return n, nil
 }
 
+// GetMany returns the known projects among ids.
+func (r *ProjectRepository) GetMany(ctx context.Context, ids []domain.ProjectID) ([]domain.Project, error) {
+	if len(ids) == 0 {
+		return []domain.Project{}, nil
+	}
+
+	rows, err := r.db.queries(ctx).GetProjectsByIDs(ctx, uuids(ids))
+	if err != nil {
+		return nil, fmt.Errorf("select projects: %w", err)
+	}
+
+	projects := make([]domain.Project, 0, len(rows))
+	for _, row := range rows {
+		projects = append(projects, toProject(sqlc.GetProjectByKeyRow(row)))
+	}
+
+	return projects, nil
+}
+
 func toProject(row sqlc.GetProjectByKeyRow) domain.Project {
 	return domain.Project{
 		ID:          domain.ProjectID(row.ID),

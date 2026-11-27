@@ -193,3 +193,53 @@ func cloneStorageItem(item domain.StorageItem) domain.StorageItem {
 
 	return item
 }
+
+// Compile-time check that StorageItemRepository satisfies the driven port.
+var _ port.StorageItemRepository = (*StorageItemRepository)(nil)
+
+// StorageItemRepository implements the kind-agnostic
+// port.StorageItemRepository on a Store.
+type StorageItemRepository struct{ s *Store }
+
+// NewStorageItemRepository returns a StorageItemRepository backed by s.
+func NewStorageItemRepository(s *Store) *StorageItemRepository { return &StorageItemRepository{s: s} }
+
+// GetMany returns the known items of any kind among ids, deleted ones included.
+func (r *StorageItemRepository) GetMany(_ context.Context, ids []domain.StorageItemID) ([]domain.StorageItem, error) {
+	r.s.mu.RLock()
+	defer r.s.mu.RUnlock()
+
+	items := make([]domain.StorageItem, 0, len(ids))
+
+	for _, id := range ids {
+		if item, ok := r.s.data.storageItems[id]; ok {
+			items = append(items, cloneStorageItem(item))
+		}
+	}
+
+	return items, nil
+}
+
+// Search returns one page of the items of any kind whose name or
+// description contains filter.Query, ignoring case, ordered by
+// lower(name), then ID.
+func (r *StorageItemRepository) Search(
+	_ context.Context, filter port.StorageItemFilter, page domain.PageRequest,
+) (domain.Page[domain.StorageItem], error) {
+	query := strings.ToLower(filter.Query)
+
+	r.s.mu.RLock()
+
+	var items []domain.StorageItem
+
+	for _, item := range r.s.data.storageItems {
+		if item.IsDeleted() == filter.Deleted &&
+			(strings.Contains(strings.ToLower(item.Name), query) || strings.Contains(strings.ToLower(item.Description), query)) {
+			items = append(items, cloneStorageItem(item))
+		}
+	}
+
+	r.s.mu.RUnlock()
+
+	return pageItems(items, func(i domain.StorageItem) domain.StorageItem { return i }, page)
+}

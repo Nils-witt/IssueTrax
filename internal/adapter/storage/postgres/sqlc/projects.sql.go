@@ -94,6 +94,48 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (GetProjectBy
 	return i, err
 }
 
+const getProjectsByIDs = `-- name: GetProjectsByIDs :many
+SELECT id, key, name, description, created_at, updated_at
+FROM projects
+WHERE id = ANY ($1::uuid[])
+`
+
+type GetProjectsByIDsRow struct {
+	ID          uuid.UUID
+	Key         string
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) GetProjectsByIDs(ctx context.Context, ids []uuid.UUID) ([]GetProjectsByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getProjectsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetProjectsByIDsRow{}
+	for rows.Next() {
+		var i GetProjectsByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT id, key, name, description, created_at, updated_at
 FROM projects

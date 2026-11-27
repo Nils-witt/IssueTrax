@@ -35,7 +35,9 @@ type Config struct {
 	GenericStorageItems port.GenericStorageItemService
 	// NetworkDevices manages the network devices kept in storages.
 	NetworkDevices port.NetworkDeviceService
-	Users          port.UserService
+	// StorageItems finds storage items of any kind, e.g. to link them to issues.
+	StorageItems port.StorageItemLookupService
+	Users        port.UserService
 	// ServiceAccounts manages "bot-<name>" users and their API keys.
 	ServiceAccounts port.ServiceAccountService
 	// Audit reads the audit log (admins only).
@@ -69,6 +71,7 @@ type Handler struct {
 	storages       port.StorageService
 	genericItems   port.GenericStorageItemService
 	networkDevices port.NetworkDeviceService
+	storageItems   port.StorageItemLookupService
 	users          port.UserService
 	accounts       port.ServiceAccountService
 	audit          port.AuditService
@@ -101,6 +104,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		storages:       cfg.Storages,
 		genericItems:   cfg.GenericStorageItems,
 		networkDevices: cfg.NetworkDevices,
+		storageItems:   cfg.StorageItems,
 		users:          cfg.Users,
 		accounts:       cfg.ServiceAccounts,
 		audit:          cfg.Audit,
@@ -187,6 +191,8 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("PATCH /api/network-devices/{id}", h.authed(h.updateNetworkDevice))
 	mux.Handle("DELETE /api/network-devices/{id}", h.authed(h.deleteNetworkDevice))
 	mux.Handle("POST /api/network-devices/{id}/restore", h.authed(h.restoreNetworkDevice))
+	mux.Handle("GET /api/storage-items", h.authed(h.searchStorageItems))
+	mux.Handle("GET /api/storage-items/{id}/issues", h.authed(h.listStorageItemIssues))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
 	mux.HandleFunc("/api/", notFound)
@@ -200,7 +206,7 @@ func (c Config) missingDependency() bool {
 	// Only interface values: a nil pointer in an any is not == nil.
 	services := []any{
 		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.GenericStorageItems,
-		c.NetworkDevices, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
+		c.NetworkDevices, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
 	}
 
 	return c.Logger == nil || slices.Contains(services, nil)

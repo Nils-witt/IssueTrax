@@ -167,6 +167,7 @@ func TestAuth_SecureCookies(t *testing.T) {
 		Storages:            service.NewStorageService(service.Repositories{Tx: store}),
 		GenericStorageItems: service.NewGenericStorageItemService(service.Repositories{Tx: store}),
 		NetworkDevices:      service.NewNetworkDeviceService(service.Repositories{Tx: store}),
+		StorageItems:        service.NewStorageItemLookupService(service.Repositories{Tx: store}),
 		Users:               service.NewUserService(service.Repositories{Tx: store}),
 
 		ServiceAccounts: service.NewBotService(service.Repositories{Tx: store}),

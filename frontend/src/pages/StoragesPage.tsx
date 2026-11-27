@@ -34,8 +34,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
 import InventoryIcon from '@mui/icons-material/Inventory2Outlined';
 import RouterIcon from '@mui/icons-material/RouterOutlined';
+import LinkIcon from '@mui/icons-material/Link';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useSearchParams } from 'react-router';
 import {
   useCreateStorage,
   useCreateStorageItem,
@@ -47,6 +49,7 @@ import {
   useRestoreStorageItem,
   useStorage,
   useStorageChildren,
+  useStorageItemIssues,
   useStorageItems,
   useStorageItemSearch,
   useUpdateNetworkDevice,
@@ -55,7 +58,9 @@ import {
 } from '../api/hooks';
 import type { GenericStorageItem, NetworkDevice, Page, Storage } from '../api/types';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
+import { StatusBadge } from '../components/StatusBadge';
 import { fieldErrorText } from '../lib/errors';
 import { NetworkDeviceDialog } from './NetworkDeviceDialog';
 
@@ -73,7 +78,8 @@ type DialogState =
   | { kind: 'editItem'; item: GenericStorageItem }
   | { kind: 'createDevice'; storage: Storage }
   | { kind: 'editDevice'; device: NetworkDevice }
-  | { kind: 'moveItem'; item: AnyItem };
+  | { kind: 'moveItem'; item: AnyItem }
+  | { kind: 'linkedIssues'; item: AnyItem };
 
 /** What the item panel shows: a storage's items or search results. */
 interface Selection {
@@ -104,7 +110,9 @@ export function StoragesPage() {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const close = () => setDialog(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // ?storage= preselects a storage, e.g. when following a link from an issue.
+  const [params] = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(() => params.get('storage'));
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
 
@@ -128,6 +136,7 @@ export function StoragesPage() {
     onCreateDevice: (storage: Storage) => setDialog({ kind: 'createDevice', storage }),
     onEdit: (item: AnyItem) => setDialog(isDevice(item) ? { kind: 'editDevice', device: item } : { kind: 'editItem', item }),
     onMove: (item: AnyItem) => setDialog({ kind: 'moveItem', item }),
+    onShowIssues: (item: AnyItem) => setDialog({ kind: 'linkedIssues', item }),
   };
 
   const actions = (s: Storage) => (
@@ -208,6 +217,7 @@ export function StoragesPage() {
       {dialog?.kind === 'createDevice' && <NetworkDeviceDialog storage={dialog.storage} onClose={close} />}
       {dialog?.kind === 'editDevice' && <NetworkDeviceDialog device={dialog.device} onClose={close} />}
       {dialog?.kind === 'moveItem' && <MoveItemDialog item={dialog.item} onClose={close} />}
+      {dialog?.kind === 'linkedIssues' && <LinkedIssuesDialog item={dialog.item} onClose={close} />}
     </Stack>
   );
 }
@@ -426,12 +436,13 @@ interface ItemDialogs {
   onCreateDevice: (storage: Storage) => void;
   onEdit: (item: AnyItem) => void;
   onMove: (item: AnyItem) => void;
+  onShowIssues: (item: AnyItem) => void;
 }
 
-type ItemActions = Pick<ItemDialogs, 'onEdit' | 'onMove'>;
+type ItemActions = Pick<ItemDialogs, 'onEdit' | 'onMove' | 'onShowIssues'>;
 
 /** The items kept in one storage, optionally with its subtree or only the deleted ones. */
-function ItemsPanel({ storageId, onCreate, onCreateDevice, onEdit, onMove }: { storageId: string } & ItemDialogs) {
+function ItemsPanel({ storageId, onCreate, onCreateDevice, ...actions }: { storageId: string } & ItemDialogs) {
   const { t } = useTranslation();
   const storage = useStorage(storageId);
   const [recursive, setRecursive] = useState(false);
@@ -473,16 +484,14 @@ function ItemsPanel({ storageId, onCreate, onCreateDevice, onEdit, onMove }: { s
           query={items}
           showStorage={recursive}
           emptyText={deleted ? t('storageItems.emptyDeleted') : t('storageItems.empty')}
-          onEdit={onEdit}
-          onMove={onMove}
+          {...actions}
         />
         <ItemList
           title={t('networkDevices.title')}
           query={devices}
           showStorage={recursive}
           emptyText={deleted ? t('networkDevices.emptyDeleted') : t('networkDevices.empty')}
-          onEdit={onEdit}
-          onMove={onMove}
+          {...actions}
         />
       </Stack>
     </Paper>
@@ -490,7 +499,7 @@ function ItemsPanel({ storageId, onCreate, onCreateDevice, onEdit, onMove }: { s
 }
 
 /** Items across all storages matching q. */
-function SearchPanel({ q, onClear, onEdit, onMove }: { q: string; onClear: () => void } & ItemActions) {
+function SearchPanel({ q, onClear, ...actions }: { q: string; onClear: () => void } & ItemActions) {
   const { t } = useTranslation();
   const [deleted, setDeleted] = useState(false);
   const items = useStorageItemSearch({ q, deleted });
@@ -516,16 +525,14 @@ function SearchPanel({ q, onClear, onEdit, onMove }: { q: string; onClear: () =>
           query={items}
           showStorage
           emptyText={t('storageItems.noMatches')}
-          onEdit={onEdit}
-          onMove={onMove}
+          {...actions}
         />
         <ItemList
           title={t('networkDevices.title')}
           query={devices}
           showStorage
           emptyText={t('networkDevices.noMatches')}
-          onEdit={onEdit}
-          onMove={onMove}
+          {...actions}
         />
       </Stack>
     </Paper>
@@ -550,6 +557,7 @@ function ItemList<T extends AnyItem>({
   emptyText,
   onEdit,
   onMove,
+  onShowIssues,
 }: { title: string; query: ItemQuery<T>; showStorage: boolean; emptyText: string } & ItemActions) {
   const { t } = useTranslation();
   const delItem = useDeleteStorageItem();
@@ -582,18 +590,30 @@ function ItemList<T extends AnyItem>({
             divider
             secondaryAction={
               item.deletedAt ? (
-                <Tooltip title={t('storageItems.restore')}>
-                  <IconButton
-                    size="small"
-                    aria-label={t('storageItems.restoreNamed', { name: item.name })}
-                    loading={busy(restore(item), item)}
-                    onClick={() => restore(item).mutate(item.id)}
-                  >
-                    <RestoreIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                <Stack direction="row" spacing={0.5}>
+                  <Tooltip title={t('storageItems.showLinkedIssues')}>
+                    <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
+                      <LinkIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('storageItems.restore')}>
+                    <IconButton
+                      size="small"
+                      aria-label={t('storageItems.restoreNamed', { name: item.name })}
+                      loading={busy(restore(item), item)}
+                      onClick={() => restore(item).mutate(item.id)}
+                    >
+                      <RestoreIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
               ) : (
                 <Stack direction="row" spacing={0.5}>
+                  <Tooltip title={t('storageItems.showLinkedIssues')}>
+                    <IconButton size="small" aria-label={t('storageItems.showLinkedIssuesNamed', { name: item.name })} onClick={() => onShowIssues(item)}>
+                      <LinkIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title={t('storageItems.edit')}>
                     <IconButton size="small" aria-label={t('storageItems.editNamed', { name: item.name })} onClick={() => onEdit(item)}>
                       <EditIcon fontSize="small" />
@@ -617,7 +637,7 @@ function ItemList<T extends AnyItem>({
                 </Stack>
               )
             }
-            sx={{ pr: item.deletedAt ? 6 : 16 }}
+            sx={{ pr: item.deletedAt ? 10 : 20 }}
           >
             <ListItemText
               primary={
@@ -765,6 +785,49 @@ function MoveItemDialog({ item, onClose }: { item: AnyItem; onClose: () => void 
         <Button variant="contained" disabled={selected === item.storageId} loading={update.isPending} onClick={submit}>
           {t('storageItems.moveHere')}
         </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** The issues of every project linking item, each opening the issue. */
+function LinkedIssuesDialog({ item, onClose }: { item: AnyItem; onClose: () => void }) {
+  const { t } = useTranslation();
+  const issues = useStorageItemIssues(item.id);
+  const list = issues.data?.pages.flatMap((p) => p.items) ?? [];
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{t('storageItems.linkedIssuesTitle', { name: item.name })}</DialogTitle>
+      <DialogContent>
+        {issues.isPending && <Loading />}
+        <ErrorMessage error={issues.error} />
+        {issues.isSuccess && list.length === 0 && <DialogContentText>{t('storageItems.noLinkedIssues')}</DialogContentText>}
+        <List dense disablePadding>
+          {list.map((issue) => (
+            <ListItem key={issue.id} disablePadding divider>
+              <ListItemButton component={Link} to={`/p/${issue.projectKey}/issues/${issue.number}`}>
+                <ListItemText
+                  primary={
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                      <KeyText>{issue.key}</KeyText>
+                      <span>{issue.title}</span>
+                    </Stack>
+                  }
+                />
+                <StatusBadge status={issue.status} />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+        {issues.hasNextPage && (
+          <Button size="small" loading={issues.isFetchingNextPage} onClick={() => void issues.fetchNextPage()}>
+            {t('app.loadMore')}
+          </Button>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{t('app.close')}</Button>
       </DialogActions>
     </Dialog>
   );

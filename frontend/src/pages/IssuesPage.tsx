@@ -24,7 +24,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { useIssues, useTags, useUsers } from '../api/hooks';
-import { issueStatuses, type Issue, type MatchMode } from '../api/types';
+import { issueStatuses, type Issue, type MatchMode, type StorageItemRef } from '../api/types';
 import { useParam } from '../app/params';
 import { ProjectNav } from '../app/ProjectNav';
 import { DateTime } from '../components/DateTime';
@@ -32,6 +32,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { KeyText } from '../components/KeyText';
 import { Loading } from '../components/Loading';
 import { StatusBadge } from '../components/StatusBadge';
+import { StorageItemPicker } from '../components/StorageItemPicker';
 import { TagPicker } from '../components/TagPicker';
 import { UserPicker } from '../components/UserPicker';
 import { tagChipSx } from '../lib/tagColor';
@@ -39,7 +40,7 @@ import { IssueBulkBar } from './IssueBulkBar';
 
 // The page's URL query uses the API's parameter names, so a filtered view
 // is a bookmarkable URL and maps 1:1 onto GET /api/projects/{key}/issues.
-const filterParams = ['status', 'tag', 'tagMode', 'assignee', 'assigneeMode', 'q'] as const;
+const filterParams = ['status', 'tag', 'tagMode', 'assignee', 'assigneeMode', 'storageItem', 'storageItemMode', 'q'] as const;
 
 export function IssuesPage() {
   const { t } = useTranslation();
@@ -64,7 +65,8 @@ export function IssuesPage() {
       <ProjectNav projectKey={key} />
 
       <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-        <FilterBar projectKey={key} />
+        {/* Listed issues name their linked items, so a filtered item has a name to show. */}
+        <FilterBar projectKey={key} knownItems={items.flatMap((i) => i.storageItems)} />
         <Button variant="contained" href={`/p/${key}/issues/new`} startIcon={<AddIcon />} sx={{ flexShrink: 0 }}>
           {t('issues.new')}
         </Button>
@@ -168,7 +170,7 @@ function IssueTable({ issues, selectedIds, onSelectedChange }: IssueTableProps) 
   );
 }
 
-function FilterBar({ projectKey }: { projectKey: string }) {
+function FilterBar({ projectKey, knownItems }: { projectKey: string; knownItems: StorageItemRef[] }) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const tags = useTags(projectKey);
@@ -274,6 +276,23 @@ function FilterBar({ projectKey }: { projectKey: string }) {
             onChange={(m) => update((p) => p.set('assigneeMode', m))}
           />
         </>
+      )}
+
+      <StorageItemPicker
+        id="storage-item-filter"
+        size="small"
+        label={t('filters.storageItems')}
+        value={params.getAll('storageItem')}
+        onChange={(v) => setAll('storageItem', v)}
+        known={knownItems}
+        sx={{ minWidth: '14rem', maxWidth: '24rem' }}
+      />
+      {params.getAll('storageItem').length > 1 && (
+        <MatchToggle
+          label={t('filters.storageItems')}
+          value={params.get('storageItemMode')}
+          onChange={(m) => update((p) => p.set('storageItemMode', m))}
+        />
       )}
 
       {hasFilters && (

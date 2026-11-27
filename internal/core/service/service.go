@@ -28,10 +28,12 @@ type Repositories struct {
 	GenericStorageItems port.GenericStorageItemRepository
 	// NetworkDevices stores the network devices kept in storages.
 	NetworkDevices port.NetworkDeviceRepository
-	Users          port.UserRepository
-	Sessions       port.SessionRepository
-	APIKeys        port.APIKeyRepository
-	Audit          port.AuditRepository
+	// StorageItems reads the shared fields of items of every kind.
+	StorageItems port.StorageItemRepository
+	Users        port.UserRepository
+	Sessions     port.SessionRepository
+	APIKeys      port.APIKeyRepository
+	Audit        port.AuditRepository
 }
 
 // Option customizes a service.

@@ -20,7 +20,7 @@ export function NewIssuePage() {
       </Typography>
       <IssueForm
         projectKey={key}
-        initial={{ title: '', description: '', status: 'open', tags: [], assignees: [] }}
+        initial={{ title: '', description: '', status: 'open', tags: [], assignees: [], storageItems: [] }}
         submitLabel={t('app.create')}
         pending={create.isPending}
         error={create.error}

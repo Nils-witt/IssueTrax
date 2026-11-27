@@ -12,6 +12,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const countSearchAllStorageItems = `-- name: CountSearchAllStorageItems :one
+SELECT count(*) FROM storage_items
+WHERE (deleted_at IS NOT NULL) = $1::boolean
+  AND ($2::text = '' OR name ILIKE $2::text OR description ILIKE $2::text)
+`
+
+type CountSearchAllStorageItemsParams struct {
+	Deleted bool
+	Pattern string
+}
+
+func (q *Queries) CountSearchAllStorageItems(ctx context.Context, arg CountSearchAllStorageItemsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchAllStorageItems, arg.Deleted, arg.Pattern)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchStorageItems = `-- name: CountSearchStorageItems :one
 SELECT count(*) FROM storage_items
 WHERE kind = $1
@@ -120,6 +138,42 @@ func (q *Queries) GetStorageItem(ctx context.Context, arg GetStorageItemParams) 
 	return i, err
 }
 
+const getStorageItemsByIDs = `-- name: GetStorageItemsByIDs :many
+SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
+FROM storage_items
+WHERE id = ANY ($1::uuid[])
+`
+
+// Items of any kind, deleted ones included.
+func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]StorageItem, error) {
+	rows, err := q.db.Query(ctx, getStorageItemsByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StorageItem{}
+	for rows.Next() {
+		var i StorageItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.StorageID,
+			&i.Kind,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStorageItemsInStorage = `-- name: ListStorageItemsInStorage :many
 WITH RECURSIVE subtree (id) AS (
     SELECT $7::uuid
@@ -159,6 +213,62 @@ func (q *Queries) ListStorageItemsInStorage(ctx context.Context, arg ListStorage
 		arg.RowLimit,
 		arg.StorageID,
 		arg.Recursive,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StorageItem{}
+	for rows.Next() {
+		var i StorageItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.StorageID,
+			&i.Kind,
+			&i.Name,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAllStorageItems = `-- name: SearchAllStorageItems :many
+SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
+FROM storage_items
+WHERE (deleted_at IS NOT NULL) = $1::boolean
+  AND ($2::text = '' OR name ILIKE $2::text OR description ILIKE $2::text)
+  AND (NOT $3::boolean OR (lower(name), id) > ($4::text, $5::uuid))
+ORDER BY lower(name), id
+LIMIT $6
+`
+
+type SearchAllStorageItemsParams struct {
+	Deleted    bool
+	Pattern    string
+	HasCursor  bool
+	CursorName string
+	CursorID   uuid.UUID
+	RowLimit   int32
+}
+
+// Like SearchStorageItems, across all kinds.
+func (q *Queries) SearchAllStorageItems(ctx context.Context, arg SearchAllStorageItemsParams) ([]StorageItem, error) {
+	rows, err := q.db.Query(ctx, searchAllStorageItems,
+		arg.Deleted,
+		arg.Pattern,
+		arg.HasCursor,
+		arg.CursorName,
+		arg.CursorID,
+		arg.RowLimit,
 	)
 	if err != nil {
 		return nil, err

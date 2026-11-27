@@ -8,6 +8,7 @@ import { useTags, useUsers } from '../api/hooks';
 import { issueStatuses, type CreateIssueInput, type IssueStatus } from '../api/types';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { MarkdownEditor } from '../components/MarkdownEditor';
+import { StorageItemPicker } from '../components/StorageItemPicker';
 import { TagInput } from '../components/TagInput';
 import { UserPicker } from '../components/UserPicker';
 import { fieldErrorText } from '../lib/errors';
@@ -18,6 +19,7 @@ export interface IssueFormValues {
   status: IssueStatus;
   tags: string[];
   assignees: string[];
+  storageItems: string[];
 }
 
 interface IssueFormProps {
@@ -103,6 +105,14 @@ export function IssueForm({ projectKey, initial, submitLabel, pending, error, on
           error={fieldError('assignees')}
         />
       )}
+
+      <StorageItemPicker
+        id="storage-items"
+        label={`${t('issues.storageItems')} (${t('app.optional')})`}
+        value={values.storageItems}
+        onChange={(v) => set('storageItems', v)}
+        error={fieldError('storageItems')}
+      />
 
       <ErrorMessage error={error} />
 

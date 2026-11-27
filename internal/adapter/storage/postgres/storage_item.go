@@ -223,6 +223,11 @@ func decodeStorageItemCursor(page domain.PageRequest) (storageItemCursor, error)
 }
 
 func toGenericStorageItem(row sqlc.StorageItem) domain.GenericStorageItem {
+	return domain.GenericStorageItem{StorageItem: toStorageItem(row)}
+}
+
+// toStorageItem converts the shared fields of an item of any kind.
+func toStorageItem(row sqlc.StorageItem) domain.StorageItem {
 	item := domain.StorageItem{
 		ID:          domain.StorageItemID(row.ID),
 		StorageID:   domain.StorageID(row.StorageID),
@@ -238,5 +243,89 @@ func toGenericStorageItem(row sqlc.StorageItem) domain.GenericStorageItem {
 		item.DeletedAt = &at
 	}
 
-	return domain.GenericStorageItem{StorageItem: item}
+	return item
+}
+
+// Compile-time check that StorageItemRepository satisfies the driven port.
+var _ port.StorageItemRepository = (*StorageItemRepository)(nil)
+
+// StorageItemRepository implements the kind-agnostic
+// port.StorageItemRepository on the shared storage_items table.
+type StorageItemRepository struct{ db *DB }
+
+// NewStorageItemRepository returns a StorageItemRepository on db.
+func NewStorageItemRepository(db *DB) *StorageItemRepository { return &StorageItemRepository{db: db} }
+
+// GetMany returns the known items of any kind among ids, deleted ones included.
+func (r *StorageItemRepository) GetMany(ctx context.Context, ids []domain.StorageItemID) ([]domain.StorageItem, error) {
+	if len(ids) == 0 {
+		return []domain.StorageItem{}, nil
+	}
+
+	rows, err := r.db.queries(ctx).GetStorageItemsByIDs(ctx, uuids(ids))
+	if err != nil {
+		return nil, fmt.Errorf("select storage items: %w", err)
+	}
+
+	items := make([]domain.StorageItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, toStorageItem(row))
+	}
+
+	return items, nil
+}
+
+// Search returns one page of the items of any kind whose name or
+// description contains filter.Query, ignoring case, ordered by
+// lower(name), then ID.
+func (r *StorageItemRepository) Search(
+	ctx context.Context, filter port.StorageItemFilter, page domain.PageRequest,
+) (domain.Page[domain.StorageItem], error) {
+	cursor, err := decodeStorageItemCursor(page)
+	if err != nil {
+		return domain.Page[domain.StorageItem]{}, err
+	}
+
+	params := sqlc.SearchAllStorageItemsParams{
+		Deleted: filter.Deleted, Pattern: containsPattern(filter.Query),
+		HasCursor: cursor.has, CursorName: cursor.name, CursorID: cursor.id, RowLimit: pageLimit(page.Limit),
+	}
+
+	var result domain.Page[domain.StorageItem]
+
+	err = r.db.readTx(ctx, func(ctx context.Context) error {
+		q := r.db.queries(ctx)
+
+		rows, err := q.SearchAllStorageItems(ctx, params)
+		if err != nil {
+			return fmt.Errorf("search storage items: %w", err)
+		}
+
+		result.Total, err = q.CountSearchAllStorageItems(ctx, sqlc.CountSearchAllStorageItemsParams{
+			Deleted: params.Deleted, Pattern: params.Pattern,
+		})
+		if err != nil {
+			return fmt.Errorf("count storage items: %w", err)
+		}
+
+		more := len(rows) > page.Limit
+		rows = rows[:min(len(rows), page.Limit)]
+
+		result.Items = make([]domain.StorageItem, 0, len(rows))
+		for _, row := range rows {
+			result.Items = append(result.Items, toStorageItem(row))
+		}
+
+		if more {
+			last := result.Items[len(result.Items)-1]
+			result.NextCursor = domain.EncodeCursor(domain.StorageCursor{Name: strings.ToLower(last.Name), ID: last.ID.String()})
+		}
+
+		return nil
+	})
+	if err != nil {
+		return domain.Page[domain.StorageItem]{}, err
+	}
+
+	return result, nil
 }
