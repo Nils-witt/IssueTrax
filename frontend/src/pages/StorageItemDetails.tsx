@@ -406,6 +406,19 @@ function moduleFields(t: T, m: Module): ReactNode {
     );
   }
 
+  if (m.sipClient) {
+    const c = m.sipClient;
+
+    return (
+      <>
+        <Field label={t('modules.sipServer')}>{c.server && <code>{c.port ? `${c.server}:${c.port}` : c.server}</code>}</Field>
+        <Field label={t('modules.sipTransport')}>{c.transport.toUpperCase()}</Field>
+        <Field label={t('modules.sipUsername')}>{c.username && <code>{c.username}</code>}</Field>
+        <Field label={t('modules.sipExtension')}>{c.extension}</Field>
+      </>
+    );
+  }
+
   if (m.networkInterface) {
     const n = m.networkInterface;
 

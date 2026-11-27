@@ -58,6 +58,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                   WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
+                  WHERE m.item_id = i.id AND (sip.server ILIKE $7::text OR sip.username ILIKE $7::text
+                                              OR sip.extension ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
 `
@@ -377,6 +380,37 @@ func (q *Queries) ListSimCardModules(ctx context.Context, moduleIds []uuid.UUID)
 	return items, nil
 }
 
+const listSipClientModules = `-- name: ListSipClientModules :many
+SELECT module_id, server, port, transport, username, extension FROM module_sip_clients WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListSipClientModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleSipClient, error) {
+	rows, err := q.db.Query(ctx, listSipClientModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleSipClient{}
+	for rows.Next() {
+		var i ModuleSipClient
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Server,
+			&i.Port,
+			&i.Transport,
+			&i.Username,
+			&i.Extension,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStorageItemModules = `-- name: ListStorageItemModules :many
 SELECT id, item_id, module, is_primary FROM storage_item_modules WHERE item_id = ANY ($1::uuid[])
 `
@@ -440,6 +474,9 @@ WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
                   WHERE m.item_id = i.id AND (w.imei ILIKE $7::text OR w.apn ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE $7::text OR os.version ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
+                  WHERE m.item_id = i.id AND (sip.server ILIKE $7::text OR sip.username ILIKE $7::text
+                                              OR sip.extension ILIKE $7::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
   AND (NOT $9::boolean OR (lower(i.name), i.id) > ($10::text, $11::uuid))
@@ -776,6 +813,35 @@ func (q *Queries) UpsertSimCardModule(ctx context.Context, arg UpsertSimCardModu
 		arg.PhoneNumber,
 		arg.Iccid,
 		arg.Imsi,
+	)
+	return err
+}
+
+const upsertSipClientModule = `-- name: UpsertSipClientModule :exec
+INSERT INTO module_sip_clients (module_id, server, port, transport, username, extension)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (module_id) DO UPDATE
+SET server = EXCLUDED.server, port = EXCLUDED.port, transport = EXCLUDED.transport,
+    username = EXCLUDED.username, extension = EXCLUDED.extension
+`
+
+type UpsertSipClientModuleParams struct {
+	ModuleID  uuid.UUID
+	Server    string
+	Port      int32
+	Transport string
+	Username  string
+	Extension string
+}
+
+func (q *Queries) UpsertSipClientModule(ctx context.Context, arg UpsertSipClientModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertSipClientModule,
+		arg.ModuleID,
+		arg.Server,
+		arg.Port,
+		arg.Transport,
+		arg.Username,
+		arg.Extension,
 	)
 	return err
 }

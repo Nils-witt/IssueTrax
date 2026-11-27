@@ -153,6 +153,13 @@ func storePayload(ctx context.Context, q *sqlc.Queries, m domain.Module) error {
 		return q.UpsertOperatingSystemModule(ctx, sqlc.UpsertOperatingSystemModuleParams{
 			ModuleID: id, Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version,
 		})
+	case m.SIPClient != nil:
+		c := m.SIPClient
+
+		return q.UpsertSipClientModule(ctx, sqlc.UpsertSipClientModuleParams{
+			ModuleID: id, Server: c.Server, Port: int32(c.Port), Transport: string(c.Transport), //nolint:gosec // domain bounds Port to 0..65535
+			Username: c.Username, Extension: c.Extension,
+		})
 	case m.NetworkInterface != nil:
 		return storeInterface(ctx, q, id, *m.NetworkInterface)
 	}
@@ -465,6 +472,16 @@ func loadPayloads(ctx context.Context, q *sqlc.Queries, ids []uuid.UUID) (map[uu
 	systems, err := q.ListOperatingSystemModules(ctx, ids)
 	if err := collectPayloads(out, "operating system", systems, err, func(o sqlc.ModuleOperatingSystem) (uuid.UUID, domain.Module) {
 		return o.ModuleID, domain.Module{OperatingSystem: &domain.OperatingSystem{Name: o.Name, Version: o.Version}}
+	}); err != nil {
+		return nil, err
+	}
+
+	sips, err := q.ListSipClientModules(ctx, ids)
+	if err := collectPayloads(out, "sip client", sips, err, func(c sqlc.ModuleSipClient) (uuid.UUID, domain.Module) {
+		return c.ModuleID, domain.Module{SIPClient: &domain.SIPClient{
+			Server: c.Server, Port: int(c.Port), Transport: domain.SIPTransport(c.Transport), Username: c.Username,
+			Extension: c.Extension,
+		}}
 	}); err != nil {
 		return nil, err
 	}

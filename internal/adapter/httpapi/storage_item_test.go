@@ -19,6 +19,7 @@ type moduleBodyJSON struct {
 	Purchase        *purchaseJSON   `json:"purchase"`
 	SimCard         *simCardJSON    `json:"simCard"`
 	WWAN            *wwanJSON       `json:"wwan"`
+	SIPClient       *sipClientJSON  `json:"sipClient"`
 	OperatingSystem *struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
@@ -45,6 +46,14 @@ type wwanJSON struct {
 		AssetTag string `json:"assetTag"`
 		Name     string `json:"name"`
 	} `json:"simCardItem"`
+}
+
+type sipClientJSON struct {
+	Server    string `json:"server"`
+	Port      int    `json:"port"`
+	Transport string `json:"transport"`
+	Username  string `json:"username"`
+	Extension string `json:"extension"`
 }
 
 type purchaseJSON struct {
@@ -103,11 +112,12 @@ func TestStorageItems_CreateGetUpdate(t *testing.T) {
 		`{"kind":"sim_card","simCard":{"provider":"Telekom","phoneNumber":"+49 171 1234567","iccid":"8949 0200 0012 3456 7890","imsi":"262 01 1234567890"}},`+
 		`{"kind":"wwan","wwan":{"imei":"49-015420-323751-8","apn":"internet.telekom","technology":"5g"}},`+
 		`{"kind":"operating_system","operatingSystem":{"name":" Debian ","version":"12"}},`+
+		`{"kind":"sip_client","sipClient":{"server":" PBX.example.org ","port":5061,"transport":"tls","username":"ada","extension":"10 42"}},`+
 		`{"kind":"hardware","hardware":{"serialNumber":"S24"}}]}`)
 
 	wantCreatedItem(t, item, me)
 
-	eth := item.Modules[5]
+	eth := item.Modules[6]
 
 	r := env.do(t, c, http.MethodPatch, "/api/storage-items/"+item.ID, `{"usable":false,"personResponsibleId":null,`+
 		`"decommissionedAt":"2026-05-01T00:00:00Z","decommissioningReason":"broken","modules":[`+
@@ -138,20 +148,20 @@ func wantCreatedItem(t *testing.T, item storageItemJSON, me string) {
 	t.Helper()
 
 	if item.AssetTag != "NET-00001" || item.Type.Name != "Switch" || item.PersonResponsible == nil ||
-		item.PersonResponsible.ID != me || len(item.Modules) != 6 || item.Modules[0].Kind != "hardware" {
+		item.PersonResponsible.ID != me || len(item.Modules) != 7 || item.Modules[0].Kind != "hardware" {
 		t.Fatalf("created = %+v", item)
 	}
 
 	if p := item.Modules[1].Purchase; p == nil || *p.Price != "12.50" || p.Currency != "EUR" ||
-		item.Modules[5].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
+		item.Modules[6].NetworkInterface.MAC != "aa:bb:cc:00:11:22" {
 		t.Fatalf("created modules = %+v", item.Modules)
 	}
 
 	wantCreatedPayloads(t, item)
 }
 
-// wantCreatedPayloads checks the SIM card, WWAN and operating system payloads of
-// the item created in TestStorageItems_CreateGetUpdate.
+// wantCreatedPayloads checks the SIM card, WWAN, operating system and SIP
+// client payloads of the item created in TestStorageItems_CreateGetUpdate.
 func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 	t.Helper()
 
@@ -167,6 +177,12 @@ func wantCreatedPayloads(t *testing.T, item storageItemJSON) {
 
 	if sys := item.Modules[4].OperatingSystem; sys == nil || sys.Name != "Debian" || sys.Version != "12" {
 		t.Fatalf("created operating system = %+v", item.Modules[4])
+	}
+
+	if sip := item.Modules[5].SIPClient; sip == nil || *sip != (sipClientJSON{
+		Server: "PBX.example.org", Port: 5061, Transport: "tls", Username: "ada", Extension: "1042",
+	}) {
+		t.Fatalf("created sip client = %+v", item.Modules[5])
 	}
 }
 

@@ -263,7 +263,7 @@ export interface NetworkInterfaceInput {
 }
 
 /** Module kinds in display order; all but network interfaces occur at most once per item. */
-export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'wwan', 'operating_system', 'network_interface'] as const;
+export const moduleKinds = ['hardware', 'network_host', 'purchase', 'sim_card', 'wwan', 'operating_system', 'sip_client', 'network_interface'] as const;
 export type ModuleKind = (typeof moduleKinds)[number];
 
 /** Only network interfaces may occur several times (and be primary). */
@@ -411,6 +411,19 @@ export interface OperatingSystem {
   version: string;
 }
 
+/** Transport protocols a SIP client registers with; empty means unknown or the client default. */
+export const sipTransports = ['udp', 'tcp', 'tls'] as const;
+export type SIPTransport = (typeof sipTransports)[number];
+
+/** A SIP (VoIP) account; every field may be empty, port 0 means the transport's default. The extension comes back without separators. */
+export interface SIPClient {
+  server: string;
+  port: number;
+  transport: SIPTransport | '';
+  username: string;
+  extension: string;
+}
+
 /** One module instance; exactly the payload matching kind is set. */
 export interface Module {
   id: string;
@@ -422,6 +435,7 @@ export interface Module {
   simCard?: SimCard;
   wwan?: WWAN;
   operatingSystem?: OperatingSystem;
+  sipClient?: SIPClient;
   networkInterface?: NetworkInterface;
 }
 
@@ -436,6 +450,7 @@ export interface ModuleInput {
   simCard?: SimCard;
   wwan?: Omit<WWAN, 'simCardItem'>;
   operatingSystem?: OperatingSystem;
+  sipClient?: SIPClient;
   networkInterface?: NetworkInterfaceInput;
 }
 

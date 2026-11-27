@@ -809,7 +809,7 @@ function ItemList({
   );
 }
 
-/** One line about an item (responsible person, model, host, SIM phone number, mobile technology, operating system, primary MAC, interface count), then its description. */
+/** One line about an item (responsible person, model, host, SIM phone number, mobile technology, operating system, SIP extension, primary MAC, interface count), then its description. */
 function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageItem): string {
   const parts: string[] = [];
   const ifaces = item.modules.filter((m) => m.networkInterface);
@@ -822,6 +822,7 @@ function itemSummary(t: ReturnType<typeof useTranslation>['t'], item: StorageIte
     if (m.simCard) parts.push(m.simCard.phoneNumber);
     if (m.wwan?.technology) parts.push(m.wwan.technology.toUpperCase());
     if (m.operatingSystem) parts.push([m.operatingSystem.name, m.operatingSystem.version].filter(Boolean).join(' '));
+    if (m.sipClient?.extension) parts.push(t('modules.sipExtensionShort', { extension: m.sipClient.extension }));
   }
 
   const primary = ifaces.find((m) => m.primary) ?? ifaces[0];

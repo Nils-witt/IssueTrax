@@ -224,6 +224,15 @@ type ModuleSimCard struct {
 	Imsi        string
 }
 
+type ModuleSipClient struct {
+	ModuleID  uuid.UUID
+	Server    string
+	Port      int32
+	Transport string
+	Username  string
+	Extension string
+}
+
 type ModuleWwan struct {
 	ModuleID      uuid.UUID
 	Imei          string

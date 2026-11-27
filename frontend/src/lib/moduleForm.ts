@@ -14,6 +14,7 @@ import {
   type NetworkInterfaceType,
   type NetworkRole,
   type OperatingSystem,
+  type SIPClient,
   type SimCard,
   type WWAN,
 } from '../api/types';
@@ -54,6 +55,11 @@ export interface PurchaseForm {
   warrantyEnd: string;
 }
 
+/** The SIP client payload as edited: the port stays text until submit, empty for the default. */
+export interface SIPClientForm extends Omit<SIPClient, 'port'> {
+  port: string;
+}
+
 /** One module instance as edited. */
 export interface ModuleForm {
   /** Stable React key. */
@@ -68,6 +74,7 @@ export interface ModuleForm {
   simCard: SimCard;
   wwan: WWAN;
   operatingSystem: OperatingSystem;
+  sipClient: SIPClientForm;
   networkInterface: InterfaceForm;
 }
 
@@ -127,8 +134,15 @@ export function moduleForm(m: Module | ModuleKind): ModuleForm {
     simCard: stored?.simCard ?? { provider: '', phoneNumber: '', iccid: '', imsi: '' },
     wwan: stored?.wwan ?? { imei: '', apn: '', technology: '', simCardItemId: null, simCardItem: null },
     operatingSystem: stored?.operatingSystem ?? { name: '', version: '' },
+    sipClient: sipClientForm(stored?.sipClient),
     networkInterface: interfaceForm(stored?.networkInterface),
   };
+}
+
+function sipClientForm(c: SIPClient | undefined): SIPClientForm {
+  if (!c) return { server: '', port: '', transport: '', username: '', extension: '' };
+
+  return { ...c, port: c.port ? String(c.port) : '' };
 }
 
 /** Text to a number, or null when empty; unparsable text becomes NaN, which the server rejects. */
@@ -199,6 +213,8 @@ export function moduleInput(f: ModuleForm): ModuleInput {
       return { ...base, wwan: { imei: f.wwan.imei, apn: f.wwan.apn, technology: f.wwan.technology, simCardItemId: f.wwan.simCardItemId } };
     case 'operating_system':
       return { ...base, operatingSystem: f.operatingSystem };
+    case 'sip_client':
+      return { ...base, sipClient: { ...f.sipClient, port: f.sipClient.port.trim() ? Number(f.sipClient.port) : 0 } };
     case 'network_interface':
       return { ...base, networkInterface: interfaceInput(f.networkInterface) };
   }

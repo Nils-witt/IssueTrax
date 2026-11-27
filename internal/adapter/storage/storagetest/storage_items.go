@@ -98,6 +98,9 @@ func fullModules(t *testing.T, r service.Repositories) []domain.Module {
 		{ID: moduleID(), Kind: domain.ModuleOperatingSystem, OperatingSystem: &domain.OperatingSystem{
 			Name: "Cisco IOS XE", Version: "17.9.4a",
 		}},
+		{ID: moduleID(), Kind: domain.ModuleSIPClient, SIPClient: &domain.SIPClient{
+			Server: "pbx.example.org", Port: 5061, Transport: domain.SIPTransportTLS, Username: "ada-desk", Extension: "1042",
+		}},
 		{ID: moduleID(), Kind: domain.ModuleNetworkInterface, Primary: true, NetworkInterface: &domain.NetworkInterface{
 			Name: "eth0", MAC: "aa:bb:cc:00:11:22", Type: domain.NetworkInterfaceWired, NativeVLAN: 10, TaggedVLANs: []int{20, 30},
 			IPv4: domain.IPConfig{
@@ -176,16 +179,17 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 	must(t, r.StorageItems.Update(t.Context(), item))
 
 	// Move the primary flag, edit a payload, drop a module and add one.
-	sim, wwan, opsys := item.Modules[3], item.Modules[4], item.Modules[5]
-	eth0, wlan0 := item.Modules[6], item.Modules[7]
+	sim, wwan, opsys, sip := item.Modules[3], item.Modules[4], item.Modules[5], item.Modules[6]
+	eth0, wlan0 := item.Modules[7], item.Modules[8]
 	eth0.Primary, wlan0.Primary = false, true
 	simItem := storageItem(t, r, st, typ, "SIM 1")
 	wwan.WWAN = &domain.WWAN{IMEI: wwan.WWAN.IMEI, APN: "iot.1nce.net", Technology: domain.WWAN4G, SimCardItemID: &simItem.ID}
+	sip.SIPClient = &domain.SIPClient{Server: "10.0.0.5", Transport: domain.SIPTransportUDP, Extension: "+4930123456"}
 	wlan0.NetworkInterface = new(*wlan0.NetworkInterface)
 	wlan0.NetworkInterface.SSID = "Guests"
 	added := domain.Module{ID: moduleID(), Kind: domain.ModuleHardware, Hardware: &domain.Hardware{SerialNumber: "S48"}}
 
-	item.Modules = []domain.Module{added, item.Modules[1], sim, wwan, opsys, eth0, wlan0}
+	item.Modules = []domain.Module{added, item.Modules[1], sim, wwan, opsys, sip, eth0, wlan0}
 	domain.SortModules(item.Modules)
 	must(t, r.StorageItems.Update(t.Context(), item))
 
@@ -196,8 +200,8 @@ func testStorageItemsModuleIDs(t *testing.T, newRepos NewRepositories) {
 		t.Fatalf("after module update = %+v\nwant %+v", got.Modules, item.Modules)
 	}
 
-	if got.Modules[5].ID != wlan0.ID || !got.Modules[5].Primary || got.Modules[5].NetworkInterface.SSID != "Guests" {
-		t.Fatalf("primary interface = %+v", got.Modules[5])
+	if got.Modules[6].ID != wlan0.ID || !got.Modules[6].Primary || got.Modules[6].NetworkInterface.SSID != "Guests" {
+		t.Fatalf("primary interface = %+v", got.Modules[6])
 	}
 }
 
@@ -325,6 +329,8 @@ func testStorageItemsSearch(t *testing.T, newRepos NewRepositories) {
 		"49015420":          {coreSwitch},
 		"ios xe":            {coreSwitch},
 		"17.9.4":            {coreSwitch},
+		"pbx.example":       {coreSwitch},
+		"ada-desk":          {coreSwitch},
 		"aa:bb":             {coreSwitch},
 		"AA-BB-CC-00-11-22": {coreSwitch},
 		"0200.0000.0001":    {coreSwitch},

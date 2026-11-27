@@ -62,6 +62,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                   WHERE m.item_id = i.id AND (w.imei ILIKE @pattern::text OR w.apn ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE @pattern::text OR os.version ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
+                  WHERE m.item_id = i.id AND (sip.server ILIKE @pattern::text OR sip.username ILIKE @pattern::text
+                                              OR sip.extension ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)))
   AND (NOT @has_cursor::boolean OR (lower(i.name), i.id) > (@cursor_name::text, @cursor_id::uuid))
@@ -103,6 +106,9 @@ WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM 
                   WHERE m.item_id = i.id AND (w.imei ILIKE @pattern::text OR w.apn ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_operating_systems os ON os.module_id = m.id
                   WHERE m.item_id = i.id AND (os.name ILIKE @pattern::text OR os.version ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_sip_clients sip ON sip.module_id = m.id
+                  WHERE m.item_id = i.id AND (sip.server ILIKE @pattern::text OR sip.username ILIKE @pattern::text
+                                              OR sip.extension ILIKE @pattern::text))
        OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
                   WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)));
 
@@ -177,6 +183,16 @@ SET name = EXCLUDED.name, version = EXCLUDED.version;
 
 -- name: ListOperatingSystemModules :many
 SELECT * FROM module_operating_systems WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertSipClientModule :exec
+INSERT INTO module_sip_clients (module_id, server, port, transport, username, extension)
+VALUES (@module_id, @server, @port, @transport, @username, @extension)
+ON CONFLICT (module_id) DO UPDATE
+SET server = EXCLUDED.server, port = EXCLUDED.port, transport = EXCLUDED.transport,
+    username = EXCLUDED.username, extension = EXCLUDED.extension;
+
+-- name: ListSipClientModules :many
+SELECT * FROM module_sip_clients WHERE module_id = ANY (@module_ids::uuid[]);
 
 -- name: UpsertNetworkInterfaceModule :exec
 INSERT INTO module_network_interfaces (

@@ -82,6 +82,16 @@ type operatingSystemJSON struct {
 	Version string `json:"version"`
 }
 
+// sipClientJSON is a SIP (VoIP) account; extension comes back without
+// separators and port is 0 for the transport's default.
+type sipClientJSON struct {
+	Server    string `json:"server"`
+	Port      int    `json:"port"`
+	Transport string `json:"transport"`
+	Username  string `json:"username"`
+	Extension string `json:"extension"`
+}
+
 // moduleJSON is one module instance. Exactly the payload matching kind is
 // set. On requests, id names an instance to keep; leave it out for a new one.
 type moduleJSON struct {
@@ -94,6 +104,7 @@ type moduleJSON struct {
 	SimCard          *simCardJSON          `json:"simCard,omitempty"`
 	WWAN             *wwanJSON             `json:"wwan,omitempty"`
 	OperatingSystem  *operatingSystemJSON  `json:"operatingSystem,omitempty"`
+	SIPClient        *sipClientJSON        `json:"sipClient,omitempty"`
 	NetworkInterface *networkInterfaceJSON `json:"networkInterface,omitempty"`
 }
 
@@ -123,6 +134,11 @@ func toModuleJSON(m domain.Module, v port.StorageItemView) moduleJSON {
 		resp.WWAN = toWWANJSON(*m.WWAN, v)
 	case m.OperatingSystem != nil:
 		resp.OperatingSystem = &operatingSystemJSON{Name: m.OperatingSystem.Name, Version: m.OperatingSystem.Version}
+	case m.SIPClient != nil:
+		c := m.SIPClient
+		resp.SIPClient = &sipClientJSON{
+			Server: c.Server, Port: c.Port, Transport: string(c.Transport), Username: c.Username, Extension: c.Extension,
+		}
 	case m.NetworkInterface != nil:
 		resp.NetworkInterface = new(toNetworkInterfaceJSON(*m.NetworkInterface))
 	}
@@ -222,21 +238,6 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 			p.Hardware = &hw
 		}
 
-		if h := m.NetworkHost; h != nil {
-			p.NetworkHost = &domain.NetworkHostParams{Role: domain.NetworkRole(h.Role), Hostname: h.Hostname}
-		}
-
-		if pu := m.Purchase; pu != nil {
-			p.Purchase = &domain.PurchaseParams{
-				Supplier: pu.Supplier, InvoiceNumber: pu.InvoiceNumber, Price: deref(pu.Price), Currency: pu.Currency,
-				WarrantyEnd: pu.WarrantyEnd,
-			}
-		}
-
-		if c := m.SimCard; c != nil {
-			p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID, IMSI: c.IMSI}
-		}
-
 		if w := m.WWAN; w != nil {
 			wwan, err := w.params("modules[" + strconv.Itoa(i) + "].wwan")
 			if err != nil {
@@ -246,18 +247,46 @@ func moduleParams(modules []moduleJSON) ([]domain.ModuleParams, error) {
 			p.WWAN = &wwan
 		}
 
-		if o := m.OperatingSystem; o != nil {
-			p.OperatingSystem = &domain.OperatingSystemParams{Name: o.Name, Version: o.Version}
-		}
-
-		if n := m.NetworkInterface; n != nil {
-			p.NetworkInterface = new(n.params())
-		}
+		m.setPlainParams(&p)
 
 		out = append(out, p)
 	}
 
 	return out, nil
+}
+
+// setPlainParams converts the payloads of m that cannot fail to convert
+// into p.
+func (m moduleJSON) setPlainParams(p *domain.ModuleParams) {
+	if h := m.NetworkHost; h != nil {
+		p.NetworkHost = &domain.NetworkHostParams{Role: domain.NetworkRole(h.Role), Hostname: h.Hostname}
+	}
+
+	if pu := m.Purchase; pu != nil {
+		p.Purchase = &domain.PurchaseParams{
+			Supplier: pu.Supplier, InvoiceNumber: pu.InvoiceNumber, Price: deref(pu.Price), Currency: pu.Currency,
+			WarrantyEnd: pu.WarrantyEnd,
+		}
+	}
+
+	if c := m.SimCard; c != nil {
+		p.SimCard = &domain.SimCardParams{Provider: c.Provider, PhoneNumber: c.PhoneNumber, ICCID: c.ICCID, IMSI: c.IMSI}
+	}
+
+	if o := m.OperatingSystem; o != nil {
+		p.OperatingSystem = &domain.OperatingSystemParams{Name: o.Name, Version: o.Version}
+	}
+
+	if c := m.SIPClient; c != nil {
+		p.SIPClient = &domain.SIPClientParams{
+			Server: c.Server, Port: c.Port, Transport: domain.SIPTransport(c.Transport), Username: c.Username,
+			Extension: c.Extension,
+		}
+	}
+
+	if n := m.NetworkInterface; n != nil {
+		p.NetworkInterface = new(n.params())
+	}
 }
 
 // params converts h; an unparsable ID is reported below field.

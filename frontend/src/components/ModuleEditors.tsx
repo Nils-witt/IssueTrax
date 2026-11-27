@@ -13,7 +13,7 @@ import Typography from '@mui/material/Typography';
 import DeleteIcon from '@mui/icons-material/DeleteOutlined';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type WWANTechnology, wwanTechnologies } from '../api/types';
+import { isMultiModule, type IPv4Mode, type IPv6Mode, type ModuleKind, type NetworkInterfaceType, type NetworkRole, type SIPTransport, sipTransports, type WWANTechnology, wwanTechnologies } from '../api/types';
 import { fieldErrorText, fieldErrorTextUnder } from '../lib/errors';
 import { CatalogPicker } from './CatalogPicker';
 import { StorageItemPicker } from './StorageItemPicker';
@@ -32,6 +32,7 @@ const payloadField: Record<ModuleKind, string> = {
   sim_card: 'simCard',
   wwan: 'wwan',
   operating_system: 'operatingSystem',
+  sip_client: 'sipClient',
   network_interface: 'networkInterface',
 };
 
@@ -83,6 +84,7 @@ export function ModuleCard({ value, index, onChange, onRemove, error }: ModuleCa
         {value.kind === 'sim_card' && <SimCardEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'wwan' && <WWANEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'operating_system' && <OperatingSystemEditor value={value} onChange={onChange} path={path} error={error} />}
+        {value.kind === 'sip_client' && <SIPClientEditor value={value} onChange={onChange} path={path} error={error} />}
         {value.kind === 'network_interface' && (
           <InterfaceEditor
             value={value.networkInterface}
@@ -386,6 +388,81 @@ function OperatingSystemEditor({ value, onChange, path, error }: PayloadEditorPr
           field={`${path}.version`}
           error={error}
           placeholder="12"
+        />
+      </Grid>
+    </Grid>
+  );
+}
+
+function SIPClientEditor({ value, onChange, path, error }: PayloadEditorProps) {
+  const { t } = useTranslation();
+  const set = (key: keyof ModuleForm['sipClient']) => (v: string) => onChange({ ...value, sipClient: { ...value.sipClient, [key]: v } });
+  const transportError = fieldErrorText(t, error, `${path}.transport`);
+
+  return (
+    <Grid container spacing={2}>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <PayloadText
+          label={t('modules.sipServer')}
+          value={value.sipClient.server}
+          onChange={set('server')}
+          field={`${path}.server`}
+          error={error}
+          maxLength={253}
+          placeholder="pbx.example.org"
+        />
+      </Grid>
+      <Grid size={{ xs: 6, sm: 3 }}>
+        <PayloadText
+          label={t('modules.sipPort')}
+          value={value.sipClient.port}
+          onChange={set('port')}
+          field={`${path}.port`}
+          error={error}
+          maxLength={5}
+          type="number"
+          placeholder={value.sipClient.transport === 'tls' ? '5061' : '5060'}
+        />
+      </Grid>
+      <Grid size={{ xs: 6, sm: 3 }}>
+        <TextField
+          select
+          fullWidth
+          size="small"
+          label={t('modules.sipTransport')}
+          value={value.sipClient.transport}
+          onChange={(e) => onChange({ ...value, sipClient: { ...value.sipClient, transport: e.target.value as SIPTransport | '' } })}
+          error={!!transportError}
+          helperText={transportError}
+        >
+          <MenuItem value="">
+            <em>{t('modules.sipTransportDefault')}</em>
+          </MenuItem>
+          {sipTransports.map((tr) => (
+            <MenuItem key={tr} value={tr}>
+              {tr.toUpperCase()}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <PayloadText
+          label={t('modules.sipUsername')}
+          value={value.sipClient.username}
+          onChange={set('username')}
+          field={`${path}.username`}
+          error={error}
+        />
+      </Grid>
+      <Grid size={{ xs: 12, sm: 6 }}>
+        <PayloadText
+          label={t('modules.sipExtension')}
+          value={value.sipClient.extension}
+          onChange={set('extension')}
+          field={`${path}.extension`}
+          error={error}
+          maxLength={32}
+          placeholder="1042"
         />
       </Grid>
     </Grid>
