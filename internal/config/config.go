@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"nilswitt.dev/issuetrax/internal/core/domain"
 )
 
 // Config is the application configuration.
@@ -43,6 +45,9 @@ type Config struct {
 	OIDCAdminGroup string
 	// AuditRetention is how long audit entries are kept; 0 keeps them forever.
 	AuditRetention time.Duration
+	// AssetTagPrefix starts proposed asset tags of items whose type chain
+	// sets no prefix.
+	AssetTagPrefix string
 	// Dev relaxes cookie security for http://localhost development.
 	Dev bool
 }
@@ -72,6 +77,8 @@ func Load(args []string) (Config, error) {
 		"identity provider group whose members are admins (env ISSUETRAX_OIDC_ADMIN_GROUP)")
 	retention := fs.String("audit-retention-days", envOrDefault("ISSUETRAX_AUDIT_RETENTION_DAYS", "0"),
 		"days to keep audit log entries, 0 keeps them forever (env ISSUETRAX_AUDIT_RETENTION_DAYS)")
+	tagPrefix := fs.String("asset-tag-prefix", envOrDefault("ISSUETRAX_ASSET_TAG_PREFIX", "INV-"),
+		"prefix of proposed asset tags when no item type sets one (env ISSUETRAX_ASSET_TAG_PREFIX)")
 	dev := fs.String("dev", envOrDefault("ISSUETRAX_DEV", "false"), "development mode: cookies without Secure for http://localhost (env ISSUETRAX_DEV)")
 
 	if err := fs.Parse(args); err != nil {
@@ -84,6 +91,7 @@ func Load(args []string) (Config, error) {
 		OIDCIssuer:     *issuer,
 		OIDCClientID:   *clientID,
 		OIDCAdminGroup: strings.TrimSpace(*adminGroup),
+		AssetTagPrefix: strings.TrimSpace(*tagPrefix),
 	}
 
 	var errs []error
@@ -100,6 +108,10 @@ func Load(args []string) (Config, error) {
 
 	if cfg.AuditRetention, err = parseRetentionDays(*retention); err != nil {
 		errs = append(errs, err)
+	}
+
+	if !domain.ValidTagPrefix(cfg.AssetTagPrefix) {
+		errs = append(errs, fmt.Errorf("invalid asset-tag-prefix %q: at most 20 of A-Z a-z 0-9 . _ / -", cfg.AssetTagPrefix))
 	}
 
 	if cfg.Dev, err = strconv.ParseBool(*dev); err != nil {

@@ -3,12 +3,10 @@ package httpapi
 import (
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/google/uuid"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
-	"nilswitt.dev/issuetrax/internal/core/port"
 )
 
 // storageItemRefResponse is a storage item as linked from issues.
@@ -28,35 +26,6 @@ func toStorageItemRefResponse(i domain.StorageItem) storageItemRefResponse {
 		Name:      i.Name,
 		Deleted:   i.IsDeleted(),
 	}
-}
-
-// GET /api/storage-items?q=&deleted=&limit=&cursor= searches items.
-func (h *Handler) searchStorageItems(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	q := r.URL.Query()
-
-	page, err := pageRequest(q)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	deleted, err := boolParam(q, "deleted")
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	filter := port.StorageItemFilter{Query: strings.TrimSpace(q.Get("q")), Deleted: deleted}
-
-	found, err := h.storageItems.Search(r.Context(), filter, page)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, toPageResponse(found, func(v port.StorageItemView) storageItemRefResponse {
-		return toStorageItemRefResponse(v.StorageItem)
-	}))
 }
 
 // GET /api/storage-items/{id}/issues?limit=&cursor= lists the issues of
@@ -87,6 +56,18 @@ func storageItemPathID(r *http.Request) (domain.StorageItemID, bool) {
 	id, err := uuid.Parse(r.PathValue("id"))
 
 	return domain.StorageItemID(id), err == nil
+}
+
+// optionalBoolParam reads an optional "true"/"false" query parameter;
+// absent or empty is nil.
+func optionalBoolParam(q url.Values, name string) (*bool, error) {
+	if q.Get(name) == "" {
+		return nil, nil //nolint:nilnil // nil means "no filter"
+	}
+
+	v, err := boolParam(q, name)
+
+	return &v, err
 }
 
 // boolParam reads an optional "true"/"false" query parameter; absent or

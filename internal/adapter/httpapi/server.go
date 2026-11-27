@@ -31,6 +31,8 @@ type Config struct {
 	Attachments port.AttachmentService
 	// Storages manages the physical storage location tree.
 	Storages port.StorageService
+	// ItemTypes manages the item type tree (changes by admins only).
+	ItemTypes port.ItemTypeService
 	// StorageItems manages the items kept in storages.
 	StorageItems port.StorageItemService
 	Users        port.UserService
@@ -65,6 +67,7 @@ type Handler struct {
 	comments     port.CommentService
 	attachments  port.AttachmentService
 	storages     port.StorageService
+	itemTypes    port.ItemTypeService
 	storageItems port.StorageItemService
 	users        port.UserService
 	accounts     port.ServiceAccountService
@@ -96,6 +99,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 		comments:     cfg.Comments,
 		attachments:  cfg.Attachments,
 		storages:     cfg.Storages,
+		itemTypes:    cfg.ItemTypes,
 		storageItems: cfg.StorageItems,
 		users:        cfg.Users,
 		accounts:     cfg.ServiceAccounts,
@@ -169,7 +173,20 @@ func NewHandler(cfg Config) (http.Handler, error) {
 	mux.Handle("POST /api/storages", h.authed(h.createStorage))
 	mux.Handle("GET /api/storages/{id}", h.authed(h.getStorage))
 	mux.Handle("PATCH /api/storages/{id}", h.authed(h.updateStorage))
+	mux.Handle("GET /api/item-types", h.authed(h.listItemTypes))
+	mux.Handle("POST /api/item-types", h.authed(h.createItemType))
+	mux.Handle("GET /api/item-types/{id}", h.authed(h.getItemType))
+	mux.Handle("PATCH /api/item-types/{id}", h.authed(h.updateItemType))
+	mux.Handle("DELETE /api/item-types/{id}", h.authed(h.deleteItemType))
+	mux.Handle("POST /api/item-types/{id}/restore", h.authed(h.restoreItemType))
+	mux.Handle("GET /api/item-types/{id}/next-asset-tag", h.authed(h.nextAssetTag))
+	mux.Handle("GET /api/storages/{id}/storage-items", h.authed(h.listStorageItemsInStorage))
 	mux.Handle("GET /api/storage-items", h.authed(h.searchStorageItems))
+	mux.Handle("POST /api/storage-items", h.authed(h.createStorageItem))
+	mux.Handle("GET /api/storage-items/{id}", h.authed(h.getStorageItem))
+	mux.Handle("PATCH /api/storage-items/{id}", h.authed(h.updateStorageItem))
+	mux.Handle("DELETE /api/storage-items/{id}", h.authed(h.deleteStorageItem))
+	mux.Handle("POST /api/storage-items/{id}/restore", h.authed(h.restoreStorageItem))
 	mux.Handle("GET /api/storage-items/{id}/issues", h.authed(h.listStorageItemIssues))
 
 	// Unknown /api paths must 404 as JSON rather than fall through to the SPA.
@@ -183,7 +200,7 @@ func NewHandler(cfg Config) (http.Handler, error) {
 func (c Config) missingDependency() bool {
 	// Only interface values: a nil pointer in an any is not == nil.
 	services := []any{
-		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
+		c.Auth, c.Projects, c.Issues, c.Tags, c.Comments, c.Attachments, c.Storages, c.ItemTypes, c.StorageItems, c.Users, c.ServiceAccounts, c.Audit, c.Changes,
 	}
 
 	return c.Logger == nil || slices.Contains(services, nil)

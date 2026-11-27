@@ -53,17 +53,20 @@ func main() {
 // driving adapters.
 func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.Logger) (http.Handler, cleaner, error) {
 	repos := service.Repositories{
-		Tx:          db,
-		Projects:    postgres.NewProjectRepository(db),
-		Issues:      postgres.NewIssueRepository(db),
-		Tags:        postgres.NewTagRepository(db),
-		Comments:    postgres.NewCommentRepository(db),
-		Attachments: postgres.NewAttachmentRepository(db),
-		Storages:    postgres.NewStorageRepository(db),
-		Users:       postgres.NewUserRepository(db),
-		Sessions:    postgres.NewSessionRepository(db),
-		APIKeys:     postgres.NewAPIKeyRepository(db),
-		Audit:       postgres.NewAuditRepository(db),
+		Tx:               db,
+		Projects:         postgres.NewProjectRepository(db),
+		Issues:           postgres.NewIssueRepository(db),
+		Tags:             postgres.NewTagRepository(db),
+		Comments:         postgres.NewCommentRepository(db),
+		Attachments:      postgres.NewAttachmentRepository(db),
+		Storages:         postgres.NewStorageRepository(db),
+		ItemTypes:        postgres.NewItemTypeRepository(db),
+		StorageItems:     postgres.NewStorageItemRepository(db),
+		AssetTagCounters: postgres.NewAssetTagCounterRepository(db),
+		Users:            postgres.NewUserRepository(db),
+		Sessions:         postgres.NewSessionRepository(db),
+		APIKeys:          postgres.NewAPIKeyRepository(db),
+		Audit:            postgres.NewAuditRepository(db),
 	}
 
 	idp, err := oidc.New(ctx, oidc.Config{
@@ -85,6 +88,7 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 	// them to browsers.
 	changes := changefeed.New()
 	notify := service.WithChangeNotifier(changes)
+	tagPrefix := service.WithAssetTagPrefix(cfg.AssetTagPrefix)
 
 	auth := service.NewAuthService(repos, idp, service.WithAdminGroup(cfg.OIDCAdminGroup))
 	audit := service.NewAuditService(repos, cfg.AuditRetention)
@@ -102,7 +106,8 @@ func wire(ctx context.Context, cfg config.Config, db *postgres.DB, logger *slog.
 		Comments:        service.NewCommentService(repos, notify),
 		Attachments:     service.NewAttachmentService(repos, notify),
 		Storages:        service.NewStorageService(repos, notify),
-		StorageItems:    service.NewStorageItemService(repos, notify),
+		ItemTypes:       service.NewItemTypeService(repos, notify, tagPrefix),
+		StorageItems:    service.NewStorageItemService(repos, notify, tagPrefix),
 		Users:           service.NewUserService(repos),
 		ServiceAccounts: service.NewBotService(repos),
 		Audit:           audit,

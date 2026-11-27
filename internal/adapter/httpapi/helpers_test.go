@@ -92,6 +92,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Comments:     service.NewCommentService(repos, notify),
 		Attachments:  service.NewAttachmentService(repos, notify),
 		Storages:     service.NewStorageService(repos, notify),
+		ItemTypes:    service.NewItemTypeService(repos, notify),
 		StorageItems: service.NewStorageItemService(repos, notify),
 		Users:        service.NewUserService(repos),
 

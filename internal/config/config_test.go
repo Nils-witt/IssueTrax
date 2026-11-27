@@ -46,6 +46,32 @@ func TestLoad_Defaults(t *testing.T) { //nolint:paralleltest // setValidEnv uses
 	if cfg.OIDCAdminGroup != "" || cfg.AuditRetention != 0 {
 		t.Fatalf("Load() audit settings = %+v", cfg)
 	}
+
+	if cfg.AssetTagPrefix != "INV-" {
+		t.Fatalf("Load() asset tag prefix = %q", cfg.AssetTagPrefix)
+	}
+}
+
+func TestLoad_AssetTagPrefix(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("ISSUETRAX_ASSET_TAG_PREFIX", " IT/ ")
+
+	cfg, err := config.Load(nil)
+	if err != nil || cfg.AssetTagPrefix != "IT/" {
+		t.Fatalf("Load() = %q, %v", cfg.AssetTagPrefix, err)
+	}
+
+	t.Setenv("ISSUETRAX_ASSET_TAG_PREFIX", "")
+
+	if cfg, err := config.Load(nil); err != nil || cfg.AssetTagPrefix != "INV-" {
+		t.Fatalf("Load(empty) = %q, %v", cfg.AssetTagPrefix, err)
+	}
+
+	t.Setenv("ISSUETRAX_ASSET_TAG_PREFIX", "IT #")
+
+	if _, err := config.Load(nil); err == nil || !strings.Contains(err.Error(), "asset-tag-prefix") {
+		t.Fatalf("Load(bad prefix) = %v, want error", err)
+	}
 }
 
 func TestLoad_AuditSettings(t *testing.T) {
