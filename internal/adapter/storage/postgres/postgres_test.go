@@ -123,17 +123,20 @@ func newDB(t *testing.T) *postgres.DB {
 
 func repositories(db *postgres.DB) service.Repositories {
 	return service.Repositories{
-		Tx:          db,
-		Projects:    postgres.NewProjectRepository(db),
-		Issues:      postgres.NewIssueRepository(db),
-		Tags:        postgres.NewTagRepository(db),
-		Comments:    postgres.NewCommentRepository(db),
-		Attachments: postgres.NewAttachmentRepository(db),
-		Storages:    postgres.NewStorageRepository(db),
-		Users:       postgres.NewUserRepository(db),
-		Sessions:    postgres.NewSessionRepository(db),
-		APIKeys:     postgres.NewAPIKeyRepository(db),
-		Audit:       postgres.NewAuditRepository(db),
+		Tx:               db,
+		Projects:         postgres.NewProjectRepository(db),
+		Issues:           postgres.NewIssueRepository(db),
+		Tags:             postgres.NewTagRepository(db),
+		Comments:         postgres.NewCommentRepository(db),
+		Attachments:      postgres.NewAttachmentRepository(db),
+		Storages:         postgres.NewStorageRepository(db),
+		ItemTypes:        postgres.NewItemTypeRepository(db),
+		StorageItems:     postgres.NewStorageItemRepository(db),
+		AssetTagCounters: postgres.NewAssetTagCounterRepository(db),
+		Users:            postgres.NewUserRepository(db),
+		Sessions:         postgres.NewSessionRepository(db),
+		APIKeys:          postgres.NewAPIKeyRepository(db),
+		Audit:            postgres.NewAuditRepository(db),
 	}
 }
 

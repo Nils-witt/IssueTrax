@@ -1,80 +1,152 @@
 -- name: CreateStorageItem :exec
-INSERT INTO storage_items (id, storage_id, kind, name, description, created_at, updated_at, deleted_at)
-VALUES (@id, @storage_id, @kind, @name, @description, @created_at, @updated_at, @deleted_at);
+INSERT INTO storage_items (
+    id, asset_tag, storage_id, item_type_id, name, description, usable, order_date, commissioned_at,
+    decommissioned_at, decommissioning_reason, responsible_id, created_at, updated_at, deleted_at
+) VALUES (
+    @id, @asset_tag, @storage_id, @item_type_id, @name, @description, @usable, @order_date, @commissioned_at,
+    @decommissioned_at, @decommissioning_reason, @responsible_id, @created_at, @updated_at, @deleted_at
+);
 
 -- name: UpdateStorageItem :execrows
+-- The asset tag never changes.
 UPDATE storage_items
-SET storage_id = @storage_id, name = @name, description = @description,
-    updated_at = @updated_at, deleted_at = @deleted_at
-WHERE id = @id AND kind = @kind;
+SET storage_id = @storage_id, item_type_id = @item_type_id, name = @name, description = @description,
+    usable = @usable, order_date = @order_date, commissioned_at = @commissioned_at,
+    decommissioned_at = @decommissioned_at, decommissioning_reason = @decommissioning_reason,
+    responsible_id = @responsible_id, updated_at = @updated_at, deleted_at = @deleted_at
+WHERE id = @id;
 
--- name: GetStorageItem :one
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE id = @id AND kind = @kind;
+-- name: GetStorageItemsByIDs :many
+-- Items, deleted ones included.
+SELECT * FROM storage_items WHERE id = ANY (@ids::uuid[]);
 
--- name: ListStorageItemsInStorage :many
--- Items of one kind in @storage_id, or in its whole subtree when @recursive.
--- @deleted selects deleted items instead of live ones.
+-- name: StorageItemAssetTagTaken :one
+SELECT EXISTS (SELECT 1 FROM storage_items WHERE lower(asset_tag) = lower(@asset_tag::text));
+
+-- name: ListStorageItems :many
+-- One page of the items matching the filters, ordered by name. A NULL
+-- @storage_id searches all storages; @recursive adds its subtree. A NULL
+-- @type_id keeps every type; @include_subtypes adds its descendants.
+-- @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search;
+-- @mac matches interface MACs exactly.
 WITH RECURSIVE subtree (id) AS (
-    SELECT @storage_id::uuid
+    SELECT sqlc.narg('storage_id')::uuid WHERE sqlc.narg('storage_id')::uuid IS NOT NULL
     UNION
     SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE @recursive::boolean
+), types (id) AS (
+    SELECT sqlc.narg('type_id')::uuid WHERE sqlc.narg('type_id')::uuid IS NOT NULL
+    UNION
+    SELECT it.id FROM item_types it JOIN types p ON it.parent_id = p.id WHERE @include_subtypes::boolean
 )
-SELECT i.id, i.storage_id, i.kind, i.name, i.description, i.created_at, i.updated_at, i.deleted_at
-FROM storage_items i
-WHERE i.storage_id IN (SELECT id FROM subtree)
-  AND i.kind = @kind
+SELECT i.* FROM storage_items i
+WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
+  AND (sqlc.narg('type_id')::uuid IS NULL OR i.item_type_id IN (SELECT id FROM types))
   AND (i.deleted_at IS NOT NULL) = @deleted::boolean
+  AND (sqlc.narg('usable')::boolean IS NULL OR i.usable = sqlc.narg('usable')::boolean)
+  AND (sqlc.narg('responsible_id')::uuid IS NULL OR i.responsible_id = sqlc.narg('responsible_id')::uuid)
+  AND (sqlc.narg('decommissioned')::boolean IS NULL
+       OR (i.decommissioned_at IS NOT NULL) = sqlc.narg('decommissioned')::boolean)
+  AND (@pattern::text = ''
+       OR i.name ILIKE @pattern::text OR i.description ILIKE @pattern::text OR i.asset_tag ILIKE @pattern::text
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
+                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE @pattern::text OR h.model ILIKE @pattern::text
+                                              OR h.serial_number ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
+                  WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
+                  WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)))
   AND (NOT @has_cursor::boolean OR (lower(i.name), i.id) > (@cursor_name::text, @cursor_id::uuid))
 ORDER BY lower(i.name), i.id
 LIMIT @row_limit;
 
--- name: CountStorageItemsInStorage :one
+-- name: CountStorageItems :one
+-- Counts what ListStorageItems lists across all pages.
 WITH RECURSIVE subtree (id) AS (
-    SELECT @storage_id::uuid
+    SELECT sqlc.narg('storage_id')::uuid WHERE sqlc.narg('storage_id')::uuid IS NOT NULL
     UNION
     SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE @recursive::boolean
+), types (id) AS (
+    SELECT sqlc.narg('type_id')::uuid WHERE sqlc.narg('type_id')::uuid IS NOT NULL
+    UNION
+    SELECT it.id FROM item_types it JOIN types p ON it.parent_id = p.id WHERE @include_subtypes::boolean
 )
 SELECT count(*) FROM storage_items i
-WHERE i.storage_id IN (SELECT id FROM subtree)
-  AND i.kind = @kind
-  AND (i.deleted_at IS NOT NULL) = @deleted::boolean;
+WHERE (sqlc.narg('storage_id')::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
+  AND (sqlc.narg('type_id')::uuid IS NULL OR i.item_type_id IN (SELECT id FROM types))
+  AND (i.deleted_at IS NOT NULL) = @deleted::boolean
+  AND (sqlc.narg('usable')::boolean IS NULL OR i.usable = sqlc.narg('usable')::boolean)
+  AND (sqlc.narg('responsible_id')::uuid IS NULL OR i.responsible_id = sqlc.narg('responsible_id')::uuid)
+  AND (sqlc.narg('decommissioned')::boolean IS NULL
+       OR (i.decommissioned_at IS NOT NULL) = sqlc.narg('decommissioned')::boolean)
+  AND (@pattern::text = ''
+       OR i.name ILIKE @pattern::text OR i.description ILIKE @pattern::text OR i.asset_tag ILIKE @pattern::text
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
+                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE @pattern::text OR h.model ILIKE @pattern::text
+                                              OR h.serial_number ILIKE @pattern::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
+                  WHERE m.item_id = i.id AND nh.hostname ILIKE @pattern::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
+                  WHERE m.item_id = i.id AND (n.mac::text ILIKE @pattern::text OR n.mac = sqlc.narg('mac')::macaddr)));
 
--- name: SearchStorageItems :many
--- @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search.
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE kind = @kind
-  AND (deleted_at IS NOT NULL) = @deleted::boolean
-  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text)
-  AND (NOT @has_cursor::boolean OR (lower(name), id) > (@cursor_name::text, @cursor_id::uuid))
-ORDER BY lower(name), id
-LIMIT @row_limit;
+-- name: DeleteStorageItemModulesExcept :exec
+-- Removes the item's modules whose ID is not in @keep_ids.
+DELETE FROM storage_item_modules WHERE item_id = @item_id AND NOT (id = ANY (@keep_ids::uuid[]));
 
--- name: CountSearchStorageItems :one
-SELECT count(*) FROM storage_items
-WHERE kind = @kind
-  AND (deleted_at IS NOT NULL) = @deleted::boolean
-  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text);
+-- name: ClearStorageItemPrimaries :exec
+UPDATE storage_item_modules SET is_primary = false WHERE item_id = @item_id AND is_primary;
 
--- name: GetStorageItemsByIDs :many
--- Items of any kind, deleted ones included.
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE id = ANY (@ids::uuid[]);
+-- name: UpsertStorageItemModule :execrows
+-- Inserts a module instance or updates its primary flag; an instance of
+-- another item or kind is left alone (0 rows).
+INSERT INTO storage_item_modules (id, item_id, module, is_primary) VALUES (@id, @item_id, @module, @is_primary)
+ON CONFLICT (id) DO UPDATE SET is_primary = EXCLUDED.is_primary
+WHERE storage_item_modules.item_id = EXCLUDED.item_id AND storage_item_modules.module = EXCLUDED.module;
 
--- name: SearchAllStorageItems :many
--- Like SearchStorageItems, across all kinds.
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE (deleted_at IS NOT NULL) = @deleted::boolean
-  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text)
-  AND (NOT @has_cursor::boolean OR (lower(name), id) > (@cursor_name::text, @cursor_id::uuid))
-ORDER BY lower(name), id
-LIMIT @row_limit;
+-- name: ListStorageItemModules :many
+SELECT id, item_id, module, is_primary FROM storage_item_modules WHERE item_id = ANY (@item_ids::uuid[]);
 
--- name: CountSearchAllStorageItems :one
-SELECT count(*) FROM storage_items
-WHERE (deleted_at IS NOT NULL) = @deleted::boolean
-  AND (@pattern::text = '' OR name ILIKE @pattern::text OR description ILIKE @pattern::text);
+-- name: UpsertHardwareModule :exec
+INSERT INTO module_hardware (module_id, manufacturer, model, serial_number)
+VALUES (@module_id, @manufacturer, @model, @serial_number)
+ON CONFLICT (module_id) DO UPDATE
+SET manufacturer = EXCLUDED.manufacturer, model = EXCLUDED.model, serial_number = EXCLUDED.serial_number;
+
+-- name: ListHardwareModules :many
+SELECT * FROM module_hardware WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertNetworkHostModule :exec
+INSERT INTO module_network_hosts (module_id, role, hostname) VALUES (@module_id, @role, @hostname)
+ON CONFLICT (module_id) DO UPDATE SET role = EXCLUDED.role, hostname = EXCLUDED.hostname;
+
+-- name: ListNetworkHostModules :many
+SELECT * FROM module_network_hosts WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertPurchaseModule :exec
+INSERT INTO module_purchases (module_id, supplier, invoice_number, price_cents, currency, warranty_end)
+VALUES (@module_id, @supplier, @invoice_number, @price_cents, @currency, @warranty_end)
+ON CONFLICT (module_id) DO UPDATE
+SET supplier = EXCLUDED.supplier, invoice_number = EXCLUDED.invoice_number, price_cents = EXCLUDED.price_cents,
+    currency = EXCLUDED.currency, warranty_end = EXCLUDED.warranty_end;
+
+-- name: ListPurchaseModules :many
+SELECT * FROM module_purchases WHERE module_id = ANY (@module_ids::uuid[]);
+
+-- name: UpsertNetworkInterfaceModule :exec
+INSERT INTO module_network_interfaces (
+    module_id, name, mac, type, ssid, native_vlan, tagged_vlans,
+    ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns,
+    ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns
+) VALUES (
+    @module_id, @name, @mac, @type, @ssid, @native_vlan, @tagged_vlans,
+    @ipv4_mode, @ipv4_address, @ipv4_gateway, @ipv4_dns,
+    @ipv6_mode, @ipv6_address, @ipv6_gateway, @ipv6_dns
+)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, mac = EXCLUDED.mac, type = EXCLUDED.type, ssid = EXCLUDED.ssid,
+    native_vlan = EXCLUDED.native_vlan, tagged_vlans = EXCLUDED.tagged_vlans,
+    ipv4_mode = EXCLUDED.ipv4_mode, ipv4_address = EXCLUDED.ipv4_address, ipv4_gateway = EXCLUDED.ipv4_gateway,
+    ipv4_dns = EXCLUDED.ipv4_dns, ipv6_mode = EXCLUDED.ipv6_mode, ipv6_address = EXCLUDED.ipv6_address,
+    ipv6_gateway = EXCLUDED.ipv6_gateway, ipv6_dns = EXCLUDED.ipv6_dns;
+
+-- name: ListNetworkInterfaceModules :many
+SELECT * FROM module_network_interfaces WHERE module_id = ANY (@module_ids::uuid[]);

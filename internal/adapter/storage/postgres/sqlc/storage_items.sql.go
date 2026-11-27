@@ -7,74 +7,78 @@ package sqlc
 
 import (
 	"context"
+	"net"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countSearchAllStorageItems = `-- name: CountSearchAllStorageItems :one
-SELECT count(*) FROM storage_items
-WHERE (deleted_at IS NOT NULL) = $1::boolean
-  AND ($2::text = '' OR name ILIKE $2::text OR description ILIKE $2::text)
+const clearStorageItemPrimaries = `-- name: ClearStorageItemPrimaries :exec
+UPDATE storage_item_modules SET is_primary = false WHERE item_id = $1 AND is_primary
 `
 
-type CountSearchAllStorageItemsParams struct {
-	Deleted bool
-	Pattern string
+func (q *Queries) ClearStorageItemPrimaries(ctx context.Context, itemID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearStorageItemPrimaries, itemID)
+	return err
 }
 
-func (q *Queries) CountSearchAllStorageItems(ctx context.Context, arg CountSearchAllStorageItemsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countSearchAllStorageItems, arg.Deleted, arg.Pattern)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countSearchStorageItems = `-- name: CountSearchStorageItems :one
-SELECT count(*) FROM storage_items
-WHERE kind = $1
-  AND (deleted_at IS NOT NULL) = $2::boolean
-  AND ($3::text = '' OR name ILIKE $3::text OR description ILIKE $3::text)
-`
-
-type CountSearchStorageItemsParams struct {
-	Kind    string
-	Deleted bool
-	Pattern string
-}
-
-func (q *Queries) CountSearchStorageItems(ctx context.Context, arg CountSearchStorageItemsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countSearchStorageItems, arg.Kind, arg.Deleted, arg.Pattern)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countStorageItemsInStorage = `-- name: CountStorageItemsInStorage :one
+const countStorageItems = `-- name: CountStorageItems :one
 WITH RECURSIVE subtree (id) AS (
-    SELECT $3::uuid
+    SELECT $1::uuid WHERE $1::uuid IS NOT NULL
     UNION
-    SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE $4::boolean
+    SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE $9::boolean
+), types (id) AS (
+    SELECT $2::uuid WHERE $2::uuid IS NOT NULL
+    UNION
+    SELECT it.id FROM item_types it JOIN types p ON it.parent_id = p.id WHERE $10::boolean
 )
 SELECT count(*) FROM storage_items i
-WHERE i.storage_id IN (SELECT id FROM subtree)
-  AND i.kind = $1
-  AND (i.deleted_at IS NOT NULL) = $2::boolean
+WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
+  AND ($2::uuid IS NULL OR i.item_type_id IN (SELECT id FROM types))
+  AND (i.deleted_at IS NOT NULL) = $3::boolean
+  AND ($4::boolean IS NULL OR i.usable = $4::boolean)
+  AND ($5::uuid IS NULL OR i.responsible_id = $5::uuid)
+  AND ($6::boolean IS NULL
+       OR (i.decommissioned_at IS NOT NULL) = $6::boolean)
+  AND ($7::text = ''
+       OR i.name ILIKE $7::text OR i.description ILIKE $7::text OR i.asset_tag ILIKE $7::text
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
+                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE $7::text OR h.model ILIKE $7::text
+                                              OR h.serial_number ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
+                  WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
+                  WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
 `
 
-type CountStorageItemsInStorageParams struct {
-	Kind      string
-	Deleted   bool
-	StorageID uuid.UUID
-	Recursive bool
+type CountStorageItemsParams struct {
+	StorageID       pgtype.UUID
+	TypeID          pgtype.UUID
+	Deleted         bool
+	Usable          pgtype.Bool
+	ResponsibleID   pgtype.UUID
+	Decommissioned  pgtype.Bool
+	Pattern         string
+	Mac             net.HardwareAddr
+	Recursive       bool
+	IncludeSubtypes bool
 }
 
-func (q *Queries) CountStorageItemsInStorage(ctx context.Context, arg CountStorageItemsInStorageParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countStorageItemsInStorage,
-		arg.Kind,
-		arg.Deleted,
+// Counts what ListStorageItems lists across all pages.
+func (q *Queries) CountStorageItems(ctx context.Context, arg CountStorageItemsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countStorageItems,
 		arg.StorageID,
+		arg.TypeID,
+		arg.Deleted,
+		arg.Usable,
+		arg.ResponsibleID,
+		arg.Decommissioned,
+		arg.Pattern,
+		arg.Mac,
 		arg.Recursive,
+		arg.IncludeSubtypes,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -82,28 +86,47 @@ func (q *Queries) CountStorageItemsInStorage(ctx context.Context, arg CountStora
 }
 
 const createStorageItem = `-- name: CreateStorageItem :exec
-INSERT INTO storage_items (id, storage_id, kind, name, description, created_at, updated_at, deleted_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO storage_items (
+    id, asset_tag, storage_id, item_type_id, name, description, usable, order_date, commissioned_at,
+    decommissioned_at, decommissioning_reason, responsible_id, created_at, updated_at, deleted_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+    $10, $11, $12, $13, $14, $15
+)
 `
 
 type CreateStorageItemParams struct {
-	ID          uuid.UUID
-	StorageID   uuid.UUID
-	Kind        string
-	Name        string
-	Description string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
+	ID                    uuid.UUID
+	AssetTag              string
+	StorageID             uuid.UUID
+	ItemTypeID            uuid.UUID
+	Name                  string
+	Description           string
+	Usable                bool
+	OrderDate             *time.Time
+	CommissionedAt        *time.Time
+	DecommissionedAt      *time.Time
+	DecommissioningReason string
+	ResponsibleID         pgtype.UUID
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
 }
 
 func (q *Queries) CreateStorageItem(ctx context.Context, arg CreateStorageItemParams) error {
 	_, err := q.db.Exec(ctx, createStorageItem,
 		arg.ID,
+		arg.AssetTag,
 		arg.StorageID,
-		arg.Kind,
+		arg.ItemTypeID,
 		arg.Name,
 		arg.Description,
+		arg.Usable,
+		arg.OrderDate,
+		arg.CommissionedAt,
+		arg.DecommissionedAt,
+		arg.DecommissioningReason,
+		arg.ResponsibleID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.DeletedAt,
@@ -111,40 +134,26 @@ func (q *Queries) CreateStorageItem(ctx context.Context, arg CreateStorageItemPa
 	return err
 }
 
-const getStorageItem = `-- name: GetStorageItem :one
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE id = $1 AND kind = $2
+const deleteStorageItemModulesExcept = `-- name: DeleteStorageItemModulesExcept :exec
+DELETE FROM storage_item_modules WHERE item_id = $1 AND NOT (id = ANY ($2::uuid[]))
 `
 
-type GetStorageItemParams struct {
-	ID   uuid.UUID
-	Kind string
+type DeleteStorageItemModulesExceptParams struct {
+	ItemID  uuid.UUID
+	KeepIds []uuid.UUID
 }
 
-func (q *Queries) GetStorageItem(ctx context.Context, arg GetStorageItemParams) (StorageItem, error) {
-	row := q.db.QueryRow(ctx, getStorageItem, arg.ID, arg.Kind)
-	var i StorageItem
-	err := row.Scan(
-		&i.ID,
-		&i.StorageID,
-		&i.Kind,
-		&i.Name,
-		&i.Description,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return i, err
+// Removes the item's modules whose ID is not in @keep_ids.
+func (q *Queries) DeleteStorageItemModulesExcept(ctx context.Context, arg DeleteStorageItemModulesExceptParams) error {
+	_, err := q.db.Exec(ctx, deleteStorageItemModulesExcept, arg.ItemID, arg.KeepIds)
+	return err
 }
 
 const getStorageItemsByIDs = `-- name: GetStorageItemsByIDs :many
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE id = ANY ($1::uuid[])
+SELECT id, asset_tag, storage_id, item_type_id, name, description, usable, order_date, commissioned_at, decommissioned_at, decommissioning_reason, responsible_id, created_at, updated_at, deleted_at FROM storage_items WHERE id = ANY ($1::uuid[])
 `
 
-// Items of any kind, deleted ones included.
+// Items, deleted ones included.
 func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]StorageItem, error) {
 	rows, err := q.db.Query(ctx, getStorageItemsByIDs, ids)
 	if err != nil {
@@ -156,10 +165,17 @@ func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 		var i StorageItem
 		if err := rows.Scan(
 			&i.ID,
+			&i.AssetTag,
 			&i.StorageID,
-			&i.Kind,
+			&i.ItemTypeID,
 			&i.Name,
 			&i.Description,
+			&i.Usable,
+			&i.OrderDate,
+			&i.CommissionedAt,
+			&i.DecommissionedAt,
+			&i.DecommissioningReason,
+			&i.ResponsibleID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -174,45 +190,229 @@ func (q *Queries) GetStorageItemsByIDs(ctx context.Context, ids []uuid.UUID) ([]
 	return items, nil
 }
 
-const listStorageItemsInStorage = `-- name: ListStorageItemsInStorage :many
+const listHardwareModules = `-- name: ListHardwareModules :many
+SELECT module_id, manufacturer, model, serial_number FROM module_hardware WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListHardwareModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleHardware, error) {
+	rows, err := q.db.Query(ctx, listHardwareModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleHardware{}
+	for rows.Next() {
+		var i ModuleHardware
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Manufacturer,
+			&i.Model,
+			&i.SerialNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNetworkHostModules = `-- name: ListNetworkHostModules :many
+SELECT module_id, role, hostname FROM module_network_hosts WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListNetworkHostModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleNetworkHost, error) {
+	rows, err := q.db.Query(ctx, listNetworkHostModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleNetworkHost{}
+	for rows.Next() {
+		var i ModuleNetworkHost
+		if err := rows.Scan(&i.ModuleID, &i.Role, &i.Hostname); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNetworkInterfaceModules = `-- name: ListNetworkInterfaceModules :many
+SELECT module_id, name, mac, type, ssid, native_vlan, tagged_vlans, ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns, ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns FROM module_network_interfaces WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListNetworkInterfaceModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModuleNetworkInterface, error) {
+	rows, err := q.db.Query(ctx, listNetworkInterfaceModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModuleNetworkInterface{}
+	for rows.Next() {
+		var i ModuleNetworkInterface
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Name,
+			&i.Mac,
+			&i.Type,
+			&i.Ssid,
+			&i.NativeVlan,
+			&i.TaggedVlans,
+			&i.Ipv4Mode,
+			&i.Ipv4Address,
+			&i.Ipv4Gateway,
+			&i.Ipv4Dns,
+			&i.Ipv6Mode,
+			&i.Ipv6Address,
+			&i.Ipv6Gateway,
+			&i.Ipv6Dns,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPurchaseModules = `-- name: ListPurchaseModules :many
+SELECT module_id, supplier, invoice_number, price_cents, currency, warranty_end FROM module_purchases WHERE module_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListPurchaseModules(ctx context.Context, moduleIds []uuid.UUID) ([]ModulePurchase, error) {
+	rows, err := q.db.Query(ctx, listPurchaseModules, moduleIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ModulePurchase{}
+	for rows.Next() {
+		var i ModulePurchase
+		if err := rows.Scan(
+			&i.ModuleID,
+			&i.Supplier,
+			&i.InvoiceNumber,
+			&i.PriceCents,
+			&i.Currency,
+			&i.WarrantyEnd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStorageItemModules = `-- name: ListStorageItemModules :many
+SELECT id, item_id, module, is_primary FROM storage_item_modules WHERE item_id = ANY ($1::uuid[])
+`
+
+func (q *Queries) ListStorageItemModules(ctx context.Context, itemIds []uuid.UUID) ([]StorageItemModule, error) {
+	rows, err := q.db.Query(ctx, listStorageItemModules, itemIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StorageItemModule{}
+	for rows.Next() {
+		var i StorageItemModule
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.Module,
+			&i.IsPrimary,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStorageItems = `-- name: ListStorageItems :many
 WITH RECURSIVE subtree (id) AS (
-    SELECT $7::uuid
+    SELECT $1::uuid WHERE $1::uuid IS NOT NULL
     UNION
-    SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE $8::boolean
+    SELECT s.id FROM storages s JOIN subtree t ON s.parent_id = t.id WHERE $13::boolean
+), types (id) AS (
+    SELECT $2::uuid WHERE $2::uuid IS NOT NULL
+    UNION
+    SELECT it.id FROM item_types it JOIN types p ON it.parent_id = p.id WHERE $14::boolean
 )
-SELECT i.id, i.storage_id, i.kind, i.name, i.description, i.created_at, i.updated_at, i.deleted_at
-FROM storage_items i
-WHERE i.storage_id IN (SELECT id FROM subtree)
-  AND i.kind = $1
-  AND (i.deleted_at IS NOT NULL) = $2::boolean
-  AND (NOT $3::boolean OR (lower(i.name), i.id) > ($4::text, $5::uuid))
+SELECT i.id, i.asset_tag, i.storage_id, i.item_type_id, i.name, i.description, i.usable, i.order_date, i.commissioned_at, i.decommissioned_at, i.decommissioning_reason, i.responsible_id, i.created_at, i.updated_at, i.deleted_at FROM storage_items i
+WHERE ($1::uuid IS NULL OR i.storage_id IN (SELECT id FROM subtree))
+  AND ($2::uuid IS NULL OR i.item_type_id IN (SELECT id FROM types))
+  AND (i.deleted_at IS NOT NULL) = $3::boolean
+  AND ($4::boolean IS NULL OR i.usable = $4::boolean)
+  AND ($5::uuid IS NULL OR i.responsible_id = $5::uuid)
+  AND ($6::boolean IS NULL
+       OR (i.decommissioned_at IS NOT NULL) = $6::boolean)
+  AND ($7::text = ''
+       OR i.name ILIKE $7::text OR i.description ILIKE $7::text OR i.asset_tag ILIKE $7::text
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_hardware h ON h.module_id = m.id
+                  WHERE m.item_id = i.id AND (h.manufacturer ILIKE $7::text OR h.model ILIKE $7::text
+                                              OR h.serial_number ILIKE $7::text))
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_hosts nh ON nh.module_id = m.id
+                  WHERE m.item_id = i.id AND nh.hostname ILIKE $7::text)
+       OR EXISTS (SELECT 1 FROM storage_item_modules m JOIN module_network_interfaces n ON n.module_id = m.id
+                  WHERE m.item_id = i.id AND (n.mac::text ILIKE $7::text OR n.mac = $8::macaddr)))
+  AND (NOT $9::boolean OR (lower(i.name), i.id) > ($10::text, $11::uuid))
 ORDER BY lower(i.name), i.id
-LIMIT $6
+LIMIT $12
 `
 
-type ListStorageItemsInStorageParams struct {
-	Kind       string
-	Deleted    bool
-	HasCursor  bool
-	CursorName string
-	CursorID   uuid.UUID
-	RowLimit   int32
-	StorageID  uuid.UUID
-	Recursive  bool
+type ListStorageItemsParams struct {
+	StorageID       pgtype.UUID
+	TypeID          pgtype.UUID
+	Deleted         bool
+	Usable          pgtype.Bool
+	ResponsibleID   pgtype.UUID
+	Decommissioned  pgtype.Bool
+	Pattern         string
+	Mac             net.HardwareAddr
+	HasCursor       bool
+	CursorName      string
+	CursorID        uuid.UUID
+	RowLimit        int32
+	Recursive       bool
+	IncludeSubtypes bool
 }
 
-// Items of one kind in @storage_id, or in its whole subtree when @recursive.
-// @deleted selects deleted items instead of live ones.
-func (q *Queries) ListStorageItemsInStorage(ctx context.Context, arg ListStorageItemsInStorageParams) ([]StorageItem, error) {
-	rows, err := q.db.Query(ctx, listStorageItemsInStorage,
-		arg.Kind,
-		arg.Deleted,
-		arg.HasCursor,
-		arg.CursorName,
-		arg.CursorID,
-		arg.RowLimit,
+// One page of the items matching the filters, ordered by name. A NULL
+// @storage_id searches all storages; @recursive adds its subtree. A NULL
+// @type_id keeps every type; @include_subtypes adds its descendants.
+// @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search;
+// @mac matches interface MACs exactly.
+func (q *Queries) ListStorageItems(ctx context.Context, arg ListStorageItemsParams) ([]StorageItem, error) {
+	rows, err := q.db.Query(ctx, listStorageItems,
 		arg.StorageID,
+		arg.TypeID,
+		arg.Deleted,
+		arg.Usable,
+		arg.ResponsibleID,
+		arg.Decommissioned,
+		arg.Pattern,
+		arg.Mac,
+		arg.HasCursor,
+		arg.CursorName,
+		arg.CursorID,
+		arg.RowLimit,
 		arg.Recursive,
+		arg.IncludeSubtypes,
 	)
 	if err != nil {
 		return nil, err
@@ -223,10 +423,17 @@ func (q *Queries) ListStorageItemsInStorage(ctx context.Context, arg ListStorage
 		var i StorageItem
 		if err := rows.Scan(
 			&i.ID,
+			&i.AssetTag,
 			&i.StorageID,
-			&i.Kind,
+			&i.ItemTypeID,
 			&i.Name,
 			&i.Description,
+			&i.Usable,
+			&i.OrderDate,
+			&i.CommissionedAt,
+			&i.DecommissionedAt,
+			&i.DecommissioningReason,
+			&i.ResponsibleID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
@@ -241,147 +448,212 @@ func (q *Queries) ListStorageItemsInStorage(ctx context.Context, arg ListStorage
 	return items, nil
 }
 
-const searchAllStorageItems = `-- name: SearchAllStorageItems :many
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE (deleted_at IS NOT NULL) = $1::boolean
-  AND ($2::text = '' OR name ILIKE $2::text OR description ILIKE $2::text)
-  AND (NOT $3::boolean OR (lower(name), id) > ($4::text, $5::uuid))
-ORDER BY lower(name), id
-LIMIT $6
+const storageItemAssetTagTaken = `-- name: StorageItemAssetTagTaken :one
+SELECT EXISTS (SELECT 1 FROM storage_items WHERE lower(asset_tag) = lower($1::text))
 `
 
-type SearchAllStorageItemsParams struct {
-	Deleted    bool
-	Pattern    string
-	HasCursor  bool
-	CursorName string
-	CursorID   uuid.UUID
-	RowLimit   int32
-}
-
-// Like SearchStorageItems, across all kinds.
-func (q *Queries) SearchAllStorageItems(ctx context.Context, arg SearchAllStorageItemsParams) ([]StorageItem, error) {
-	rows, err := q.db.Query(ctx, searchAllStorageItems,
-		arg.Deleted,
-		arg.Pattern,
-		arg.HasCursor,
-		arg.CursorName,
-		arg.CursorID,
-		arg.RowLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []StorageItem{}
-	for rows.Next() {
-		var i StorageItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.StorageID,
-			&i.Kind,
-			&i.Name,
-			&i.Description,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchStorageItems = `-- name: SearchStorageItems :many
-SELECT id, storage_id, kind, name, description, created_at, updated_at, deleted_at
-FROM storage_items
-WHERE kind = $1
-  AND (deleted_at IS NOT NULL) = $2::boolean
-  AND ($3::text = '' OR name ILIKE $3::text OR description ILIKE $3::text)
-  AND (NOT $4::boolean OR (lower(name), id) > ($5::text, $6::uuid))
-ORDER BY lower(name), id
-LIMIT $7
-`
-
-type SearchStorageItemsParams struct {
-	Kind       string
-	Deleted    bool
-	Pattern    string
-	HasCursor  bool
-	CursorName string
-	CursorID   uuid.UUID
-	RowLimit   int32
-}
-
-// @pattern is a pre-escaped ILIKE pattern ('%term%'), empty for no search.
-func (q *Queries) SearchStorageItems(ctx context.Context, arg SearchStorageItemsParams) ([]StorageItem, error) {
-	rows, err := q.db.Query(ctx, searchStorageItems,
-		arg.Kind,
-		arg.Deleted,
-		arg.Pattern,
-		arg.HasCursor,
-		arg.CursorName,
-		arg.CursorID,
-		arg.RowLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []StorageItem{}
-	for rows.Next() {
-		var i StorageItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.StorageID,
-			&i.Kind,
-			&i.Name,
-			&i.Description,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) StorageItemAssetTagTaken(ctx context.Context, assetTag string) (bool, error) {
+	row := q.db.QueryRow(ctx, storageItemAssetTagTaken, assetTag)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const updateStorageItem = `-- name: UpdateStorageItem :execrows
 UPDATE storage_items
-SET storage_id = $1, name = $2, description = $3,
-    updated_at = $4, deleted_at = $5
-WHERE id = $6 AND kind = $7
+SET storage_id = $1, item_type_id = $2, name = $3, description = $4,
+    usable = $5, order_date = $6, commissioned_at = $7,
+    decommissioned_at = $8, decommissioning_reason = $9,
+    responsible_id = $10, updated_at = $11, deleted_at = $12
+WHERE id = $13
 `
 
 type UpdateStorageItemParams struct {
-	StorageID   uuid.UUID
-	Name        string
-	Description string
-	UpdatedAt   time.Time
-	DeletedAt   *time.Time
-	ID          uuid.UUID
-	Kind        string
+	StorageID             uuid.UUID
+	ItemTypeID            uuid.UUID
+	Name                  string
+	Description           string
+	Usable                bool
+	OrderDate             *time.Time
+	CommissionedAt        *time.Time
+	DecommissionedAt      *time.Time
+	DecommissioningReason string
+	ResponsibleID         pgtype.UUID
+	UpdatedAt             time.Time
+	DeletedAt             *time.Time
+	ID                    uuid.UUID
 }
 
+// The asset tag never changes.
 func (q *Queries) UpdateStorageItem(ctx context.Context, arg UpdateStorageItemParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateStorageItem,
 		arg.StorageID,
+		arg.ItemTypeID,
 		arg.Name,
 		arg.Description,
+		arg.Usable,
+		arg.OrderDate,
+		arg.CommissionedAt,
+		arg.DecommissionedAt,
+		arg.DecommissioningReason,
+		arg.ResponsibleID,
 		arg.UpdatedAt,
 		arg.DeletedAt,
 		arg.ID,
-		arg.Kind,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const upsertHardwareModule = `-- name: UpsertHardwareModule :exec
+INSERT INTO module_hardware (module_id, manufacturer, model, serial_number)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (module_id) DO UPDATE
+SET manufacturer = EXCLUDED.manufacturer, model = EXCLUDED.model, serial_number = EXCLUDED.serial_number
+`
+
+type UpsertHardwareModuleParams struct {
+	ModuleID     uuid.UUID
+	Manufacturer string
+	Model        string
+	SerialNumber string
+}
+
+func (q *Queries) UpsertHardwareModule(ctx context.Context, arg UpsertHardwareModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertHardwareModule,
+		arg.ModuleID,
+		arg.Manufacturer,
+		arg.Model,
+		arg.SerialNumber,
+	)
+	return err
+}
+
+const upsertNetworkHostModule = `-- name: UpsertNetworkHostModule :exec
+INSERT INTO module_network_hosts (module_id, role, hostname) VALUES ($1, $2, $3)
+ON CONFLICT (module_id) DO UPDATE SET role = EXCLUDED.role, hostname = EXCLUDED.hostname
+`
+
+type UpsertNetworkHostModuleParams struct {
+	ModuleID uuid.UUID
+	Role     string
+	Hostname string
+}
+
+func (q *Queries) UpsertNetworkHostModule(ctx context.Context, arg UpsertNetworkHostModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertNetworkHostModule, arg.ModuleID, arg.Role, arg.Hostname)
+	return err
+}
+
+const upsertNetworkInterfaceModule = `-- name: UpsertNetworkInterfaceModule :exec
+INSERT INTO module_network_interfaces (
+    module_id, name, mac, type, ssid, native_vlan, tagged_vlans,
+    ipv4_mode, ipv4_address, ipv4_gateway, ipv4_dns,
+    ipv6_mode, ipv6_address, ipv6_gateway, ipv6_dns
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11,
+    $12, $13, $14, $15
+)
+ON CONFLICT (module_id) DO UPDATE
+SET name = EXCLUDED.name, mac = EXCLUDED.mac, type = EXCLUDED.type, ssid = EXCLUDED.ssid,
+    native_vlan = EXCLUDED.native_vlan, tagged_vlans = EXCLUDED.tagged_vlans,
+    ipv4_mode = EXCLUDED.ipv4_mode, ipv4_address = EXCLUDED.ipv4_address, ipv4_gateway = EXCLUDED.ipv4_gateway,
+    ipv4_dns = EXCLUDED.ipv4_dns, ipv6_mode = EXCLUDED.ipv6_mode, ipv6_address = EXCLUDED.ipv6_address,
+    ipv6_gateway = EXCLUDED.ipv6_gateway, ipv6_dns = EXCLUDED.ipv6_dns
+`
+
+type UpsertNetworkInterfaceModuleParams struct {
+	ModuleID    uuid.UUID
+	Name        string
+	Mac         net.HardwareAddr
+	Type        string
+	Ssid        string
+	NativeVlan  *int32
+	TaggedVlans []int32
+	Ipv4Mode    string
+	Ipv4Address *netip.Prefix
+	Ipv4Gateway *netip.Addr
+	Ipv4Dns     []netip.Addr
+	Ipv6Mode    string
+	Ipv6Address *netip.Prefix
+	Ipv6Gateway *netip.Addr
+	Ipv6Dns     []netip.Addr
+}
+
+func (q *Queries) UpsertNetworkInterfaceModule(ctx context.Context, arg UpsertNetworkInterfaceModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertNetworkInterfaceModule,
+		arg.ModuleID,
+		arg.Name,
+		arg.Mac,
+		arg.Type,
+		arg.Ssid,
+		arg.NativeVlan,
+		arg.TaggedVlans,
+		arg.Ipv4Mode,
+		arg.Ipv4Address,
+		arg.Ipv4Gateway,
+		arg.Ipv4Dns,
+		arg.Ipv6Mode,
+		arg.Ipv6Address,
+		arg.Ipv6Gateway,
+		arg.Ipv6Dns,
+	)
+	return err
+}
+
+const upsertPurchaseModule = `-- name: UpsertPurchaseModule :exec
+INSERT INTO module_purchases (module_id, supplier, invoice_number, price_cents, currency, warranty_end)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (module_id) DO UPDATE
+SET supplier = EXCLUDED.supplier, invoice_number = EXCLUDED.invoice_number, price_cents = EXCLUDED.price_cents,
+    currency = EXCLUDED.currency, warranty_end = EXCLUDED.warranty_end
+`
+
+type UpsertPurchaseModuleParams struct {
+	ModuleID      uuid.UUID
+	Supplier      string
+	InvoiceNumber string
+	PriceCents    pgtype.Int8
+	Currency      string
+	WarrantyEnd   *time.Time
+}
+
+func (q *Queries) UpsertPurchaseModule(ctx context.Context, arg UpsertPurchaseModuleParams) error {
+	_, err := q.db.Exec(ctx, upsertPurchaseModule,
+		arg.ModuleID,
+		arg.Supplier,
+		arg.InvoiceNumber,
+		arg.PriceCents,
+		arg.Currency,
+		arg.WarrantyEnd,
+	)
+	return err
+}
+
+const upsertStorageItemModule = `-- name: UpsertStorageItemModule :execrows
+INSERT INTO storage_item_modules (id, item_id, module, is_primary) VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE SET is_primary = EXCLUDED.is_primary
+WHERE storage_item_modules.item_id = EXCLUDED.item_id AND storage_item_modules.module = EXCLUDED.module
+`
+
+type UpsertStorageItemModuleParams struct {
+	ID        uuid.UUID
+	ItemID    uuid.UUID
+	Module    string
+	IsPrimary bool
+}
+
+// Inserts a module instance or updates its primary flag; an instance of
+// another item or kind is left alone (0 rows).
+func (q *Queries) UpsertStorageItemModule(ctx context.Context, arg UpsertStorageItemModuleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertStorageItemModule,
+		arg.ID,
+		arg.ItemID,
+		arg.Module,
+		arg.IsPrimary,
 	)
 	if err != nil {
 		return 0, err
