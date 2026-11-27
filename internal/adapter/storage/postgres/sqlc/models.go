@@ -7,6 +7,8 @@ package sqlc
 import (
 	"database/sql/driver"
 	"fmt"
+	"net"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -123,6 +125,34 @@ type IssueAssignee struct {
 type IssueTag struct {
 	IssueID uuid.UUID
 	TagID   uuid.UUID
+}
+
+type NetworkDevice struct {
+	ItemID       uuid.UUID
+	Role         string
+	Hostname     string
+	Manufacturer string
+	Model        string
+	SerialNumber string
+}
+
+type NetworkInterface struct {
+	ItemID      uuid.UUID
+	Position    int32
+	Name        string
+	Mac         net.HardwareAddr
+	Type        string
+	Ssid        string
+	NativeVlan  *int32
+	TaggedVlans []int32
+	Ipv4Mode    string
+	Ipv4Address *netip.Prefix
+	Ipv4Gateway *netip.Addr
+	Ipv4Dns     []netip.Addr
+	Ipv6Mode    string
+	Ipv6Address *netip.Prefix
+	Ipv6Gateway *netip.Addr
+	Ipv6Dns     []netip.Addr
 }
 
 type Project struct {

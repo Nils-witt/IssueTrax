@@ -48,6 +48,10 @@ export const auditActions = [
   'generic_storage_item.update',
   'generic_storage_item.delete',
   'generic_storage_item.restore',
+  'network_device.create',
+  'network_device.update',
+  'network_device.delete',
+  'network_device.restore',
   'service_account.create',
   'api_key.create',
   'api_key.revoke',
@@ -222,6 +226,90 @@ export interface UpdateGenericStorageItemInput {
   /** Moves the item to this storage. */
   storageId?: string;
 }
+
+export type NetworkRole = 'router' | 'switch' | 'client';
+export type NetworkInterfaceType = 'wired' | 'wireless';
+export type IPv4Mode = 'dhcp' | 'static' | 'off';
+/** SLAAC only exists for IPv6. */
+export type IPv6Mode = 'dhcp' | 'slaac' | 'static' | 'off';
+
+/** One IP family of an interface; address, prefix, gateway and DNS are only set when static. */
+export interface IPConfig<Mode extends string> {
+  mode: Mode;
+  address: string | null;
+  prefixLength: number | null;
+  gateway: string | null;
+  dnsServers: string[];
+}
+
+export interface NetworkInterface {
+  name: string;
+  /** Lower case, colon-separated. */
+  mac: string;
+  type: NetworkInterfaceType;
+  /** Always empty for wired interfaces. */
+  ssid: string;
+  /** The untagged VLAN, if any. */
+  nativeVlan: number | null;
+  taggedVlans: number[];
+  ipv4: IPConfig<IPv4Mode>;
+  ipv6: IPConfig<IPv6Mode>;
+}
+
+/** A network device kept in a storage. Deleting only sets deletedAt. */
+export interface NetworkDevice {
+  id: string;
+  storageId: string;
+  name: string;
+  description: string;
+  role: NetworkRole;
+  hostname: string;
+  manufacturer: string;
+  model: string;
+  serialNumber: string;
+  primaryInterface: NetworkInterface;
+  secondaryInterfaces: NetworkInterface[];
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+/** Static settings are only allowed (and address and prefix required) when mode is 'static'. */
+export interface IPConfigInput<Mode extends string> {
+  mode: Mode;
+  address?: string | null;
+  prefixLength?: number | null;
+  gateway?: string | null;
+  dnsServers?: string[];
+}
+
+export interface NetworkInterfaceInput {
+  name: string;
+  mac: string;
+  type: NetworkInterfaceType;
+  /** Only for wireless interfaces. */
+  ssid?: string | null;
+  nativeVlan?: number | null;
+  taggedVlans?: number[];
+  ipv4: IPConfigInput<IPv4Mode>;
+  ipv6: IPConfigInput<IPv6Mode>;
+}
+
+export interface CreateNetworkDeviceInput {
+  storageId: string;
+  name: string;
+  description?: string;
+  role: NetworkRole;
+  hostname?: string;
+  manufacturer?: string;
+  model?: string;
+  serialNumber?: string;
+  primaryInterface: NetworkInterfaceInput;
+  secondaryInterfaces?: NetworkInterfaceInput[];
+}
+
+/** Partial update; the interfaces given replace the stored ones, storageId moves the device. */
+export type UpdateNetworkDeviceInput = Partial<CreateNetworkDeviceInput>;
 
 /** Narrows an item list. */
 export interface StorageItemFilter {

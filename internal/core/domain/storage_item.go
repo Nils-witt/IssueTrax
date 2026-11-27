@@ -21,6 +21,8 @@ const (
 	// StorageItemKindGeneric is a plain item described only by name and
 	// description.
 	StorageItemKindGeneric StorageItemKind = "generic"
+	// StorageItemKindNetworkDevice is a NetworkDevice.
+	StorageItemKindNetworkDevice StorageItemKind = "network_device"
 )
 
 // StorageItem holds the fields every kind of item kept in a storage has.

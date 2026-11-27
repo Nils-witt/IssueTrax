@@ -39,6 +39,11 @@ const (
 	AuditGenericStorageItemDelete  AuditAction = "generic_storage_item.delete"
 	AuditGenericStorageItemRestore AuditAction = "generic_storage_item.restore"
 
+	AuditNetworkDeviceCreate  AuditAction = "network_device.create"
+	AuditNetworkDeviceUpdate  AuditAction = "network_device.update"
+	AuditNetworkDeviceDelete  AuditAction = "network_device.delete"
+	AuditNetworkDeviceRestore AuditAction = "network_device.restore"
+
 	AuditServiceAccountCreate AuditAction = "service_account.create"
 	AuditAPIKeyCreate         AuditAction = "api_key.create"
 	AuditAPIKeyRevoke         AuditAction = "api_key.revoke" //nolint:gosec // an action name, not a credential
@@ -50,6 +55,7 @@ var AuditActions = []AuditAction{
 	AuditIssueUpdate, AuditTagUpdate, AuditCommentCreate, AuditCommentUpdate, AuditCommentDelete,
 	AuditAttachmentCreate, AuditAttachmentDelete, AuditStorageCreate, AuditStorageUpdate,
 	AuditGenericStorageItemCreate, AuditGenericStorageItemUpdate, AuditGenericStorageItemDelete, AuditGenericStorageItemRestore,
+	AuditNetworkDeviceCreate, AuditNetworkDeviceUpdate, AuditNetworkDeviceDelete, AuditNetworkDeviceRestore,
 	AuditServiceAccountCreate, AuditAPIKeyCreate, AuditAPIKeyRevoke,
 }
 
@@ -67,8 +73,10 @@ const (
 	AuditTargetStorage    = "storage"
 	// AuditTargetGenericStorageItem is a GenericStorageItem.
 	AuditTargetGenericStorageItem = "generic_storage_item"
-	AuditTargetServiceAccount     = "service_account"
-	AuditTargetAPIKey             = "api_key"
+	// AuditTargetNetworkDevice is a NetworkDevice.
+	AuditTargetNetworkDevice  = "network_device"
+	AuditTargetServiceAccount = "service_account"
+	AuditTargetAPIKey         = "api_key"
 )
 
 // AuditEntry records one security-relevant event or change. Entries are

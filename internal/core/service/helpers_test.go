@@ -30,6 +30,7 @@ type fixture struct {
 	attachments *service.AttachmentService
 	storages    *service.StorageService
 	items       *service.GenericStorageItemService
+	devices     *service.NetworkDeviceService
 	users       *service.UserService
 	// changes records every change the services announced.
 	changes *changeRecorder
@@ -72,6 +73,7 @@ func newFixture(t *testing.T) *fixture {
 		Attachments:         memory.NewAttachmentRepository(store),
 		Storages:            memory.NewStorageRepository(store),
 		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
+		NetworkDevices:      memory.NewNetworkDeviceRepository(store),
 		Users:               memory.NewUserRepository(store),
 		Sessions:            memory.NewSessionRepository(store),
 		APIKeys:             memory.NewAPIKeyRepository(store),
@@ -90,6 +92,7 @@ func newFixture(t *testing.T) *fixture {
 		attachments: service.NewAttachmentService(repos, clock, notify),
 		storages:    service.NewStorageService(repos, clock, notify),
 		items:       service.NewGenericStorageItemService(repos, clock, notify),
+		devices:     service.NewNetworkDeviceService(repos, clock, notify),
 		users:       service.NewUserService(repos),
 		changes:     changes,
 	}

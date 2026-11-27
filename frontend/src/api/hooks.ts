@@ -12,8 +12,10 @@ import type {
   CreateIssueInput,
   CreateProjectInput,
   CreateGenericStorageItemInput,
+  CreateNetworkDeviceInput,
   CreateStorageInput,
   GenericStorageItem,
+  NetworkDevice,
   Issue,
   Me,
   Page,
@@ -26,6 +28,7 @@ import type {
   UpdateTagInput,
   UpdateProjectInput,
   UpdateGenericStorageItemInput,
+  UpdateNetworkDeviceInput,
   UpdateStorageInput,
   User,
   VersionInfo,
@@ -56,6 +59,9 @@ export const keys = {
   storageItems: ['storageItems'] as const,
   storageItemsIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'in', storage, filter] as const,
   storageItemSearch: (filter: StorageItemFilter) => ['storageItems', 'search', filter] as const,
+  // Under storageItems, so item invalidation covers network devices too.
+  networkDevicesIn: (storage: string, filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'in', storage, filter] as const,
+  networkDeviceSearch: (filter: StorageItemFilter) => ['storageItems', 'networkDevices', 'search', filter] as const,
 };
 
 export function useServiceAccounts() {
@@ -465,4 +471,70 @@ export function useRestoreStorageItem() {
   const onSuccess = useInvalidateStorageItems();
 
   return useMutation({ mutationFn: (id: string) => request<GenericStorageItem>('POST', `${itemPath(id)}/restore`), onSuccess });
+}
+
+/** The network devices in one storage (or its subtree), paginated by name. */
+export function useNetworkDevices(storage: string, filter: StorageItemFilter) {
+  return useInfiniteQuery({
+    queryKey: keys.networkDevicesIn(storage, filter),
+    queryFn: ({ pageParam }) =>
+      request<Page<NetworkDevice>>(
+        'GET',
+        `/api/storages/${encodeURIComponent(storage)}/network-devices${query({
+          recursive: flag(filter.recursive),
+          deleted: flag(filter.deleted),
+          cursor: pageParam,
+        })}`,
+      ),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+}
+
+/** Network devices across all storages whose name, description, hostname, serial number or MAC contains filter.q. */
+export function useNetworkDeviceSearch(filter: StorageItemFilter, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: keys.networkDeviceSearch(filter),
+    queryFn: ({ pageParam }) =>
+      request<Page<NetworkDevice>>(
+        'GET',
+        `/api/network-devices${query({ q: filter.q, deleted: flag(filter.deleted), cursor: pageParam })}`,
+      ),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled,
+  });
+}
+
+export function useCreateNetworkDevice() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({
+    mutationFn: (input: CreateNetworkDeviceInput) => request<NetworkDevice>('POST', '/api/network-devices', input),
+    onSuccess,
+  });
+}
+
+const devicePath = (id: string) => `/api/network-devices/${encodeURIComponent(id)}`;
+
+export function useUpdateNetworkDevice() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateNetworkDeviceInput }) =>
+      request<NetworkDevice>('PATCH', devicePath(id), input),
+    onSuccess,
+  });
+}
+
+export function useDeleteNetworkDevice() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({ mutationFn: (id: string) => request<null>('DELETE', devicePath(id)), onSuccess });
+}
+
+export function useRestoreNetworkDevice() {
+  const onSuccess = useInvalidateStorageItems();
+
+  return useMutation({ mutationFn: (id: string) => request<NetworkDevice>('POST', `${devicePath(id)}/restore`), onSuccess });
 }

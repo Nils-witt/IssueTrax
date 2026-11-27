@@ -25,3 +25,17 @@ export function fieldErrorText(t: TFunction, err: unknown, field: string): strin
 
   return i18n.exists(key) ? t(key as 'fieldErrors.invalid') : code;
 }
+
+/**
+ * Translates the first validation code for field or anything nested in it
+ * (e.g. "ipv4.dnsServers" also matches "ipv4.dnsServers[1]").
+ */
+export function fieldErrorTextUnder(t: TFunction, err: unknown, field: string): string | undefined {
+  if (!(err instanceof ApiError)) return undefined;
+
+  const key = Object.keys(err.fields)
+    .sort()
+    .find((f) => f === field || f.startsWith(`${field}.`) || f.startsWith(`${field}[`));
+
+  return key ? fieldErrorText(t, err, key) : undefined;
+}

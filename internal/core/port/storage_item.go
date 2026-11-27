@@ -33,42 +33,50 @@ type StorageItemFilter struct {
 	Query string
 }
 
-// GenericStorageItemService is the driving port for generic storage item
-// use cases. Delete only marks an item deleted; Restore undoes it. Deleted
-// items cannot be updated.
-type GenericStorageItemService interface {
-	Create(ctx context.Context, actor domain.UserID, in CreateGenericStorageItemInput) (domain.GenericStorageItem, error)
-	// Get returns the item, also when it is deleted.
-	Get(ctx context.Context, id domain.StorageItemID) (domain.GenericStorageItem, error)
-	// ListInStorage returns one page of the items in storage (Recursive and
-	// Deleted apply), ordered by name.
+// StorageItemReader reads the storage items of one kind T. Both the
+// driving and the driven port of every item kind include it.
+//
+// Get returns the item, also when it is deleted, or
+// domain.ErrStorageItemNotFound (also for items of another kind).
+// ListInStorage returns one page of the items in storage (Recursive and
+// Deleted apply); Search one page across all storages (Query and Deleted
+// apply). Both order by lower(name), then ID, and return either only live
+// or only deleted items.
+type StorageItemReader[T any] interface {
+	Get(ctx context.Context, id domain.StorageItemID) (T, error)
 	ListInStorage(
 		ctx context.Context, storage domain.StorageID, filter StorageItemFilter, page domain.PageRequest,
-	) (domain.Page[domain.GenericStorageItem], error)
-	// Search returns one page of items across all storages (Query and
-	// Deleted apply), ordered by name.
-	Search(ctx context.Context, filter StorageItemFilter, page domain.PageRequest) (domain.Page[domain.GenericStorageItem], error)
+	) (domain.Page[T], error)
+	Search(ctx context.Context, filter StorageItemFilter, page domain.PageRequest) (domain.Page[T], error)
+}
+
+// StorageItemService holds the driving-port use cases every item kind T
+// offers besides its own Create and Update. Delete only marks an item
+// deleted; Restore undoes it. Deleted items cannot be updated.
+type StorageItemService[T any] interface {
+	StorageItemReader[T]
+	Delete(ctx context.Context, actor domain.UserID, id domain.StorageItemID) error
+	Restore(ctx context.Context, actor domain.UserID, id domain.StorageItemID) (T, error)
+}
+
+// GenericStorageItemService is the driving port for generic storage item
+// use cases. Search matches name and description.
+type GenericStorageItemService interface {
+	StorageItemService[domain.GenericStorageItem]
+	Create(ctx context.Context, actor domain.UserID, in CreateGenericStorageItemInput) (domain.GenericStorageItem, error)
 	Update(
 		ctx context.Context, actor domain.UserID, id domain.StorageItemID, in UpdateGenericStorageItemInput,
 	) (domain.GenericStorageItem, error)
-	Delete(ctx context.Context, actor domain.UserID, id domain.StorageItemID) error
-	Restore(ctx context.Context, actor domain.UserID, id domain.StorageItemID) (domain.GenericStorageItem, error)
 }
 
 // GenericStorageItemRepository is the driven port for persisting generic
-// storage items. It only sees items of kind domain.StorageItemKindGeneric.
+// storage items. It only sees items of kind domain.StorageItemKindGeneric;
+// Search matches name and description.
 //
-// Get returns domain.ErrStorageItemNotFound, deleted items included. Update
-// stores every mutable field including DeletedAt and returns
-// domain.ErrStorageItemNotFound for an unknown item. ListInStorage and
-// Search order by lower(name), then ID, and return either only live or only
-// deleted items (filter.Deleted).
+// Update stores every mutable field including DeletedAt and returns
+// domain.ErrStorageItemNotFound for an unknown item.
 type GenericStorageItemRepository interface {
+	StorageItemReader[domain.GenericStorageItem]
 	Create(ctx context.Context, item domain.GenericStorageItem) error
 	Update(ctx context.Context, item domain.GenericStorageItem) error
-	Get(ctx context.Context, id domain.StorageItemID) (domain.GenericStorageItem, error)
-	ListInStorage(
-		ctx context.Context, storage domain.StorageID, filter StorageItemFilter, page domain.PageRequest,
-	) (domain.Page[domain.GenericStorageItem], error)
-	Search(ctx context.Context, filter StorageItemFilter, page domain.PageRequest) (domain.Page[domain.GenericStorageItem], error)
 }

@@ -70,6 +70,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Attachments:         memory.NewAttachmentRepository(store),
 		Storages:            memory.NewStorageRepository(store),
 		GenericStorageItems: memory.NewGenericStorageItemRepository(store),
+		NetworkDevices:      memory.NewNetworkDeviceRepository(store),
 		Users:               memory.NewUserRepository(store),
 		Sessions:            memory.NewSessionRepository(store),
 		APIKeys:             memory.NewAPIKeyRepository(store),
@@ -91,6 +92,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Attachments:         service.NewAttachmentService(repos, notify),
 		Storages:            service.NewStorageService(repos, notify),
 		GenericStorageItems: service.NewGenericStorageItemService(repos, notify),
+		NetworkDevices:      service.NewNetworkDeviceService(repos, notify),
 		Users:               service.NewUserService(repos),
 
 		ServiceAccounts: service.NewBotService(repos),

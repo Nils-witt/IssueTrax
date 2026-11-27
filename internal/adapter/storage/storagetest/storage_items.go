@@ -14,6 +14,8 @@ import (
 const (
 	drill = "Drill"
 	bits  = "bits"
+	// deletedCase names table cases that list deleted items.
+	deletedCase = "deleted"
 )
 
 func genericItem(t *testing.T, r service.Repositories, st domain.Storage, name, description string) domain.GenericStorageItem {
@@ -30,6 +32,11 @@ func genericItem(t *testing.T, r service.Repositories, st domain.Storage, name, 
 }
 
 func equalItems(a, b domain.GenericStorageItem) bool {
+	return equalItemBase(a.StorageItem, b.StorageItem)
+}
+
+// equalItemBase compares the fields every item kind shares.
+func equalItemBase(a, b domain.StorageItem) bool {
 	sameDeleted := (a.DeletedAt == nil) == (b.DeletedAt == nil) && (a.DeletedAt == nil || a.DeletedAt.Equal(*b.DeletedAt))
 
 	return a.ID == b.ID && a.StorageID == b.StorageID && a.Kind == b.Kind && a.Name == b.Name &&
@@ -115,7 +122,7 @@ func testGenericStorageItemsListInStorage(t *testing.T, newRepos NewRepositories
 		{name: "direct", storage: shelf, want: []string{bits, drill}},
 		{name: "recursive", storage: room, filter: port.StorageItemFilter{Recursive: true}, want: []string{bits, drill, "lamp", "Screws"}},
 		{name: "recursive leaf", storage: box, filter: port.StorageItemFilter{Recursive: true}, want: []string{"Screws"}},
-		{name: "deleted", storage: shelf, filter: port.StorageItemFilter{Deleted: true}, want: []string{"Broken"}},
+		{name: deletedCase, storage: shelf, filter: port.StorageItemFilter{Deleted: true}, want: []string{"Broken"}},
 		{name: "deleted recursive", storage: room, filter: port.StorageItemFilter{Deleted: true, Recursive: true}, want: []string{"Broken"}},
 		{name: "empty", storage: storage(t, r, nil, "Empty"), want: []string{}},
 	}
@@ -198,7 +205,7 @@ func testGenericStorageItemsSearch(t *testing.T, newRepos NewRepositories) {
 		{name: "name or description ignoring case", filter: port.StorageItemFilter{Query: "dRiLl"}, want: []string{bits, drill}},
 		{name: "wildcards are literal", filter: port.StorageItemFilter{Query: "%"}, want: []string{"100% cotton"}},
 		{name: "underscore is literal", filter: port.StorageItemFilter{Query: "_"}, want: []string{}},
-		{name: "deleted", filter: port.StorageItemFilter{Query: "drill", Deleted: true}, want: []string{"Old drill"}},
+		{name: deletedCase, filter: port.StorageItemFilter{Query: "drill", Deleted: true}, want: []string{"Old drill"}},
 	}
 
 	for _, tt := range tests {

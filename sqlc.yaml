@@ -20,3 +20,19 @@ sql:
               import: time
               type: Time
               pointer: true
+          # inet maps to netip.Addr, which drops the prefix length the
+          # interface address columns keep.
+          - column: network_interfaces.ipv4_address
+            go_type:
+              import: net/netip
+              type: Prefix
+              pointer: true
+          - column: network_interfaces.ipv6_address
+            go_type:
+              import: net/netip
+              type: Prefix
+              pointer: true
+          - column: network_interfaces.native_vlan
+            go_type:
+              type: int32
+              pointer: true

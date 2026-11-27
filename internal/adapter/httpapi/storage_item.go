@@ -50,66 +50,12 @@ type updateGenericStorageItemRequest struct {
 
 // GET /api/generic-storage-items?q=&deleted=&limit=&cursor=.
 func (h *Handler) searchGenericStorageItems(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	q := r.URL.Query()
-
-	page, err := pageRequest(q)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	deleted, err := boolParam(q, "deleted")
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	filter := port.StorageItemFilter{Query: strings.TrimSpace(q.Get("q")), Deleted: deleted}
-
-	items, err := h.genericItems.Search(r.Context(), filter, page)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, toPageResponse(items, toGenericStorageItemResponse))
+	searchItems(h, w, r, h.genericItems, toGenericStorageItemResponse)
 }
 
 // GET /api/storages/{id}/generic-storage-items?recursive=&deleted=&limit=&cursor=.
 func (h *Handler) listGenericStorageItemsInStorage(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	storage, ok := storagePathID(r)
-	if !ok {
-		h.writeDomainError(w, r, domain.ErrStorageNotFound)
-		return
-	}
-
-	q := r.URL.Query()
-
-	page, err := pageRequest(q)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	var filter port.StorageItemFilter
-
-	if filter.Recursive, err = boolParam(q, "recursive"); err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	if filter.Deleted, err = boolParam(q, "deleted"); err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	items, err := h.genericItems.ListInStorage(r.Context(), storage, filter, page)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, toPageResponse(items, toGenericStorageItemResponse))
+	listItemsInStorage(h, w, r, h.genericItems, toGenericStorageItemResponse)
 }
 
 // POST /api/generic-storage-items.
@@ -139,19 +85,7 @@ func (h *Handler) createGenericStorageItem(w http.ResponseWriter, r *http.Reques
 
 // GET /api/generic-storage-items/{id}. Deleted items are returned too.
 func (h *Handler) getGenericStorageItem(w http.ResponseWriter, r *http.Request, _ domain.User) {
-	id, ok := storageItemPathID(r)
-	if !ok {
-		h.writeDomainError(w, r, domain.ErrStorageItemNotFound)
-		return
-	}
-
-	item, err := h.genericItems.Get(r.Context(), id)
-	if err != nil {
-		h.writeDomainError(w, r, err)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, toGenericStorageItemResponse(item))
+	getItem(h, w, r, h.genericItems, toGenericStorageItemResponse)
 }
 
 // PATCH /api/generic-storage-items/{id}.
@@ -220,6 +154,91 @@ func (h *Handler) restoreGenericStorageItem(w http.ResponseWriter, r *http.Reque
 	}
 
 	writeJSON(w, http.StatusOK, toGenericStorageItemResponse(item))
+}
+
+// searchItems answers ?q=&deleted=&limit=&cursor= with one page of items
+// of any kind across all storages.
+func searchItems[T, R any](h *Handler, w http.ResponseWriter, r *http.Request, items port.StorageItemReader[T], toResponse func(T) R) {
+	q := r.URL.Query()
+
+	page, err := pageRequest(q)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	deleted, err := boolParam(q, "deleted")
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	filter := port.StorageItemFilter{Query: strings.TrimSpace(q.Get("q")), Deleted: deleted}
+
+	found, err := items.Search(r.Context(), filter, page)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toPageResponse(found, toResponse))
+}
+
+// listItemsInStorage answers ?recursive=&deleted=&limit=&cursor= with one
+// page of the items of any kind in the storage {id}.
+func listItemsInStorage[T, R any](
+	h *Handler, w http.ResponseWriter, r *http.Request, items port.StorageItemReader[T], toResponse func(T) R,
+) {
+	storage, ok := storagePathID(r)
+	if !ok {
+		h.writeDomainError(w, r, domain.ErrStorageNotFound)
+		return
+	}
+
+	q := r.URL.Query()
+
+	page, err := pageRequest(q)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	var filter port.StorageItemFilter
+
+	if filter.Recursive, err = boolParam(q, "recursive"); err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	if filter.Deleted, err = boolParam(q, "deleted"); err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	listed, err := items.ListInStorage(r.Context(), storage, filter, page)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toPageResponse(listed, toResponse))
+}
+
+// getItem answers with the item {id} of any kind, deleted or not.
+func getItem[T, R any](h *Handler, w http.ResponseWriter, r *http.Request, items port.StorageItemReader[T], toResponse func(T) R) {
+	id, ok := storageItemPathID(r)
+	if !ok {
+		h.writeDomainError(w, r, domain.ErrStorageItemNotFound)
+		return
+	}
+
+	item, err := items.Get(r.Context(), id)
+	if err != nil {
+		h.writeDomainError(w, r, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toResponse(item))
 }
 
 func storageItemPathID(r *http.Request) (domain.StorageItemID, bool) {

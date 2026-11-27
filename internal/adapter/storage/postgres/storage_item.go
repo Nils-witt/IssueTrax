@@ -90,17 +90,34 @@ func (r *GenericStorageItemRepository) Get(ctx context.Context, id domain.Storag
 func (r *GenericStorageItemRepository) ListInStorage(
 	ctx context.Context, storage domain.StorageID, filter port.StorageItemFilter, page domain.PageRequest,
 ) (domain.Page[domain.GenericStorageItem], error) {
-	cursor, err := decodeStorageItemCursor(page)
+	load, err := itemsInStorage(ctx, genericKind, storage, filter, page)
 	if err != nil {
 		return domain.Page[domain.GenericStorageItem]{}, err
 	}
 
+	return r.page(ctx, page, load)
+}
+
+// itemLoader loads one page of storage item rows (up to one more than the
+// limit) and the total.
+type itemLoader func(q *sqlc.Queries) ([]sqlc.StorageItem, int64, error)
+
+// itemsInStorage returns the loader for one page of the items of kind in
+// storage (or its subtree), ordered by lower(name), then ID.
+func itemsInStorage(
+	ctx context.Context, kind string, storage domain.StorageID, filter port.StorageItemFilter, page domain.PageRequest,
+) (itemLoader, error) {
+	cursor, err := decodeStorageItemCursor(page)
+	if err != nil {
+		return nil, err
+	}
+
 	params := sqlc.ListStorageItemsInStorageParams{
-		Kind: genericKind, Deleted: filter.Deleted, StorageID: uuid.UUID(storage), Recursive: filter.Recursive,
+		Kind: kind, Deleted: filter.Deleted, StorageID: uuid.UUID(storage), Recursive: filter.Recursive,
 		HasCursor: cursor.has, CursorName: cursor.name, CursorID: cursor.id, RowLimit: pageLimit(page.Limit),
 	}
 
-	return r.page(ctx, page, func(q *sqlc.Queries) ([]sqlc.StorageItem, int64, error) {
+	return func(q *sqlc.Queries) ([]sqlc.StorageItem, int64, error) {
 		rows, err := q.ListStorageItemsInStorage(ctx, params)
 		if err != nil {
 			return nil, 0, fmt.Errorf("select storage items: %w", err)
@@ -114,7 +131,7 @@ func (r *GenericStorageItemRepository) ListInStorage(
 		}
 
 		return rows, total, nil
-	})
+	}, nil
 }
 
 // Search returns one page of the generic items whose name or description
@@ -152,7 +169,7 @@ func (r *GenericStorageItemRepository) Search(
 // page runs load in one read transaction and turns its rows (up to one more
 // than the limit) into a page.
 func (r *GenericStorageItemRepository) page(
-	ctx context.Context, page domain.PageRequest, load func(q *sqlc.Queries) ([]sqlc.StorageItem, int64, error),
+	ctx context.Context, page domain.PageRequest, load itemLoader,
 ) (domain.Page[domain.GenericStorageItem], error) {
 	var result domain.Page[domain.GenericStorageItem]
 

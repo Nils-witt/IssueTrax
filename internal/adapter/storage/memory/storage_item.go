@@ -118,12 +118,17 @@ func (r *GenericStorageItemRepository) matching(keep func(domain.StorageItem) bo
 
 // subtree returns root and all storages below it. Callers hold r.s.mu.
 func (r *GenericStorageItemRepository) subtree(root domain.StorageID) map[domain.StorageID]bool {
+	return r.s.subtree(root)
+}
+
+// subtree returns root and all storages below it. Callers hold s.mu.
+func (s *Store) subtree(root domain.StorageID) map[domain.StorageID]bool {
 	in := map[domain.StorageID]bool{root: true}
 
 	for grew := true; grew; {
 		grew = false
 
-		for _, st := range r.s.data.storages {
+		for _, st := range s.data.storages {
 			if st.ParentID != nil && in[*st.ParentID] && !in[st.ID] {
 				in[st.ID] = true
 				grew = true
@@ -135,21 +140,31 @@ func (r *GenericStorageItemRepository) subtree(root domain.StorageID) map[domain
 }
 
 func pageStorageItems(all []domain.GenericStorageItem, page domain.PageRequest) (domain.Page[domain.GenericStorageItem], error) {
+	return pageItems(all, func(i domain.GenericStorageItem) domain.StorageItem { return i.StorageItem }, page)
+}
+
+// pageItems sorts items of any kind by lower(name), then ID, and cuts out
+// the page after page.Cursor.
+func pageItems[T any](all []T, base func(T) domain.StorageItem, page domain.PageRequest) (domain.Page[T], error) {
 	cursor, hasCursor, err := domain.DecodeCursor[domain.StorageCursor](page.Cursor)
 	if err != nil {
-		return domain.Page[domain.GenericStorageItem]{}, err
+		return domain.Page[T]{}, err
 	}
 
-	slices.SortFunc(all, func(a, b domain.GenericStorageItem) int {
+	slices.SortFunc(all, func(a, b T) int {
+		ia, ib := base(a), base(b)
+
 		return cmp.Or(
-			cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)),
-			cmp.Compare(a.ID.String(), b.ID.String()),
+			cmp.Compare(strings.ToLower(ia.Name), strings.ToLower(ib.Name)),
+			cmp.Compare(ia.ID.String(), ib.ID.String()),
 		)
 	})
 
 	after := all
 	if hasCursor {
-		after = slices.DeleteFunc(slices.Clone(all), func(i domain.GenericStorageItem) bool {
+		after = slices.DeleteFunc(slices.Clone(all), func(v T) bool {
+			i := base(v)
+
 			return cmp.Or(
 				cmp.Compare(strings.ToLower(i.Name), cursor.Name),
 				cmp.Compare(i.ID.String(), cursor.ID),
@@ -158,12 +173,10 @@ func pageStorageItems(all []domain.GenericStorageItem, page domain.PageRequest) 
 	}
 
 	items, more := paginate(after, page.Limit)
-	result := domain.Page[domain.GenericStorageItem]{
-		Items: append([]domain.GenericStorageItem{}, items...), Total: int64(len(all)),
-	}
+	result := domain.Page[T]{Items: append([]T{}, items...), Total: int64(len(all))}
 
 	if more {
-		last := items[len(items)-1]
+		last := base(items[len(items)-1])
 		result.NextCursor = domain.EncodeCursor(domain.StorageCursor{Name: strings.ToLower(last.Name), ID: last.ID.String()})
 	}
 

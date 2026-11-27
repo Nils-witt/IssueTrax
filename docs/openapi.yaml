@@ -60,6 +60,15 @@ tags:
       Deleting an item only marks it deleted (`deletedAt`); deleted items are
       hidden from lists unless `deleted=true`, cannot be changed, and can be
       restored.
+  - name: network-devices
+    description: |
+      Network devices kept in a storage: a role (router, switch or client),
+      optional hostname, manufacturer, model and serial number, exactly one
+      primary interface and any number of secondary interfaces. Like generic
+      items, deleting only marks a device deleted (`deletedAt`).
+
+      Validation errors name nested fields by path, e.g.
+      `primaryInterface.mac` or `secondaryInterfaces[1].ipv4.dnsServers[0]`.
   - name: users
   - name: service-accounts
   - name: audit
@@ -927,6 +936,156 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /api/storages/{id}/network-devices:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [network-devices]
+      summary: List the network devices in a storage
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - name: recursive
+          in: query
+          description: Also include devices kept anywhere below the storage.
+          schema: { type: boolean, default: false }
+        - $ref: "#/components/parameters/StorageItemDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of devices.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevicePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/network-devices:
+    get:
+      tags: [network-devices]
+      summary: Search network devices across all storages
+      description: Ordered by name (A→Z, ignoring case), then ID.
+      parameters:
+        - name: q
+          in: query
+          description: |
+            Keep devices whose name, description, hostname, serial number or
+            the MAC of any interface contains this text, ignoring case.
+          schema: { type: string }
+        - $ref: "#/components/parameters/StorageItemDeleted"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: One page of devices.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevicePage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "422": { $ref: "#/components/responses/Validation" }
+    post:
+      tags: [network-devices]
+      summary: Create a network device
+      description: An unknown `storageId` yields `422` with field code `invalid` on `storageId`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateNetworkDevice" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevice" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "422": { $ref: "#/components/responses/Validation" }
+
+  /api/network-devices/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [network-devices]
+      summary: Get a network device
+      description: Deleted devices are returned too, with `deletedAt` set.
+      responses:
+        "200":
+          description: The device.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevice" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [network-devices]
+      summary: Edit or move a network device
+      description: |
+        Partial update; absent fields stay unchanged. `storageId` moves the
+        device; an unknown storage yields `422` on `storageId`.
+        `primaryInterface` and `secondaryInterfaces` each replace what is
+        stored; send both with swapped entries to make a secondary interface
+        primary.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNetworkDevice" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevice" }
+        "400": { $ref: "#/components/responses/InvalidJSON" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StorageItemDeleted" }
+        "422": { $ref: "#/components/responses/Validation" }
+    delete:
+      tags: [network-devices]
+      summary: Delete a network device
+      description: Marks the device deleted; restore it with `POST …/restore`.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/StorageItemDeleted" }
+
+  /api/network-devices/{id}/restore:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [network-devices]
+      summary: Restore a deleted network device
+      responses:
+        "200":
+          description: Restored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetworkDevice" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/CrossOrigin" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`storage_item_not_deleted`: the device is not deleted."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/service-accounts:
     get:
       tags: [service-accounts]
@@ -1196,6 +1355,10 @@ components:
         - generic_storage_item.update
         - generic_storage_item.delete
         - generic_storage_item.restore
+        - network_device.create
+        - network_device.update
+        - network_device.delete
+        - network_device.restore
         - service_account.create
         - api_key.create
         - api_key.revoke
@@ -1227,7 +1390,7 @@ components:
 
     AuditTargetType:
       type: string
-      enum: [user, project, issue, tag, comment, attachment, storage, generic_storage_item, service_account, api_key]
+      enum: [user, project, issue, tag, comment, attachment, storage, generic_storage_item, network_device, service_account, api_key]
 
     AuditChange:
       type: object
@@ -1549,5 +1712,160 @@ components:
       required: [items, total, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/GenericStorageItem" } }
+        total: { type: integer, format: int64 }
+        nextCursor: { type: [string, "null"] }
+
+    NetworkRole:
+      type: string
+      enum: [router, switch, client]
+
+    IPv4Config:
+      type: object
+      required: [mode, address, prefixLength, gateway, dnsServers]
+      description: |
+        `address`, `prefixLength`, `gateway` and `dnsServers` are only set in
+        `static` mode.
+      properties:
+        mode: { type: string, enum: [dhcp, static, "off"] }
+        address: { type: [string, "null"], format: ipv4, example: 192.168.1.10 }
+        prefixLength: { type: [integer, "null"], minimum: 0, maximum: 32, example: 24 }
+        gateway: { type: [string, "null"], format: ipv4, description: Inside the address's subnet. }
+        dnsServers: { type: array, items: { type: string, format: ipv4 } }
+
+    IPv6Config:
+      type: object
+      required: [mode, address, prefixLength, gateway, dnsServers]
+      description: |
+        `address`, `prefixLength`, `gateway` and `dnsServers` are only set in
+        `static` mode.
+      properties:
+        mode: { type: string, enum: [dhcp, slaac, static, "off"] }
+        address: { type: [string, "null"], format: ipv6, example: "2001:db8::10" }
+        prefixLength: { type: [integer, "null"], minimum: 0, maximum: 128, example: 64 }
+        gateway:
+          type: [string, "null"]
+          format: ipv6
+          description: Inside the address's subnet, or link-local (fe80::/10).
+        dnsServers: { type: array, items: { type: string, format: ipv6 } }
+
+    NetworkInterface:
+      type: object
+      required: [name, mac, type, ssid, nativeVlan, taggedVlans, ipv4, ipv6]
+      properties:
+        name: { type: string, maxLength: 100, example: eth0 }
+        mac: { type: string, description: "EUI-48, lower case and colon-separated.", example: "aa:bb:cc:00:11:22" }
+        type: { type: string, enum: [wired, wireless] }
+        ssid: { type: string, description: Wireless network name; always empty for wired interfaces. }
+        nativeVlan: { type: [integer, "null"], minimum: 1, maximum: 4094, description: Untagged VLAN. }
+        taggedVlans: { type: array, items: { type: integer, minimum: 1, maximum: 4094 } }
+        ipv4: { $ref: "#/components/schemas/IPv4Config" }
+        ipv6: { $ref: "#/components/schemas/IPv6Config" }
+
+    NetworkDevice:
+      type: object
+      required:
+        - id
+        - storageId
+        - name
+        - description
+        - role
+        - hostname
+        - manufacturer
+        - model
+        - serialNumber
+        - primaryInterface
+        - secondaryInterfaces
+        - createdAt
+        - updatedAt
+        - deletedAt
+      properties:
+        id: { type: string, format: uuid }
+        storageId: { type: string, format: uuid, description: The storage the device is kept in. }
+        name: { type: string, maxLength: 100, example: Core router }
+        description: { type: string, description: Plain text; may be empty. }
+        role: { $ref: "#/components/schemas/NetworkRole" }
+        hostname: { type: string, description: RFC 1123 host name; may be empty. }
+        manufacturer: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        serialNumber: { type: string, maxLength: 100 }
+        primaryInterface: { $ref: "#/components/schemas/NetworkInterface" }
+        secondaryInterfaces: { type: array, items: { $ref: "#/components/schemas/NetworkInterface" } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null unless the device is deleted. }
+
+    IPConfigInput:
+      type: object
+      required: [mode]
+      additionalProperties: false
+      description: |
+        `slaac` is only valid for IPv6. In `static` mode `address` and
+        `prefixLength` are required and `gateway` and `dnsServers` optional;
+        addresses must be of the interface's family. In any other mode they
+        must be absent.
+      properties:
+        mode: { type: string, enum: [dhcp, slaac, static, "off"] }
+        address: { type: [string, "null"] }
+        prefixLength: { type: [integer, "null"] }
+        gateway: { type: [string, "null"] }
+        dnsServers: { type: array, items: { type: string }, description: Distinct addresses. }
+
+    NetworkInterfaceInput:
+      type: object
+      required: [name, mac, type, ipv4, ipv6]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        mac: { type: string, description: "EUI-48 in any common notation (aa:bb:…, AA-BB-…, aabb.cc…)." }
+        type: { type: string, enum: [wired, wireless] }
+        ssid: { type: [string, "null"], maxLength: 32, description: Only allowed for wireless interfaces. }
+        nativeVlan: { type: [integer, "null"], minimum: 1, maximum: 4094 }
+        taggedVlans:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 4094 }
+          description: Distinct, and not the native VLAN.
+        ipv4: { $ref: "#/components/schemas/IPConfigInput" }
+        ipv6: { $ref: "#/components/schemas/IPConfigInput" }
+
+    CreateNetworkDevice:
+      type: object
+      required: [storageId, name, role, primaryInterface]
+      additionalProperties: false
+      properties:
+        storageId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, description: Plain text, at most 256 KiB. }
+        role: { $ref: "#/components/schemas/NetworkRole" }
+        hostname: { type: string, maxLength: 253 }
+        manufacturer: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        serialNumber: { type: string, maxLength: 100 }
+        primaryInterface: { $ref: "#/components/schemas/NetworkInterfaceInput" }
+        secondaryInterfaces: { type: array, items: { $ref: "#/components/schemas/NetworkInterfaceInput" } }
+
+    UpdateNetworkDevice:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, description: Plain text, at most 256 KiB; empty clears it. }
+        storageId: { type: string, format: uuid, description: Moves the device to this storage. }
+        role: { $ref: "#/components/schemas/NetworkRole" }
+        hostname: { type: string, maxLength: 253, description: Empty clears it. }
+        manufacturer: { type: string, maxLength: 100 }
+        model: { type: string, maxLength: 100 }
+        serialNumber: { type: string, maxLength: 100 }
+        primaryInterface:
+          $ref: "#/components/schemas/NetworkInterfaceInput"
+        secondaryInterfaces:
+          type: array
+          items: { $ref: "#/components/schemas/NetworkInterfaceInput" }
+          description: Replaces all secondary interfaces; empty removes them.
+
+    NetworkDevicePage:
+      type: object
+      required: [items, total, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/NetworkDevice" } }
         total: { type: integer, format: int64 }
         nextCursor: { type: [string, "null"] }

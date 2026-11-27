@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"nilswitt.dev/issuetrax/internal/core/domain"
 	"nilswitt.dev/issuetrax/internal/core/port"
@@ -17,11 +16,18 @@ var _ port.GenericStorageItemService = (*GenericStorageItemService)(nil)
 type GenericStorageItemService struct {
 	repos Repositories
 	opts  options
+	kind  itemKind[domain.GenericStorageItem]
 }
 
 // NewGenericStorageItemService returns a GenericStorageItemService backed by repos.
 func NewGenericStorageItemService(repos Repositories, opts ...Option) *GenericStorageItemService {
-	return &GenericStorageItemService{repos: repos, opts: newOptions(opts)}
+	o := newOptions(opts)
+
+	return &GenericStorageItemService{repos: repos, opts: o, kind: itemKind[domain.GenericStorageItem]{
+		repos: repos, opts: o, repo: repos.GenericStorageItems,
+		base:  func(i *domain.GenericStorageItem) *domain.StorageItem { return &i.StorageItem },
+		event: storageItemEvent,
+	}}
 }
 
 // Create validates and stores a new item in in.StorageID.
@@ -66,12 +72,7 @@ func (s *GenericStorageItemService) Create(
 
 // Get returns the item with id, also when it is deleted.
 func (s *GenericStorageItemService) Get(ctx context.Context, id domain.StorageItemID) (domain.GenericStorageItem, error) {
-	item, err := s.repos.GenericStorageItems.Get(ctx, id)
-	if err != nil {
-		return domain.GenericStorageItem{}, fmt.Errorf("get storage item %s: %w", id, err)
-	}
-
-	return item, nil
+	return s.kind.get(ctx, id)
 }
 
 // ListInStorage returns one page of the items in storage. An unknown
@@ -79,28 +80,14 @@ func (s *GenericStorageItemService) Get(ctx context.Context, id domain.StorageIt
 func (s *GenericStorageItemService) ListInStorage(
 	ctx context.Context, storage domain.StorageID, filter port.StorageItemFilter, page domain.PageRequest,
 ) (domain.Page[domain.GenericStorageItem], error) {
-	if _, err := s.repos.Storages.Get(ctx, storage); err != nil {
-		return domain.Page[domain.GenericStorageItem]{}, fmt.Errorf("get storage %s: %w", storage, err)
-	}
-
-	items, err := s.repos.GenericStorageItems.ListInStorage(ctx, storage, filter, page)
-	if err != nil {
-		return domain.Page[domain.GenericStorageItem]{}, fmt.Errorf("list storage items: %w", err)
-	}
-
-	return items, nil
+	return s.kind.listInStorage(ctx, storage, filter, page)
 }
 
 // Search returns one page of items across all storages.
 func (s *GenericStorageItemService) Search(
 	ctx context.Context, filter port.StorageItemFilter, page domain.PageRequest,
 ) (domain.Page[domain.GenericStorageItem], error) {
-	items, err := s.repos.GenericStorageItems.Search(ctx, filter, page)
-	if err != nil {
-		return domain.Page[domain.GenericStorageItem]{}, fmt.Errorf("search storage items: %w", err)
-	}
-
-	return items, nil
+	return s.kind.search(ctx, filter, page)
 }
 
 // Update edits and/or moves an item. Deleted items fail with
@@ -163,7 +150,7 @@ func (s *GenericStorageItemService) Update(
 // Delete marks an item deleted. An already deleted item fails with
 // domain.ErrStorageItemDeleted.
 func (s *GenericStorageItemService) Delete(ctx context.Context, actor domain.UserID, id domain.StorageItemID) error {
-	_, err := s.setDeleted(ctx, actor, id, domain.AuditGenericStorageItemDelete, (*domain.StorageItem).Delete)
+	_, err := s.kind.setDeleted(ctx, actor, id, domain.AuditGenericStorageItemDelete, (*domain.StorageItem).Delete)
 
 	return err
 }
@@ -173,44 +160,19 @@ func (s *GenericStorageItemService) Delete(ctx context.Context, actor domain.Use
 func (s *GenericStorageItemService) Restore(
 	ctx context.Context, actor domain.UserID, id domain.StorageItemID,
 ) (domain.GenericStorageItem, error) {
-	return s.setDeleted(ctx, actor, id, domain.AuditGenericStorageItemRestore, (*domain.StorageItem).Restore)
-}
-
-func (s *GenericStorageItemService) setDeleted(
-	ctx context.Context, actor domain.UserID, id domain.StorageItemID, action domain.AuditAction,
-	apply func(*domain.StorageItem, time.Time) error,
-) (domain.GenericStorageItem, error) {
-	var item domain.GenericStorageItem
-
-	err := s.repos.Tx.WithinTx(ctx, func(ctx context.Context) error {
-		var err error
-		if item, err = s.Get(ctx, id); err != nil {
-			return err
-		}
-
-		if err := apply(&item.StorageItem, s.opts.now()); err != nil {
-			return err
-		}
-
-		if err := s.repos.GenericStorageItems.Update(ctx, item); err != nil {
-			return fmt.Errorf("update storage item %s: %w", item.ID, err)
-		}
-
-		return record(ctx, s.repos, s.opts, storageItemEvent(actor, action, item, nil))
-	})
-	if err != nil {
-		return domain.GenericStorageItem{}, err
-	}
-
-	s.notify(ctx)
-
-	return item, nil
+	return s.kind.setDeleted(ctx, actor, id, domain.AuditGenericStorageItemRestore, (*domain.StorageItem).Restore)
 }
 
 // checkStorage fails with domain.ErrStorageItemStorageNotFound unless
 // storage exists.
 func (s *GenericStorageItemService) checkStorage(ctx context.Context, storage domain.StorageID) error {
-	if _, err := s.repos.Storages.Get(ctx, storage); err != nil {
+	return checkItemStorage(ctx, s.repos, storage)
+}
+
+// checkItemStorage fails with domain.ErrStorageItemStorageNotFound unless
+// the storage an item is put in exists.
+func checkItemStorage(ctx context.Context, repos Repositories, storage domain.StorageID) error {
+	if _, err := repos.Storages.Get(ctx, storage); err != nil {
 		if errors.Is(err, domain.ErrStorageNotFound) {
 			return domain.ErrStorageItemStorageNotFound
 		}
@@ -221,11 +183,8 @@ func (s *GenericStorageItemService) checkStorage(ctx context.Context, storage do
 	return nil
 }
 
-// notify announces a committed item change. It also changes item counts,
-// which clients load with the storages.
-func (s *GenericStorageItemService) notify(ctx context.Context) {
-	s.opts.notify(ctx, domain.Change{Kind: domain.ChangeStorageItems})
-}
+// notify announces a committed item change.
+func (s *GenericStorageItemService) notify(ctx context.Context) { notifyStorageItems(ctx, s.opts) }
 
 func storageItemEvent(
 	actor domain.UserID, action domain.AuditAction, item domain.GenericStorageItem, changes domain.AuditChanges,
