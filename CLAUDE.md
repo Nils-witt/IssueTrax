@@ -4,11 +4,11 @@ Before any Go coding, review, debugging, troubleshooting, or setup task, load th
 
 ## Project
 
-IssueTrax: Go backend (`nilswitt.dev/issuetrax`) serving a JSON API under `/api` (documented in `docs/openapi.yaml`) plus a Vite + React + TypeScript SPA (React Router, TanStack Query, i18next en/de, MUI with Emotion; theme in `frontend/src/theme.ts`) embedded via `//go:embed` (`frontend/embed.go`). Design decisions: `base_architecture.md`.
+IssueTrax: Go backend (`nilswitt.dev/issuetrax`) serving a JSON API under `/api` (documented in `docs/openapi.yaml`) plus a Vite + React + TypeScript SPA (React Router, TanStack Query, i18next en/de, MUI with Emotion; theme in `frontend/src/theme.ts`) embedded via `//go:embed` (`frontend/embed.go`). Design decisions: `base_architecture.md` (storage items: `storage_items_architecture.md`).
 
 Architecture is hexagonal (ports & adapters), wired by manual constructor injection in `cmd/issuetrax/main.go`:
 
-- `internal/core/domain` — entities and rules (projects, issues, tags, users, sessions, coded errors, pagination); no adapter imports.
+- `internal/core/domain` — entities and rules (projects, issues, tags, users, sessions, storages, item types, storage items and their modules, coded errors, pagination); no adapter imports.
 - `internal/core/port` — driving (`*Service`, e.g. `IssueService`, `AuthService`) and driven (`*Repository`, `TxManager`, `IdentityProvider`) interfaces.
 - `internal/core/service` — use-case implementations of driving ports.
 - `internal/adapter/httpapi` — inbound HTTP adapter (JSON DTOs live here, not in domain): `/api` JSON, `/auth` browser sign-in (signed login cookie, session cookie, CSRF via `http.CrossOriginProtection`), SPA fallback.
